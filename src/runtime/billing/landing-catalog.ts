@@ -53,34 +53,16 @@ export function createLandingPriceCatalog(options: {
     .sort((left, right) => left.priceId.localeCompare(right.priceId))
     .map(
       (entry) =>
-        `${entry.priceId}:${entry.productId}:${entry.plan}:${entry.frequency}:${entry.cohort}`,
+        `${entry.priceId}:${entry.productId}:${entry.plan}:${entry.frequency}:${entry.cohort}:${entry.legacy === true ? "legacy" : "current"}`,
     )
     .join("|");
 
-  async function admission(): Promise<FounderAdmission> {
-    const historicalCount = Math.max(
-      0,
-      await (options.countFounderPlaces?.() ?? Promise.resolve(50)),
-    );
-    return {
-      historicalCount,
-      publicCount: Math.min(historicalCount, 50),
-      limit: 50,
-      open: historicalCount < 50,
-    };
-  }
-
   return {
-    readFounderAdmission: admission,
     async read() {
-      const founderAdmission = await admission();
-      const cohort = founderAdmission.open ? "founder" : "standard";
       const selectedCatalog = new Map(
-        [...options.catalog].filter(
-          ([, entry]) => entry.cohort === cohort && entry.legacy !== true,
-        ),
+        [...options.catalog].filter(([, entry]) => entry.legacy !== true),
       );
-      const cacheKey = `${catalogKey}:${cohort}`;
+      const cacheKey = `${catalogKey}:current`;
       const cached = cache.get(cacheKey);
       const ageMs = cached ? now() - cached.readAtMs : Number.POSITIVE_INFINITY;
       if (cached && ageMs <= freshForMs) return cached.prices;

@@ -62,7 +62,6 @@ export function createCloudflareBillingRuntime(env: Env) {
     landingPriceCatalog: createLandingPriceCatalog({
       catalog: config.catalog,
       stripe,
-      countFounderPlaces: () => syncStore.countFounderPlaces(),
     }),
     webhookHandler: createStripeWebhookHandler({
       secret: config.webhookSecret,

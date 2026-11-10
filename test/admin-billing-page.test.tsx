@@ -25,7 +25,7 @@ const subscription = (
   ownerId: "owner",
   customerId: "customer",
   subscriptionId: plan === "free" ? null : "sub",
-  priceId: plan === "free" ? null : "price",
+  priceId: plan === "free" ? null : `${plan === "premium" ? "premium" : "plus"}-${frequency}`,
   productId: plan === "free" ? null : "product",
   plan,
   frequency,
@@ -180,7 +180,7 @@ async function settle() {
   });
 }
 
-test("Billing explains unqualified Founder TEST subscriptions without offering a rejected plan change", async () => {
+test("Billing explains unavailable current prices without showing retired launch terms", async () => {
   const data = { ...billing("premium", "monthly"), catalog: [] };
   const restoreFetch = installFetch(async (input) => {
     if (String(input).endsWith("/billing")) return response(data);
@@ -191,10 +191,10 @@ test("Billing explains unqualified Founder TEST subscriptions without offering a
   try {
     await render(env);
     await settle();
-    assert.match(env.container.textContent ?? "", /pricing cohort has not been confirmed/);
-    assert.match(
+    assert.match(env.container.textContent ?? "", /Current plan prices are unavailable/);
+    assert.doesNotMatch(
       env.container.textContent ?? "",
-      /test subscriptions do not receive Founder status/,
+      /founder|places claimed|cannot be reclaimed/i,
     );
     assert.equal(env.container.querySelector('[aria-label="Billing frequency"]'), null);
     assert.ok(
@@ -207,6 +207,56 @@ test("Billing explains unqualified Founder TEST subscriptions without offering a
         (button) => !/Upgrade|Downgrade|Switch to/.test(button.textContent ?? ""),
       ),
     );
+  } finally {
+    restoreFetch();
+    await env.restore();
+  }
+});
+
+test("historical founder metadata does not restore launch badges or place counters", async () => {
+  const data = {
+    ...billing("premium", "monthly"),
+    founderAdmission: { historicalCount: 3, publicCount: 3, limit: 50, open: true },
+    subscription: { ...subscription("premium", "monthly"), pricingCohort: "founder" },
+  };
+  const restoreFetch = installFetch(async (input) => {
+    if (String(input).endsWith("/billing")) return response(data);
+    if (String(input).endsWith("/billing/history")) return response({ events: [] });
+    return response({ assignments: [], eligibleGuilds: [], capacity: 1 });
+  });
+  const env = createDom();
+  try {
+    await render(env);
+    await settle();
+    assert.doesNotMatch(
+      env.container.textContent ?? "",
+      /founder|3 of 50|places claimed|cannot be reclaimed/i,
+    );
+  } finally {
+    restoreFetch();
+    await env.restore();
+  }
+});
+
+test("an existing legacy-price subscriber can choose the current rate for the same plan", async () => {
+  const data = {
+    ...billing("premium", "monthly"),
+    subscription: { ...subscription("premium", "monthly"), priceId: "retired-premium-monthly" },
+  };
+  const restoreFetch = installFetch(async (input) => {
+    if (String(input).endsWith("/billing")) return response(data);
+    if (String(input).endsWith("/billing/history")) return response({ events: [] });
+    return response({ assignments: [], eligibleGuilds: [], capacity: 1 });
+  });
+  const env = createDom();
+  try {
+    await render(env);
+    await settle();
+    const buttons = [...env.container.querySelectorAll("button")].filter((node) =>
+      node.textContent?.includes("Review change"),
+    );
+    assert.equal(buttons.length, 2);
+    assert.equal(buttons[0]?.disabled, false);
   } finally {
     restoreFetch();
     await env.restore();

@@ -82,22 +82,26 @@ test("landing catalogue publishes only a complete approved Stripe Price set and 
   assert.deepEqual(requested.sort(), ["price_fpm", "price_fppm", "price_fppy", "price_fpy"]);
 });
 
-test("Founder admission caps accepted overshoot in its public counter", async () => {
+test("standard landing prices ignore the retired founder counter", async () => {
   const catalogue = createLandingPriceCatalog({
     catalog: billingCatalog,
-    countFounderPlaces: async () => 52,
+    countFounderPlaces: async () => {
+      throw new Error("historical counter unavailable");
+    },
     stripe: {
-      readPrice: async () => {
-        throw new Error("not needed");
+      readPrice: async (priceId) => {
+        const entry = billingCatalog.get(priceId)!;
+        return stripePrice(
+          priceId,
+          entry.productId,
+          499,
+          entry.frequency === "monthly" ? "month" : "year",
+        );
       },
     },
   });
-  assert.deepEqual(await catalogue.readFounderAdmission?.(), {
-    historicalCount: 52,
-    publicCount: 50,
-    limit: 50,
-    open: false,
-  });
+  assert.equal((await catalogue.read())?.length, 4);
+  assert.equal(catalogue.readFounderAdmission, undefined);
 });
 
 test("landing catalogue serves bounded stale data and then fails closed", async () => {
@@ -173,7 +177,7 @@ test("landing catalogue rejects mismatched, partial, and unavailable Stripe data
     },
   });
   const partialCatalog = new Map(billingCatalog);
-  partialCatalog.delete("price_ppy");
+  partialCatalog.delete("price_fppy");
   const partial = createLandingPriceCatalog({
     catalog: partialCatalog,
     cache: new Map(),

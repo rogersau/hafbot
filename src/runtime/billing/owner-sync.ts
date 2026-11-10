@@ -253,10 +253,13 @@ export function projectOwnerState(
   if (
     previous?.subscriptionId === subscription.id &&
     previous.pricingCohort &&
-    previous.pricingCohort !== catalogEntry.cohort
+    previous.pricingCohort !== catalogEntry.cohort &&
+    (catalogEntry.cohort !== "standard" || catalogEntry.legacy === true)
   ) {
     return quarantinedProjection(ownerId, state, previous, "pricing_cohort_mismatch", subscription);
   }
+  // Existing founder awards remain historical subscription state. Moving to a
+  // current standard offer must not quarantine that same subscription.
   return fromSubscription(
     ownerId,
     state,

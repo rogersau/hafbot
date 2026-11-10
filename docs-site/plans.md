@@ -16,19 +16,18 @@ Free includes HAF Bot's core community, identity, moderation, and automation too
 
 ## Plan Overview
 
-|                                   | Free                   | Premium                       | Premium Plus                                         |
-| --------------------------------- | ---------------------- | ----------------------------- | ---------------------------------------------------- |
-| Standard price                    | $0                     | AU$14.99/month or AU$135/year | AU$29.99/month or AU$270/year                        |
-| Servers receiving plan features   | No subscription needed | 1 assigned server             | Up to 3 assigned servers                             |
-| Bot identity                      | HAF Bot                | HAF Bot                       | HAF Bot or one shared White-Label Bot identity       |
-| White-Label Bot installations     | Not included           | Not included                  | Any or all assigned servers under one name and brand |
-| Managed object storage per server | 100 MB                 | 1 GB                          | 1 GB                                                 |
+|                                   | Free                   | Premium                     | Premium Plus                                         |
+| --------------------------------- | ---------------------- | --------------------------- | ---------------------------------------------------- |
+| Standard price                    | $0                     | AU$4.99/month or AU$45/year | AU$8.99/month or AU$80/year                          |
+| Servers receiving plan features   | No subscription needed | 1 assigned server           | Up to 3 assigned servers                             |
+| Bot identity                      | HAF Bot                | HAF Bot                     | HAF Bot or one shared White-Label Bot identity       |
+| White-Label Bot installations     | Not included           | Not included                | Any or all assigned servers under one name and brand |
+| Managed object storage per server | 100 MB                 | 1 GB                        | 1 GB                                                 |
 
-::: info Founder pricing
-The first 50 qualifying subscriptions may receive Founder Pricing: AU$4.99/month or AU$45/year for Premium, and AU$8.99/month or AU$80/year for Premium Plus. Current availability is shown on [hafbot.xyz](https://hafbot.xyz).
-
-Founder Pricing remains while that subscription stays continuously active. Cancelling or losing the subscription gives up the Founder Pricing place, and it is not offered again automatically.
-:::
+These are the standard subscription prices, with no launch-place limit. New and returning Plan
+Owners can choose the current offer. Check [hafbot.xyz](https://hafbot.xyz) or Billing for the
+current Stripe prices. Existing subscriptions continue at their existing Stripe price unless the
+Plan Owner chooses a change in Billing.
 
 ::: tip Returning to Free
 HAF keeps saved configuration and existing records. Paid-only processing stops, and Free quantity limits block new items when the server is already over the limit. Restoring a paid Guild Assignment reactivates the saved setup for new activity, but HAF does not process activity missed while the feature was inactive.

@@ -61,7 +61,7 @@ A Free pilot can combine 100 platform links, one support panel and one Ticket ty
 
 Premium covers **one Discord server**. Premium Plus covers **up to three Discord servers** and can use **one shared white-label bot identity** across the assigned servers. These are Discord-server assignments, not a promise about how many DayZ game servers an integration supports.
 
-Prices and Founder Pricing availability can change. Use [Compare Plans](/plans) and the [current HAF website](https://hafbot.xyz/) when choosing a subscription.
+Use [Compare Plans](/plans) and the [current HAF website](https://hafbot.xyz/) for current standard subscription prices when choosing a subscription.
 
 **First milestone:** one player completes the chosen workflow, and staff can use the result. Prove that before enabling more features.
 

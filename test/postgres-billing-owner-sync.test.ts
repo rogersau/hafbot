@@ -255,6 +255,62 @@ test(
           assert.equal(await store.countFounderPlaces(), 1);
         },
       );
+
+      await t.test(
+        "permanent standard pricing preserves existing Founder records without awarding new places",
+        async () => {
+          const currentCatalog = new Map(catalog);
+          currentCatalog.set("price_founder", {
+            ...catalog.get("price_founder")!,
+            cohort: "standard",
+          });
+          currentCatalog.set("price_standard", { ...catalog.get("price_standard")!, legacy: true });
+          const currentSync = createBillingOwnerSync({
+            store,
+            catalog: currentCatalog,
+            now: () => nowMs,
+            createId: () => `op_${++nextId}`,
+            stripe: {
+              async readOwnerState(customerId) {
+                const values = subscriptions.get(customerId);
+                assert.ok(values);
+                return {
+                  customer: { id: customerId, email: null },
+                  subscriptions: values,
+                  observedAtMs: nowMs,
+                };
+              },
+            },
+          });
+          nowMs++;
+          const preserved = await currentSync({ ownerId: "founder-paid", source: "scheduled" });
+          assert.equal(preserved.status, "active");
+          assert.equal(preserved.plan, "premium");
+          assert.equal(preserved.quarantineReason, null);
+          assert.equal(preserved.pricingCohort, "founder");
+          assert.equal(preserved.founderAwardedAtMs, NOW);
+          const ownerId = "permanent-standard";
+          subscriptions.set(`cus_${ownerId}`, [
+            subscription(ownerId, {
+              priceId: "price_founder",
+              livemode: true,
+              latestInvoicePaid: true,
+              latestInvoiceAmountPaid: 499,
+              latestInvoiceBillingReason: "subscription_create",
+            }),
+          ]);
+          const created = await currentSync({
+            ownerId,
+            customerId: `cus_${ownerId}`,
+            source: "checkout",
+          });
+          assert.equal(created.status, "active");
+          assert.equal(created.plan, "premium");
+          assert.equal(created.pricingCohort, "standard");
+          assert.equal(created.founderAwardedAtMs, null);
+          assert.equal(await store.countFounderPlaces(), 1);
+        },
+      );
     } finally {
       await database.close();
     }

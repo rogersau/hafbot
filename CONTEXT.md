@@ -653,16 +653,20 @@ A Stripe-backed purchase owned by one **Plan Owner** on either the **Premium** o
 _Avoid:_ "Donor Claim", "license" (when referring to the billing relationship)
 
 **Founder Place:**
-Membership in the nominal first-50 **Subscription** launch cohort, awarded only after Stripe confirms a successful non-zero first payment for a live-mode Subscription started on an approved Founder Price. Admission closes on a best-effort basis after 50 awards have been observed, so concurrent successful payments may extend the cohort; an awarded place remains permanently consumed even if that Subscription later cancels or loses Founder Pricing.
-_Avoid:_ "founder slot" (suggests reusable capacity), "available founder place" after award
+A historical award from the former Subscription launch cohort. Existing awards remain part of billing history; they do not limit admission to current subscription prices.
+_Avoid:_ "founder slot", "available founder place", treating historical awards as current purchase eligibility
 
 **Founder Pricing:**
-The launch price entitlement attached to a **Subscription** with a **Founder Place**. It persists with that same non-terminal Subscription through temporary payment failure, **Grace Period**, payment recovery, plan changes, and billing-frequency changes, and is permanently forfeited when the Subscription becomes terminal.
-_Avoid:_ "founder discount" (the founder offer is its own enduring price entitlement), treating `past_due` or Grace as forfeiture
+The historical name for the launch rates that are now the standard subscription offer. Current prices have no launch-cohort restriction or cancellation-forfeiture condition.
+_Avoid:_ "founder discount" for the current offer, presenting historical cohort membership as a current benefit
 
 **Founder Counter:**
-The public historical count of awarded **Founder Place**s, capped visually at 50. It increases only after successful initial payment, never decreases after cancellation, and becomes a fully-claimed state once HAF has observed at least 50 awards.
-_Avoid:_ "active founders" count, showing concurrency overshoot above 50
+A historical count of awarded **Founder Place**s. It is no longer a public availability counter or a purchase limit.
+_Avoid:_ "places remaining", "fully claimed" for the current subscription offer
+
+**Legacy Subscription Price:**
+An earlier price retained for an existing **Subscription** and its billing history, rather than offered for new purchases or plan changes. Existing subscriptions keep their Stripe price until the Plan Owner chooses a change.
+_Avoid:_ treating a legacy price as an unknown subscription or automatically repricing existing customers
 
 **GST Registration Posture:**
 HAF's current launch posture while it is not registered for Australian GST: customer prices contain no GST collection, Stripe Tax stays disabled, and current and projected GST turnover are monitored for a separate registration and tax-enablement decision.
