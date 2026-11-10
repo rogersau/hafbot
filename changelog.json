@@ -1,6 +1,22 @@
 {
   "releases": [
     {
+      "version": "2026.11.10",
+      "date": "2026-11-10",
+      "title": "Standard subscription pricing",
+      "summary": "Premium and Premium Plus now use our standard subscription prices for new and returning subscribers.",
+      "changes": [
+        {
+          "type": "improved",
+          "text": "Premium is AU$4.99 per month or AU$45 per year. Premium Plus is AU$8.99 per month or AU$80 per year."
+        },
+        {
+          "type": "improved",
+          "text": "New and returning subscribers can choose the current prices. Existing subscriptions keep their current Stripe price unless their owner chooses a change."
+        }
+      ]
+    },
+    {
       "version": "2026.08.28",
       "date": "2026-08-28",
       "title": "Server Levels beta",

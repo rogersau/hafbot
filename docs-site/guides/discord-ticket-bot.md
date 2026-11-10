@@ -48,7 +48,7 @@ Before announcing the panel, confirm that ordinary members cannot see another me
 | Auto-replies, conditional replies and AI transcript summaries | Not included        | Available                  |
 | Anonymous staff replies and advanced creation controls        | Not included        | Available                  |
 
-Storage allowances and Discord limits still apply. Check [Compare Plans](/plans) for current prices, limits and Founder Pricing terms rather than relying on an old promotional post.
+Storage allowances and Discord limits still apply. Check [Compare Plans](/plans) for current standard prices and limits rather than relying on an old promotional post.
 
 ## Staff anonymity is different from an anonymous report
 

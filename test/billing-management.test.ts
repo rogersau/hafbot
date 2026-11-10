@@ -41,14 +41,14 @@ test("Premium upgrade is immediate, prorated, pending-payment safe, and sync-onl
       return store.projection;
     },
   });
-  assert.deepEqual(await service.changePrice("owner", "ppm", "intent_upgrade"), {
+  assert.deepEqual(await service.changePrice("owner", "fppm", "intent_upgrade"), {
     effective: "immediate",
     chargeImpact: "prorated",
     url: "https://portal",
   });
   assert.deepEqual(provider.updated[0], {
     subscriptionId: "sub",
-    priceId: "ppm",
+    priceId: "fppm",
     idempotencyKey: "update-price:owner:intent_upgrade",
     proration: "always_invoice",
     pendingIfIncomplete: true,
@@ -69,12 +69,12 @@ test("Premium Plus downgrade schedules renewal and blocks excess assignments or 
     },
   });
   store.assignmentCount = 2;
-  await assert.rejects(() => service.changePrice("owner", "pm", "intent_blocked"), /obligations/);
+  await assert.rejects(() => service.changePrice("owner", "fpm", "intent_blocked"), /obligations/);
   store.assignmentCount = 1;
   store.whiteLabel = true;
-  await assert.rejects(() => service.changePrice("owner", "pm", "intent_blocked2"), /obligations/);
+  await assert.rejects(() => service.changePrice("owner", "fpm", "intent_blocked2"), /obligations/);
   store.whiteLabel = false;
-  assert.deepEqual(await service.changePrice("owner", "pm", "intent_downgrade"), {
+  assert.deepEqual(await service.changePrice("owner", "fpm", "intent_downgrade"), {
     effective: "renewal",
     effectiveAtMs: 2_000,
     url: "https://portal",
@@ -105,18 +105,18 @@ test("Portal is ephemeral, cancellation is period-end reversible, and Grace/quar
   );
   store.projection.status = "past_due";
   await assert.rejects(
-    () => service.changePrice("owner", "ppm", "intent_grace"),
+    () => service.changePrice("owner", "fppm", "intent_grace"),
     /billing_in_grace/,
   );
   store.projection.status = "active";
   store.projection.quarantineReason = "duplicate";
   await assert.rejects(
-    () => service.changePrice("owner", "ppm", "intent_quarantine"),
+    () => service.changePrice("owner", "fppm", "intent_quarantine"),
     /quarantined/,
   );
 });
 
-test("Founder subscriptions can change only among Founder Prices", async () => {
+test("historical Founder subscriptions can choose current standard Prices but not retired rates", async () => {
   const provider = new FakeProvider();
   const store = new FakeStore("premium", "fpm");
   store.projection.pricingCohort = "founder";
@@ -135,11 +135,11 @@ test("Founder subscriptions can change only among Founder Prices", async () => {
   assert.equal(provider.updated[0]?.priceId, "fppm");
   await assert.rejects(
     service.changePrice("owner", "ppm", "intent_standard_bypass"),
-    /pricing_cohort_mismatch/,
+    /unsupported_price/,
   );
 });
 
-test("a Founder TEST price with no live cohort keeps the plan-change guard", async () => {
+test("active subscriptions can choose current Prices without historical Founder qualification", async () => {
   const provider = new FakeProvider();
   const store = new FakeStore("premium", "fpm");
   store.projection.pricingCohort = null;
@@ -152,12 +152,25 @@ test("a Founder TEST price with no live cohort keeps the plan-change guard", asy
       return store.projection;
     },
   });
-  await assert.rejects(
-    service.changePrice("owner", "fppm", "intent_test_founder"),
-    /pricing_cohort_mismatch/,
-  );
-  assert.equal(provider.updated.length, 0);
+  await service.changePrice("owner", "fppm", "intent_test_current");
+  assert.equal(provider.updated[0]?.priceId, "fppm");
   assert.equal(store.projection.pricingCohort, null);
+});
+
+test("a subscription on a retired higher Price can select the current rate for the same plan", async () => {
+  const provider = new FakeProvider();
+  const store = new FakeStore("premium", "pm");
+  const service = createBillingManagementService({
+    provider,
+    store,
+    catalog,
+    publicBaseUrl: "https://haf",
+    async syncOwner() {
+      return store.projection;
+    },
+  });
+  await service.changePrice("owner", "fpm", "intent_current_rate");
+  assert.equal(provider.updated[0]?.priceId, "fpm");
 });
 
 test("legacy Founder Prices are valid sources but cannot be selected as targets", async () => {

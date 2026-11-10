@@ -77,6 +77,9 @@ test("Billing summary includes the validated display Price catalogue", async () 
   const handler = createBillingApiHandler({
     service: emptyCheckoutService(),
     prices: {
+      async readFounderAdmission() {
+        throw new Error("retired founder counter must not be read");
+      },
       async read() {
         return [
           {
@@ -100,8 +103,11 @@ test("Billing summary includes the validated display Price catalogue", async () 
   const response = await handler(new Request("https://haf/admin/api/billing"));
   const body = (await response?.json()) as {
     prices: Array<{ formattedAmount: string }>;
+    founderAdmission: unknown;
   };
+  assert.equal(response?.status, 200);
   assert.equal(body.prices[0]?.formattedAmount, "$4.99");
+  assert.equal(body.founderAdmission, null);
 });
 
 test("Billing Support authorization is freshly checked and broad admin sessions do not grant access", async () => {

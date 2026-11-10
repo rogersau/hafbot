@@ -114,12 +114,12 @@ export function createBillingApiHandler(options: {
           );
         response = Response.json({ result: result ?? null });
       } else if (path === "/admin/api/billing") {
-        const founderAdmission = await options.prices?.readFounderAdmission?.();
         response = Response.json({
           subscription: await options.service.readSummary(session.user.id),
           catalog: await options.service.listCatalog(session.user.id),
           prices: (await options.prices?.read()) ?? [],
-          founderAdmission: founderAdmission ?? null,
+          // Retain the nullable response field for older clients; launch admission has ended.
+          founderAdmission: null,
         });
       } else if (path === "/admin/api/billing/history") {
         if (!options.history) return unavailableResponse(adminRequest);

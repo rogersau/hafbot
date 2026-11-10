@@ -49,32 +49,12 @@ export function createBillingCheckoutService(options: {
 }): BillingCheckoutService {
   const now = options.now ?? Date.now;
   return {
-    listCatalog: async (ownerId) => {
-      const projection = ownerId ? await options.store.readProjection(ownerId) : null;
-      const cohort =
-        projection?.subscriptionId && projection.status !== "cancelled"
-          ? (projection.pricingCohort ??
-            (options.catalog.get(projection.priceId ?? "")?.cohort === "standard"
-              ? "standard"
-              : null))
-          : null;
-      if (projection?.subscriptionId && projection.status !== "cancelled" && !cohort) return [];
-      return cohort
-        ? [...options.catalog.values()].filter(
-            (entry) => entry.cohort === cohort && entry.legacy !== true,
-          )
-        : purchasableCatalog(options.catalog, await options.store.countFounderPlaces());
-    },
+    listCatalog: async () => [...options.catalog.values()].filter((entry) => entry.legacy !== true),
     readSummary: (ownerId) => options.store.readProjection(ownerId),
     async startCheckout(input) {
       const catalogEntry = options.catalog.get(input.priceId);
       if (!catalogEntry || catalogEntry.legacy) {
         throw new BillingCheckoutError("unsupported_price", 400);
-      }
-      const purchasableCohort =
-        (await options.store.countFounderPlaces()) < 50 ? "founder" : "standard";
-      if (catalogEntry.cohort !== purchasableCohort) {
-        throw new BillingCheckoutError("stale_pricing_cohort", 409);
       }
       if (!/^[A-Za-z0-9_-]{8,100}$/.test(input.intentId)) {
         throw new BillingCheckoutError("invalid_intent", 400);
@@ -110,14 +90,6 @@ export function createBillingCheckoutService(options: {
     requestSync: (ownerId, correlationId) =>
       options.syncOwner({ ownerId, source: "checkout", correlationId }),
   };
-}
-
-function purchasableCatalog(
-  catalog: ReadonlyMap<string, BillingCatalogEntry>,
-  founderCount: number,
-): BillingCatalogEntry[] {
-  const cohort = founderCount < 50 ? "founder" : "standard";
-  return [...catalog.values()].filter((entry) => entry.cohort === cohort && entry.legacy !== true);
 }
 
 export class BillingCheckoutError extends Error {

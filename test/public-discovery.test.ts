@@ -7,7 +7,7 @@ import type { LandingPriceCatalog } from "../src/runtime/billing/landing-catalog
 import { renderLandingPage } from "../src/runtime/landing-page";
 
 for (const admission of ["missing", "failed", "closed"] as const) {
-  test(`founder admission ${admission} never invents a sold-out counter`, async () => {
+  test(`historical founder admission ${admission} never changes standard pricing copy`, async () => {
     const catalog: LandingPriceCatalog = {
       read: async () => [
         {
@@ -33,11 +33,8 @@ for (const admission of ["missing", "failed", "closed"] as const) {
       });
     const html = await renderLandingPage(catalog);
     assert.match(html, /\$1\.23/);
-    assert.doesNotMatch(html, /fully claimed|50 of 50/);
-    assert.match(
-      html,
-      admission === "closed" ? /not currently available/ : /availability could not be confirmed/,
-    );
+    assert.doesNotMatch(html, /founder|fully claimed|50 of 50|cannot be reclaimed/i);
+    assert.match(html, /Standard subscription prices/);
   });
 }
 

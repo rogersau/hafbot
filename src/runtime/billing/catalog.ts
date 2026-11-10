@@ -20,34 +20,37 @@ export interface BillingCatalogConfig {
 export function createBillingCatalog(
   config: BillingCatalogConfig,
 ): ReadonlyMap<string, BillingCatalogEntry> {
+  // Keep the existing configuration keys and immutable Price identities. The
+  // former launch rates are now the standard offer; earlier rates remain valid
+  // for existing subscriptions but cannot be selected for a new purchase.
   const entries: BillingCatalogEntry[] = [
     entry(
       config.founderPremiumMonthlyPriceId,
       config.premiumMonthlyProductId,
       "premium",
       "monthly",
-      "founder",
+      "standard",
     ),
     entry(
       config.founderPremiumYearlyPriceId,
       config.premiumYearlyProductId,
       "premium",
       "yearly",
-      "founder",
+      "standard",
     ),
     entry(
       config.founderPremiumPlusMonthlyPriceId,
       config.premiumPlusMonthlyProductId,
       "premium_plus",
       "monthly",
-      "founder",
+      "standard",
     ),
     entry(
       config.founderPremiumPlusYearlyPriceId,
       config.premiumPlusYearlyProductId,
       "premium_plus",
       "yearly",
-      "founder",
+      "standard",
     ),
     entry(
       config.premiumMonthlyPriceId,
@@ -55,6 +58,7 @@ export function createBillingCatalog(
       "premium",
       "monthly",
       "standard",
+      true,
     ),
     entry(
       config.premiumYearlyPriceId,
@@ -62,6 +66,7 @@ export function createBillingCatalog(
       "premium",
       "yearly",
       "standard",
+      true,
     ),
     entry(
       config.premiumPlusMonthlyPriceId,
@@ -69,6 +74,7 @@ export function createBillingCatalog(
       "premium_plus",
       "monthly",
       "standard",
+      true,
     ),
     entry(
       config.premiumPlusYearlyPriceId,
@@ -76,6 +82,7 @@ export function createBillingCatalog(
       "premium_plus",
       "yearly",
       "standard",
+      true,
     ),
   ];
   if (config.legacyFounderPremiumYearlyPriceId) {

@@ -55,11 +55,11 @@ test("Billing catalogue requires unique Price identities with explicit cohorts",
   );
 });
 
-test("Checkout binds a Customer first and supports the currently purchasable cohort", async () => {
+test("Checkout binds a Customer first and supports every current standard Price", async () => {
   const provider = new FakeProvider();
   const store = new MemoryStore();
   const service = createService(provider, store);
-  for (const { priceId } of [...catalog.values()].filter((entry) => entry.cohort === "standard")) {
+  for (const { priceId } of [...catalog.values()].filter((entry) => entry.legacy !== true)) {
     const result = await service.startCheckout({
       ownerId: "owner",
       email: "owner@example.test",
@@ -88,7 +88,7 @@ test("duplicate submission reuses a stable business-intent idempotency key", asy
   const input = {
     ownerId: "owner",
     email: null,
-    priceId: "price_pm",
+    priceId: "price_fpm",
     intentId: "intent_duplicate",
   };
   await service.startCheckout(input);
@@ -99,66 +99,83 @@ test("duplicate submission reuses a stable business-intent idempotency key", asy
   );
 });
 
-test("Founder Checkout admission switches at 50 without reserving in-flight places", async () => {
+test("current standard Prices remain available before and beyond the former launch limit", async () => {
   const provider = new FakeProvider();
   const store = new MemoryStore();
   const service = createService(provider, store);
-  store.founderCount = 49;
-  assert.deepEqual(
-    (await service.listCatalog()).map((entry) => entry.cohort),
-    ["founder", "founder", "founder", "founder"],
-  );
-  await assert.rejects(
-    service.startCheckout({
+  for (const count of [0, 49, 50, 500]) {
+    store.founderCount = count;
+    const offered = await service.listCatalog();
+    assert.deepEqual(
+      offered.map((entry) => entry.priceId),
+      ["price_fpm", "price_fpy", "price_fppm", "price_fppy"],
+    );
+    assert.ok(offered.every((entry) => entry.cohort === "standard"));
+    await service.startCheckout({
       ownerId: "owner",
       email: null,
-      priceId: "price_legacy_fpy",
-      intentId: "intent_legacy_founder",
-    }),
-    /unsupported_price/,
-  );
+      priceId: "price_fpm",
+      intentId: `intent_current_${count}`,
+    });
+  }
+  for (const priceId of [
+    "price_pm",
+    "price_py",
+    "price_ppm",
+    "price_ppy",
+    "price_legacy_fpy",
+    "price_legacy_fppy",
+  ]) {
+    await assert.rejects(
+      service.startCheckout({
+        ownerId: "owner",
+        email: null,
+        priceId,
+        intentId: "intent_retired_price",
+      }),
+      /unsupported_price/,
+    );
+  }
+  assert.equal(provider.checkoutCalls.length, 4);
+});
+
+test("retired founder counters do not affect standard checkout availability", async () => {
+  const store = new MemoryStore();
+  store.countFounderPlaces = async () => {
+    throw new Error("historical counter unavailable");
+  };
+  const service = createService(new FakeProvider(), store);
+  assert.equal((await service.listCatalog()).length, 4);
   await service.startCheckout({
     ownerId: "owner",
     email: null,
     priceId: "price_fpm",
-    intentId: "intent_founder_open",
+    intentId: "intent_no_counter",
   });
-  await assert.rejects(
-    service.startCheckout({
-      ownerId: "owner",
-      email: null,
-      priceId: "price_pm",
-      intentId: "intent_forged_standard",
-    }),
-    /stale_pricing_cohort/,
-  );
-
-  store.founderCount = 50;
-  assert.ok((await service.listCatalog()).every((entry) => entry.cohort === "standard"));
-  await assert.rejects(
-    service.startCheckout({
-      ownerId: "owner",
-      email: null,
-      priceId: "price_fpm",
-      intentId: "intent_stale_founder",
-    }),
-    /stale_pricing_cohort/,
-  );
-
-  store.projection = projection({
-    subscriptionId: "sub_founder",
-    priceId: "price_fpm",
-    productId: "prod_p",
-    plan: "premium",
-    frequency: "monthly",
-    status: "active",
-    pricingCohort: "founder",
-    founderAwardedAtMs: 1,
-  });
-  assert.ok((await service.listCatalog("owner")).every((entry) => entry.cohort === "founder"));
 });
 
-test("unqualified Founder TEST subscriptions offer no unsupported plan changes while standard subscriptions keep their cohort", async () => {
+test("a former subscriber can return at the current rate without reclaiming a launch place", async () => {
+  const store = new MemoryStore();
+  store.founderCount = 500;
+  store.projection = projection({
+    subscriptionId: "sub_previous",
+    priceId: "price_fpm",
+    productId: "prod_p",
+    plan: "free",
+    frequency: "monthly",
+    status: "cancelled",
+  });
+  const provider = new FakeProvider();
+  await createService(provider, store).startCheckout({
+    ownerId: "owner",
+    email: null,
+    priceId: "price_fpm",
+    intentId: "intent_returning_owner",
+  });
+  assert.equal(provider.checkoutCalls[0]?.priceId, "price_fpm");
+});
+
+test("current Price choices do not depend on a historical subscription cohort", async () => {
   const store = new MemoryStore();
   const service = createService(new FakeProvider(), store);
   store.projection = projection({
@@ -170,11 +187,12 @@ test("unqualified Founder TEST subscriptions offer no unsupported plan changes w
     status: "active",
     pricingCohort: null,
   });
-  assert.deepEqual(await service.listCatalog("owner"), []);
-  store.projection = { ...store.projection, priceId: "price_pm" };
-  const supported = await service.listCatalog("owner");
-  assert.ok(supported.length > 0);
-  assert.ok(supported.every((entry) => entry.cohort === "standard"));
+  for (const cohort of [null, "founder", "standard"] as const) {
+    store.projection = { ...store.projection, pricingCohort: cohort };
+    const supported = await service.listCatalog("owner");
+    assert.equal(supported.length, 4);
+    assert.ok(supported.every((entry) => entry.cohort === "standard" && entry.legacy !== true));
+  }
 });
 
 test("usable Subscription and quarantine block Checkout while abandonment grants nothing", async () => {
@@ -190,7 +208,7 @@ test("usable Subscription and quarantine block Checkout while abandonment grants
       service.startCheckout({
         ownerId: "owner",
         email: null,
-        priceId: "price_pm",
+        priceId: "price_fpm",
         intentId: `intent_${status}`,
       }),
       /subscription_already_exists/,
@@ -201,7 +219,7 @@ test("usable Subscription and quarantine block Checkout while abandonment grants
     service.startCheckout({
       ownerId: "owner",
       email: null,
-      priceId: "price_pm",
+      priceId: "price_fpm",
       intentId: "intent_quarantine",
     }),
     /billing_quarantined/,

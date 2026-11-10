@@ -94,8 +94,8 @@ test("home response renders the same Stripe catalogue values into plans and stru
   assert.match(html, /"name":"Premium monthly"[^}]+"price":"29\.00"/);
   assert.match(html, /"name":"Premium Plus yearly"[^}]+"price":"490\.00"/);
   assert.doesNotMatch(html, /View current price in Billing/);
-  assert.match(html, /Founder launch pricing · 12 of 50 places claimed/);
-  assert.match(html, /If the subscription ends, founder pricing cannot be reclaimed/);
+  assert.match(html, /Standard subscription prices/);
+  assert.doesNotMatch(html, /founder|places claimed|cannot be reclaimed/i);
   assert.doesNotMatch(html, /normally|was <|<del|line-through/i);
   const structuredData = readStructuredData(html);
   const offers = structuredData["@graph"]
