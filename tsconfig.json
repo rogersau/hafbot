@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "jsx": "react-jsx",
+    "types": ["@cloudflare/workers-types"],
+    "lib": ["ES2022"],
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "test/**/*.ts",
+    "dist-tests",
+    "dist-node",
+    "src/admin/**",
+    "src/db/postgres/**",
+    "src/landing/**",
+    "src/node/**",
+    "src/runtime/postgres/**",
+    "src/runtime/node-*.ts",
+    "src/runtime/sqlite-store.ts"
+  ]
+}

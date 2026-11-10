@@ -1,0 +1,3 @@
+overrides:
+  # CVE-2026-109461: match the Azure Identity override in the root workspace.
+  "@azure/identity>@azure/msal-node@<7.1.1": 7.1.1

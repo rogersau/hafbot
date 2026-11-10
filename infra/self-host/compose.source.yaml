@@ -1,0 +1,7 @@
+# Build from a reviewed source commit when a public registry image is unavailable.
+# Set HAF_IMAGE=haf-bot:self-host in the private .env for this path.
+services:
+  app:
+    build:
+      context: ../..
+      target: runtime

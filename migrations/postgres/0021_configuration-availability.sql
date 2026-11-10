@@ -1,0 +1,6 @@
+ALTER TABLE timed_role_config_rules ADD COLUMN enabled BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE player_count_servers ADD COLUMN enabled BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE evidence_vault_configs ADD COLUMN enabled BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE platform_link_configs ADD COLUMN enabled BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE lfg_configs ADD COLUMN enabled BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE marketplace_configs ADD COLUMN enabled BIGINT NOT NULL DEFAULT 1;

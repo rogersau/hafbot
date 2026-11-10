@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "budgets": {
+    "initialJs": { "rawBytes": 615000, "gzipBytes": 195000 },
+    "totalInitialCss": { "gzipBytes": 20000 },
+    "routes": {
+      "route.auditLog": { "gzipBytes": 45000 },
+      "route.banCases": { "gzipBytes": 43000 },
+      "route.billing": { "gzipBytes": 18000 },
+      "route.blocklist": { "gzipBytes": 50000 },
+      "route.botDefense": { "gzipBytes": 44900 },
+      "route.channelPermissions": { "gzipBytes": 17000 },
+      "route.clans": { "gzipBytes": 42000 },
+      "route.commerce": { "gzipBytes": 27000 },
+      "route.communityTools": { "gzipBytes": 38000 },
+      "route.events": { "gzipBytes": 55000 },
+      "route.evidenceVault": { "gzipBytes": 43000 },
+      "route.guildSettings": { "gzipBytes": 31000 },
+      "route.imageRules": { "gzipBytes": 45000 },
+      "route.lfg": { "gzipBytes": 47000 },
+      "route.managedMessages": { "gzipBytes": 47000 },
+      "route.marketplace": { "gzipBytes": 48000 },
+      "route.memberVerification": { "gzipBytes": 50500 },
+      "route.mentionProtection": { "gzipBytes": 46000 },
+      "route.overview": { "gzipBytes": 12000 },
+      "route.wardogs": { "gzipBytes": 5000 },
+      "route.playercount": { "gzipBytes": 42000 },
+      "route.profile": { "gzipBytes": 12000 },
+      "route.reactionRoles": { "gzipBytes": 38000 },
+      "route.reputation": { "gzipBytes": 33000 },
+      "route.serverLevels": { "gzipBytes": 40000 },
+      "route.steamLink": { "gzipBytes": 51000 },
+      "route.suggestions": { "gzipBytes": 40000 },
+      "route.tickets": { "gzipBytes": 67000 },
+      "route.timedRoles": { "gzipBytes": 43000 },
+      "route.troubleshooting": { "gzipBytes": 23000 },
+      "route.webhooks": { "gzipBytes": 39000 }
+    },
+    "interactions": {
+      "interaction.discordPreview": { "gzipBytes": 93000 },
+      "interaction.unicodeEmojiPicker": { "gzipBytes": 68000 }
+    },
+    "singleAsset": { "rawBytes": 615000 },
+    "inlineDataUrl": { "decodedBytes": 4096 }
+  }
+}

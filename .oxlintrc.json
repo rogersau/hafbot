@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    ".worktrees/**",
+    ".wrangler/**",
+    "dist/**",
+    "dist-admin/**",
+    "dist-node/**",
+    "dist-tests/**",
+    "node_modules/**"
+  ],
+  "jsPlugins": ["./oxlint-plugin-custom.mjs"],
+  "rules": {
+    "custom/no-use-effect": "warn",
+    "custom/no-is-record": "warn"
+  }
+}

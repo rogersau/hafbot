@@ -1,0 +1,49 @@
+name: haf-bot-e2e
+
+services:
+  app:
+    build:
+      context: .
+      target: e2e
+    env_file: .env.e2e
+    environment:
+      DATABASE_URL: postgresql://haf:haf_e2e_only@postgres:5432/haf_e2e_test
+      STAGING_MODE: "true"
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: "8080"
+      BETTER_AUTH_URL: http://localhost:8081
+      HAF_ROLE: all
+      HAF_RUN_MIGRATIONS: "true"
+      HAF_GATEWAY_ENABLED: "true"
+      HAF_JOBS_ENABLED: "true"
+      HAF_SCHEDULER_ENABLED: "false"
+      HAF_MAINTENANCE_MODE: "false"
+      HAF_STATUS_TOKEN: e2e-local-status-only
+    ports:
+      - "127.0.0.1:8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  postgres:
+    image: postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    environment:
+      POSTGRES_DB: haf_e2e_test
+      POSTGRES_USER: haf
+      POSTGRES_PASSWORD: haf_e2e_only
+    volumes:
+      - postgres-e2e-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haf -d haf_e2e_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-e2e-data:

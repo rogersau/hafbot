@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "@cloudflare/workers-types"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/node/**/*.ts",
+    "src/db/postgres/**/*.ts",
+    "src/observability/**/*.ts",
+    "src/runtime/postgres/**/*.ts",
+    "src/security/**/*.ts"
+  ],
+  "exclude": ["dist-node", "src/admin/**", "src/landing/**"]
+}

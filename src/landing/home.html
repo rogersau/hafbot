@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HAF Bot — Discord tickets, player links &amp; community tools</title>
+    <meta
+      name="description"
+      content="A Discord bot for gaming communities: tickets, player links, LFG, moderation and a web dashboard. Use hosted HAF or self-host with Docker."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <link rel="canonical" href="https://hafbot.xyz/" />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:title"
+      content="HAF Bot — Discord tickets, player links &amp; community tools"
+    />
+    <meta
+      property="og:description"
+      content="Private support tickets, player links, LFG and moderation for gaming Discords. Start free on hosted HAF or self-host with Docker."
+    />
+    <meta property="og:url" content="https://hafbot.xyz/" />
+    <meta property="og:image" content="https://hafbot.xyz/banner.png" />
+    <meta property="og:image:alt" content="HAF Bot — Helpful as F**K" />
+    <meta property="og:site_name" content="HAF Bot" />
+    <meta property="og:locale" content="en_AU" />
+    <link
+      rel="alternate"
+      type="application/atom+xml"
+      title="HAF Bot updates"
+      href="https://hafbot.xyz/changelog.xml"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="HAF Bot — Discord tickets, player links &amp; community tools"
+    />
+    <meta
+      name="twitter:description"
+      content="Private support tickets, player links, LFG and moderation for gaming Discords. Start free on hosted HAF or self-host with Docker."
+    />
+    <meta name="twitter:image" content="https://hafbot.xyz/banner.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/landing/assets/landing.css" />
+    <script id="landing-structured-data" type="application/ld+json">
+      {{STRUCTURED_DATA}}
+    </script>
+  </head>
+  <body>
+    <div class="signal-field" aria-hidden="true">
+      <i></i><i></i><i></i><span></span><span></span><span></span>
+    </div>
+    <div class="landing-page">
+      <header class="site-header">
+        <nav class="landing-shell site-nav" aria-label="Main navigation">
+          <a class="brand" href="/" aria-label="HAF Bot home"
+            ><img src="/logo.png" alt="" width="42" height="42" /><span>HAF BOT</span></a
+          >
+          <a class="login-link" href="#plans">Pricing</a>
+          <a class="login-link" href="https://docs.hafbot.xyz/">Docs</a>
+          <a class="login-link" href="/changelog">What's New</a>
+          <a class="login-link" href="/admin">Login</a>
+          <a class="install-link" href="/install">Install <span aria-hidden="true">↗</span></a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero landing-shell" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <p class="eyebrow">
+              <span class="eyebrow-dot" aria-hidden="true"></span>BUILT FOR DISCORD GAMING
+              COMMUNITIES
+            </p>
+            <h1 id="hero-title">Less time running Discord. More time playing.</h1>
+            <p class="hero-intro">
+              A Discord bot for gaming communities: handle player reports in private tickets, link
+              game accounts, organise groups and automate moderation from one web dashboard. Start
+              with one useful workflow on the hosted free plan, or self-host with Docker on your own
+              infrastructure.
+            </p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="/install"
+                >Add HAF Bot to Discord <span aria-hidden="true">↗</span></a
+              >
+              <a class="button button-ghost" href="#live-demo"
+                >See it in action <span aria-hidden="true">↓</span></a
+              >
+              <a class="button button-ghost" href="https://docs.hafbot.xyz/self-hosting"
+                >Self-host HAF <span aria-hidden="true">↗</span></a
+              >
+            </div>
+            <ul class="hero-trust">
+              <li>Free forever plan</li>
+              <li>No card required</li>
+              <li>Guided setup</li>
+            </ul>
+          </div>
+
+          <div
+            class="radar-scope"
+            role="img"
+            aria-label="Illustration of example HAF Bot activity: member verification, an LFG application, a trade post and moderator review. Not live customer data."
+          >
+            <div class="scope-frame">
+              <header class="scope-bar">
+                <span class="scope-status"><i aria-hidden="true"></i>EXAMPLE ACTIVITY</span>
+                <span class="scope-id">HAF COMMUNITY · AU</span>
+              </header>
+              <div class="scope-display">
+                <span class="scope-bearing" style="--bearing: 0deg">000</span>
+                <span class="scope-bearing" style="--bearing: 90deg">090</span>
+                <span class="scope-bearing" style="--bearing: 180deg">180</span>
+                <span class="scope-bearing" style="--bearing: 270deg">270</span>
+                <div class="scope-sweep" aria-hidden="true"></div>
+                <div class="scope-blip" style="--delay: 1.87s; left: 72.7%; top: 24.7%">
+                  <i aria-hidden="true"></i><b>Member verified</b>
+                </div>
+                <div class="scope-blip" style="--delay: 4.98s; left: 77.8%; top: 61.2%">
+                  <i aria-hidden="true"></i><b>LFG application</b>
+                </div>
+                <div class="scope-blip" style="--delay: 9.11s; left: 35.2%; top: 81.7%">
+                  <i aria-hidden="true"></i><b>Trade posted</b>
+                </div>
+                <div class="scope-blip" style="--delay: 14.04s; left: 27.1%; top: 26.3%">
+                  <i aria-hidden="true"></i><b>Mod queue cleared</b>
+                </div>
+                <img class="scope-logo" src="/logo.png" alt="" />
+              </div>
+              <footer class="scope-bar scope-readouts">
+                <span>ILLUSTRATIVE PREVIEW</span><span>NOT LIVE DATA</span>
+              </footer>
+            </div>
+          </div>
+        </section>
+
+        <section class="demo landing-shell" id="live-demo" aria-labelledby="demo-title">
+          <header class="section-heading reveal">
+            <div>
+              <p class="eyebrow">EXAMPLE DISCORD WORKFLOWS</p>
+              <h2 id="demo-title">See what your community could use.</h2>
+            </div>
+            <p>
+              Explore illustrative examples of verification, LFG, trades, mod review and logs. These
+              are mockups, not live customer activity. Feature availability depends on your plan.
+            </p>
+          </header>
+
+          <div
+            class="discord-console reveal"
+            data-nosnippet
+            aria-label="Example Discord gaming community using HAF Bot"
+          >
+            <aside class="server-rail" aria-hidden="true">
+              <img src="/logo.png" alt="" /><span>HC</span><span>01</span><span>+</span>
+            </aside>
+            <aside class="channel-rail">
+              <header><strong>HAF COMMUNITY</strong><span aria-hidden="true">⌄</span></header>
+              <p>EXAMPLE CHANNELS</p>
+              <div
+                class="channel-tabs"
+                role="tablist"
+                aria-label="Example HAF Bot tools"
+                aria-orientation="vertical"
+              >
+                <button
+                  id="tab-announcements"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="panel-announcements"
+                  tabindex="-1"
+                  data-channel="announcements"
+                >
+                  # announcements
+                </button>
+                <button
+                  id="tab-community"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="panel-community"
+                  tabindex="0"
+                  data-channel="community"
+                >
+                  # community-hub
+                </button>
+                <button
+                  id="tab-mod-queue"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="panel-mod-queue"
+                  tabindex="-1"
+                  data-channel="mod-queue"
+                >
+                  # mod-queue
+                </button>
+                <button
+                  id="tab-audit-log"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="panel-audit-log"
+                  tabindex="-1"
+                  data-channel="audit-log"
+                >
+                  # audit-log
+                </button>
+                <div class="channel-group-label" role="presentation">MORE COMMUNITY TOOLS</div>
+                <button
+                  id="tab-welcome"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="panel-welcome"
+                  tabindex="-1"
+                  data-channel="welcome"
+                >
+                  # welcome
+                </button>
+                <button
+                  id="tab-looking-for-group"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="panel-looking-for-group"
+                  tabindex="-1"
+                  data-channel="looking-for-group"
+                >
+                  # looking-for-group
+                </button>
+                <button
+                  id="tab-marketplace"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="panel-marketplace"
+                  tabindex="-1"
+                  data-channel="marketplace"
+                >
+                  # marketplace
+                </button>
+                <button
+                  id="tab-evidence-vault"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="panel-evidence-vault"
+                  tabindex="-1"
+                  data-channel="evidence-vault"
+                >
+                  # evidence-vault
+                </button>
+              </div>
+            </aside>
+
+            <button
+              class="mobile-channel-backdrop"
+              type="button"
+              aria-label="Close channel list"
+              tabindex="-1"
+            ></button>
+
+            <div class="message-pane">
+              <header>
+                <button
+                  class="mobile-channel-toggle"
+                  type="button"
+                  aria-label="Open channel list"
+                  aria-expanded="false"
+                >
+                  <span aria-hidden="true"></span>
+                </button>
+                <div>
+                  <b id="active-channel"># community-hub</b
+                  ><span>See what HAF Bot can do inside Discord.</span>
+                </div>
+                <span aria-hidden="true">⌕ &nbsp; ?</span>
+              </header>
+              <div class="message-content">
+                <section
+                  id="panel-community"
+                  role="tabpanel"
+                  aria-labelledby="tab-community"
+                  data-panel="community"
+                >
+                  <div class="bot-heading">
+                    <span class="bot-avatar"><img src="/logo.png" alt="" /></span>
+                    <div>
+                      <p><b>HAF BOT</b><em>APP</em><time>Today at 7:42 PM</time></p>
+                      <h2>Keep your server moving.</h2>
+                      <p>
+                        Members use HAF in Discord. Staff configure player links, support and
+                        community tools in the web dashboard.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="activity-label"><span>WHAT'S HAPPENING</span></div>
+                  <article class="discord-event">
+                    <span class="member-avatar blue">RX</span>
+                    <div>
+                      <p><b>RexActual</b><time>Today at 7:46 PM</time></p>
+                      <span>joined the community and finished verification</span>
+                      <div class="bot-reply">
+                        <b>HAF BOT <em>APP</em></b>
+                        <p>You're verified, RexActual. Welcome in.</p>
+                        <span class="mock-button">✓ Verified</span>
+                      </div>
+                    </div>
+                    <aside>
+                      <small>NEW PLAYERS</small><b>Member Verification</b
+                      ><a href="https://docs.hafbot.xyz/features/member-verification"
+                        >Read about verification ↗</a
+                      >
+                    </aside>
+                  </article>
+                  <article class="discord-event">
+                    <span class="member-avatar purple">MA</span>
+                    <div>
+                      <p><b>Maple</b><time>Today at 8:03 PM</time></p>
+                      <span>created an LFG post for tonight’s raid</span>
+                      <div class="bot-reply purple-reply">
+                        <b>LOOKING FOR GROUP</b>
+                        <p>
+                          <strong>Nightfall Raid · looking for 3 players</strong><br />Applications
+                          open · Expires in 23h
+                        </p>
+                        <span class="mock-button">Apply</span>
+                      </div>
+                    </div>
+                    <aside>
+                      <small>COMMUNITY</small><b>Looking for Group</b
+                      ><a href="https://docs.hafbot.xyz/features/lfg">Read about LFG ↗</a>
+                    </aside>
+                  </article>
+                </section>
+
+                <section
+                  id="panel-announcements"
+                  role="tabpanel"
+                  aria-labelledby="tab-announcements"
+                  data-panel="announcements"
+                  hidden
+                >
+                  <div class="panel-intro">
+                    <p class="eyebrow">MANAGED MESSAGE</p>
+                    <h2>Post it once. Update it anytime.</h2>
+                    <p>
+                      Change announcements from HAF without deleting and reposting them. Everyone
+                      sees the latest version in the same message.
+                    </p>
+                  </div>
+                  <article class="feature-message">
+                    <span class="bot-avatar"><img src="/logo.png" alt="" /></span>
+                    <div>
+                      <p><b>HAF BOT</b><em>APP</em><time>Today at 6:30 PM</time></p>
+                      <div class="announcement-card">
+                        <small>COMMUNITY BRIEFING</small>
+                        <h3>Weekend raid schedule</h3>
+                        <p>
+                          Squad sign-ups close Friday at 8 PM AEST. Check your platform link before
+                          applying.
+                        </p>
+                        <footer>Updated by Community Staff · no extra ping</footer>
+                      </div>
+                      <a href="https://docs.hafbot.xyz/features/managed-messages"
+                        >See how announcements work ↗</a
+                      >
+                    </div>
+                  </article>
+                </section>
+
+                <section
+                  id="panel-mod-queue"
+                  role="tabpanel"
+                  aria-labelledby="tab-mod-queue"
+                  data-panel="mod-queue"
+                  hidden
+                >
+                  <div class="panel-intro">
+                    <p class="eyebrow">IMAGE RULES MOD QUEUE · PAID PLANS</p>
+                    <h2>Let the bot flag it. Let your mods decide.</h2>
+                    <p>
+                      In normal mode, uncertain images are removed from the channel and queued for
+                      staff review. Start in dry run to test your rules without deleting messages.
+                    </p>
+                  </div>
+                  <article class="feature-message">
+                    <span class="member-avatar green">HB</span>
+                    <div>
+                      <p><b>HAF BOT</b><em>APP</em><time>Today at 8:17 PM</time></p>
+                      <div class="queue-card">
+                        <small>MOD CHECK NEEDED</small>
+                        <h3>Image needs a quick look</h3>
+                        <p>
+                          Original message removed. Review the image and classification. Restore
+                          posts a new bot-authored image message, not the original text or
+                          authorship.
+                        </p>
+                        <div>
+                          <span class="mock-button">Approve deletion</span
+                          ><span class="mock-button secondary">Restore message</span>
+                        </div>
+                      </div>
+                      <a href="https://docs.hafbot.xyz/features/image-rules"
+                        >Read about Image Rules ↗</a
+                      >
+                    </div>
+                  </article>
+                </section>
+
+                <section
+                  id="panel-audit-log"
+                  role="tabpanel"
+                  aria-labelledby="tab-audit-log"
+                  data-panel="audit-log"
+                  hidden
+                >
+                  <div class="panel-intro">
+                    <p class="eyebrow">GUILD AUDIT LOG</p>
+                    <h2>Know what changed and who changed it.</h2>
+                    <p>
+                      Important bot and staff actions are posted to a Discord channel, so your team
+                      can quickly check what happened.
+                    </p>
+                  </div>
+                  <div class="discord-message-stack">
+                    <article class="discord-message">
+                      <span class="bot-avatar"><img src="/logo.png" alt="" /></span>
+                      <div>
+                        <p class="discord-message-meta">
+                          <b>HAF BOT</b><em>APP</em><time>Today at 8:22 PM</time>
+                        </p>
+                        <div class="discord-embed audit-embed yellow-embed">
+                          <h3>Managed Message Updated</h3>
+                          <div class="embed-fields single-column">
+                            <p>
+                              <b>Actor</b><span>@StaffLead<br />ID: 492801745639201743</span>
+                            </p>
+                            <p><b>Internal Name</b><span>Weekend raid schedule</span></p>
+                            <p><b>Channel</b><span>#announcements</span></p>
+                            <p><b>Message ID</b><span>1264920315578601512</span></p>
+                          </div>
+                          <footer><span>hafbot.xyz</span><time>Today at 8:22 PM</time></footer>
+                        </div>
+                      </div>
+                    </article>
+                    <article class="discord-message">
+                      <span class="bot-avatar"><img src="/logo.png" alt="" /></span>
+                      <div>
+                        <p class="discord-message-meta">
+                          <b>HAF BOT</b><em>APP</em><time>Today at 8:17 PM</time>
+                        </p>
+                        <div class="discord-embed audit-embed green-embed">
+                          <h3>Image Rules Mod Queue Action</h3>
+                          <div class="embed-fields single-column">
+                            <p>
+                              <b>Author</b><span>@Maple<br />ID: 318544810279330481</span>
+                            </p>
+                            <p><b>Channel</b><span>#screenshots</span></p>
+                            <p><b>Message ID</b><span>1264920315578601597</span></p>
+                          </div>
+                          <footer><span>hafbot.xyz</span><time>Today at 8:17 PM</time></footer>
+                        </div>
+                      </div>
+                    </article>
+                    <article class="discord-message">
+                      <span class="bot-avatar"><img src="/logo.png" alt="" /></span>
+                      <div>
+                        <p class="discord-message-meta">
+                          <b>HAF BOT</b><em>APP</em><time>Today at 7:46 PM</time>
+                        </p>
+                        <div class="discord-embed audit-embed green-embed">
+                          <h3>Member Verified</h3>
+                          <div class="embed-fields single-column">
+                            <p>
+                              <b>User</b><span>@RexActual<br />ID: 284790135728649013</span>
+                            </p>
+                            <p>
+                              <b>Context</b><span><strong>method:</strong> discord-button</span>
+                            </p>
+                          </div>
+                          <footer><span>hafbot.xyz</span><time>Today at 7:46 PM</time></footer>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+                  <a class="panel-doc-link" href="https://docs.hafbot.xyz/features/guild-audit-log"
+                    >See how audit logs work ↗</a
+                  >
+                </section>
+
+                <section
+                  id="panel-welcome"
+                  role="tabpanel"
+                  aria-labelledby="tab-welcome"
+                  data-panel="welcome"
+                  hidden
+                >
+                  <div class="panel-intro compact-intro">
+                    <p class="eyebrow">MEMBER VERIFICATION</p>
+                    <h2>Give new players an easy first step.</h2>
+                    <p>
+                      Welcome members in a DM or shared channel. The free Verify button grants your
+                      configured role; it is not proof of human or game-account identity.
+                    </p>
+                  </div>
+                  <article class="discord-message">
+                    <span class="bot-avatar"><img src="/logo.png" alt="" /></span>
+                    <div>
+                      <p class="discord-message-meta">
+                        <b>HAF BOT</b><em>APP</em><time>Today at 7:41 PM</time>
+                      </p>
+                      <div class="discord-embed welcome-embed">
+                        <h3>Welcome to HAF Community</h3>
+                        <p>
+                          Read the rules, hit Verify, and jump in. Your access will be waiting if
+                          you leave and come back later.
+                        </p>
+                        <footer>HAF Community • Today at 7:41 PM</footer>
+                      </div>
+                      <div class="discord-actions">
+                        <span class="mock-button success">✓ Verify</span
+                        ><span class="mock-button secondary">Rules ↗</span>
+                      </div>
+                      <a href="https://docs.hafbot.xyz/features/member-verification"
+                        >See how player verification works ↗</a
+                      >
+                    </div>
+                  </article>
+                </section>
+
+                <section
+                  id="panel-looking-for-group"
+                  role="tabpanel"
+                  aria-labelledby="tab-looking-for-group"
+                  data-panel="looking-for-group"
+                  hidden
+                >
+                  <div class="panel-intro compact-intro">
+                    <p class="eyebrow">LOOKING FOR GROUP</p>
+                    <h2>Turn “anyone on?” into a full squad.</h2>
+                    <p>
+                      Players share a server or activity, when they want to play and who they need.
+                      Interested members can notify the poster or apply through optional approval.
+                    </p>
+                  </div>
+                  <article class="discord-message">
+                    <span class="bot-avatar"><img src="/logo.png" alt="" /></span>
+                    <div>
+                      <p class="discord-message-meta">
+                        <b>HAF BOT</b><em>APP</em><time>Today at 8:03 PM</time>
+                      </p>
+                      <div class="discord-embed lfg-embed">
+                        <h3>🎮 Looking For Gamers</h3>
+                        <div class="embed-fields single-column">
+                          <p><b>🌲 Server</b><span>Chernarus • AU Main</span></p>
+                          <p><b>🕒 When</b><span>Tonight from 8:30 PM AEST</span></p>
+                          <p><b>👥 Looking for</b><span>3 players for a bunker run</span></p>
+                          <p><b>📝 Info</b><span>Bring NBC gear. New players welcome.</span></p>
+                          <p><b>👤 Posted by</b><span>@Maple</span></p>
+                          <p><b>⏳ Expires</b><span>in 23 hours</span></p>
+                          <p><b>📌 Status</b><span>Open</span></p>
+                        </div>
+                        <footer>Today at 8:03 PM</footer>
+                      </div>
+                      <div class="discord-actions">
+                        <span class="mock-button success">✓ I'm Interested</span
+                        ><span class="mock-button secondary">✎ Edit Post</span
+                        ><span class="mock-button danger">✕ Close Post</span>
+                      </div>
+                      <a href="https://docs.hafbot.xyz/features/lfg">Read about LFG ↗</a>
+                    </div>
+                  </article>
+                </section>
+
+                <section
+                  id="panel-marketplace"
+                  role="tabpanel"
+                  aria-labelledby="tab-marketplace"
+                  data-panel="marketplace"
+                  hidden
+                >
+                  <div class="panel-intro compact-intro">
+                    <p class="eyebrow">MARKETPLACE</p>
+                    <h2>Make trading easier to follow.</h2>
+                    <p>
+                      Every post shows what's offered, what's wanted, the server, and who posted it.
+                      No more offers getting lost in chat.
+                    </p>
+                  </div>
+                  <article class="discord-message">
+                    <span class="bot-avatar"><img src="/logo.png" alt="" /></span>
+                    <div>
+                      <p class="discord-message-meta">
+                        <b>HAF BOT</b><em>APP</em><time>Today at 8:11 PM</time>
+                      </p>
+                      <div class="discord-embed marketplace-embed">
+                        <h3>💼 Marketplace Listing</h3>
+                        <div class="embed-fields">
+                          <p><b>Type</b><span>Have item to trade</span></p>
+                          <p><b>Server</b><span>AU Main</span></p>
+                          <p><b>Condition</b><span>Pristine</span></p>
+                          <p>
+                            <b>What do you have for trade?</b><span>NVG headstrap + battery</span>
+                          </p>
+                          <p>
+                            <b>Is there something you are looking for?</b
+                            ><span>Plate carrier or 5.56 ammunition</span>
+                          </p>
+                          <p><b>Extra info</b><span>Available after tonight’s restart.</span></p>
+                          <p><b>Posted by</b><span>@RexActual</span></p>
+                        </div>
+                        <footer>Post ID: market-1842 • Today at 8:11 PM</footer>
+                      </div>
+                      <div class="discord-actions">
+                        <span class="mock-button success">💼 Do Business</span
+                        ><span class="mock-button danger">🔒 Close Post</span>
+                      </div>
+                      <a href="https://docs.hafbot.xyz/features/marketplace"
+                        >Read about Marketplace ↗</a
+                      >
+                    </div>
+                  </article>
+                </section>
+
+                <section
+                  id="panel-evidence-vault"
+                  role="tabpanel"
+                  aria-labelledby="tab-evidence-vault"
+                  data-panel="evidence-vault"
+                  hidden
+                >
+                  <div class="panel-intro compact-intro">
+                    <p class="eyebrow">EVIDENCE VAULT</p>
+                    <h2>Keep a private staff record of sensitive messages.</h2>
+                    <p>
+                      Staff can hide a message, find it later, and see who posted it, where it came
+                      from, and who saved it.
+                    </p>
+                  </div>
+                  <article class="discord-message">
+                    <span class="bot-avatar"><img src="/logo.png" alt="" /></span>
+                    <div>
+                      <p class="discord-message-meta">
+                        <b>HAF BOT</b><em>APP</em><time>Today at 8:26 PM</time>
+                      </p>
+                      <div class="discord-embed evidence-embed">
+                        <h3>Evidence Vault Search</h3>
+                        <p>Records for Discord user 3185…4481. Newest first.</p>
+                        <div class="embed-fields single-column">
+                          <p>
+                            <b>1. ev_01J8YH4K2N</b
+                            ><span
+                              >Source author: Maple (3185…4481)<br />Source channel:
+                              #staff-reports<br />Hider: StaffLead (4928…0174)<br />Hidden: 4
+                              minutes ago</span
+                            >
+                          </p>
+                          <p>
+                            <b>2. ev_01J8XF91QS</b
+                            ><span
+                              >Source author: Maple (3185…4481)<br />Source channel:
+                              #trade-disputes<br />Hider: ModAlex (7012…6620)<br />Hidden: 2 days
+                              ago</span
+                            >
+                          </p>
+                        </div>
+                        <footer>Page 1 of 1 • 2 results</footer>
+                      </div>
+                      <div class="discord-actions">
+                        <span class="mock-button">View record 1</span
+                        ><span class="mock-button">View record 2</span>
+                      </div>
+                      <a href="https://docs.hafbot.xyz/features/evidence-vault"
+                        >Read about Evidence Vault ↗</a
+                      >
+                    </div>
+                  </article>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="operations-strip" aria-label="What HAF Bot covers">
+          <div class="landing-shell">
+            <p>One bot. Less admin. More time for your community.</p>
+            <div class="capability-marquee" aria-hidden="true">
+              <div class="marquee-track">
+                <span>WELCOME</span><span>VERIFY</span><span>FIND SQUADS</span><span>TRADE</span
+                ><span>MODERATE</span><span>LOG</span><span>ANNOUNCE</span><span>SCHEDULE</span>
+              </div>
+              <div class="marquee-track">
+                <span>WELCOME</span><span>VERIFY</span><span>FIND SQUADS</span><span>TRADE</span
+                ><span>MODERATE</span><span>LOG</span><span>ANNOUNCE</span><span>SCHEDULE</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="lower-content">
+          <section class="goals landing-shell" aria-labelledby="goals-title">
+            <header class="section-heading reveal">
+              <div>
+                <p class="eyebrow">START WITH WHAT YOU WANT TO IMPROVE</p>
+                <h2 id="goals-title">What should HAF help your community do?</h2>
+              </div>
+              <p>
+                Open a goal to see a practical starting point. You can add more features whenever
+                your community needs them.
+              </p>
+            </header>
+            <div class="goal-accordion reveal">
+              <details open>
+                <summary>
+                  <span class="goal-index" aria-hidden="true">01</span>
+                  <span class="goal-title">Protect the community</span>
+                </summary>
+                <div>
+                  <p>
+                    Limit unwanted reactions, flag suspicious accounts and review off-topic images.
+                  </p>
+                  <ul>
+                    <li>
+                      <a href="https://docs.hafbot.xyz/features/reaction-rules">Reaction Rules</a>
+                    </li>
+                    <li><a href="https://docs.hafbot.xyz/features/bot-defense">Bot Defense</a></li>
+                    <li><a href="https://docs.hafbot.xyz/features/image-rules">Image Rules</a></li>
+                  </ul>
+                </div>
+              </details>
+              <details>
+                <summary>
+                  <span class="goal-index" aria-hidden="true">02</span>
+                  <span class="goal-title">Run staff operations</span>
+                </summary>
+                <div>
+                  <p>Give staff dependable support, evidence, and audit workflows.</p>
+                  <ul>
+                    <li><a href="https://docs.hafbot.xyz/features/tickets">Tickets</a></li>
+                    <li>
+                      <a href="https://docs.hafbot.xyz/features/evidence-vault">Evidence Vault</a>
+                    </li>
+                    <li>
+                      <a href="https://docs.hafbot.xyz/features/guild-audit-log">Guild Audit Log</a>
+                    </li>
+                  </ul>
+                </div>
+              </details>
+              <details>
+                <summary>
+                  <span class="goal-index" aria-hidden="true">03</span>
+                  <span class="goal-title">Help members participate</span>
+                </summary>
+                <div>
+                  <p>
+                    Help members find groups, trade, join events, and turn structured Suggestions
+                    into transparent community decisions with visible staff outcomes.
+                  </p>
+                  <ul>
+                    <li><a href="https://docs.hafbot.xyz/features/lfg">Looking for Group</a></li>
+                    <li><a href="https://docs.hafbot.xyz/features/marketplace">Marketplace</a></li>
+                    <li><a href="https://docs.hafbot.xyz/features/suggestions">Suggestions</a></li>
+                    <li><a href="https://docs.hafbot.xyz/features/events">Events</a></li>
+                  </ul>
+                </div>
+              </details>
+              <details>
+                <summary>
+                  <span class="goal-index" aria-hidden="true">04</span>
+                  <span class="goal-title">Connect players and systems</span>
+                </summary>
+                <div>
+                  <p>Connect player identities, game servers, and trusted external services.</p>
+                  <ul>
+                    <li><a href="https://docs.hafbot.xyz/features/player-link">Player Link</a></li>
+                    <li>
+                      <a href="https://docs.hafbot.xyz/features/player-count">Player Count</a>
+                    </li>
+                    <li><a href="https://docs.hafbot.xyz/features/webhook-proxy">Webhooks</a></li>
+                    <li>
+                      <a href="https://docs.hafbot.xyz/features/server-levels"
+                        >DayZ Server Levels (Beta)</a
+                      >
+                    </li>
+                    <li>
+                      <a href="https://docs.hafbot.xyz/guides/wardogs-discord-community"
+                        >WARDOGS Discord setup and status</a
+                      >
+                    </li>
+                  </ul>
+                </div>
+              </details>
+              <details>
+                <summary>
+                  <span class="goal-index" aria-hidden="true">05</span>
+                  <span class="goal-title">Manage access and communications</span>
+                </summary>
+                <div>
+                  <p>Automate temporary access and keep important Discord messages current.</p>
+                  <ul>
+                    <li><a href="https://docs.hafbot.xyz/features/timed-roles">Timed Roles</a></li>
+                    <li>
+                      <a href="https://docs.hafbot.xyz/features/managed-messages"
+                        >Managed Messages</a
+                      >
+                    </li>
+                    <li>
+                      <a href="https://docs.hafbot.xyz/features/member-verification"
+                        >Member Verification</a
+                      >
+                    </li>
+                  </ul>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <section class="pricing landing-shell" id="plans" aria-labelledby="plans-title">
+            <header class="section-heading reveal">
+              <div>
+                <p class="eyebrow">HOSTED HAF PLANS</p>
+                <h2 id="plans-title">Start free. Upgrade when your community needs more.</h2>
+              </div>
+              <div class="pricing-summary">
+                <p>
+                  These plans cover the hosted HAF service. Stripe handles monthly and yearly
+                  payments. Self-hosted mode includes core features with your own external services.
+                </p>
+                <a href="https://docs.hafbot.xyz/plans">Compare every feature and plan limit ↗</a>
+              </div>
+            </header>
+            <div class="plan-grid reveal">
+              <article>
+                <small>FREE</small>
+                <h3>Get started</h3>
+                <p class="plan-price"><strong>$0</strong><span>forever</span></p>
+                <ul>
+                  <li>1 ticket panel and type, with ordinary transcripts</li>
+                  <li>Up to 100 player links across supported platforms</li>
+                  <li>LFG, Marketplace, Suggestions and Timed Roles</li>
+                  <li>3 managed messages, including drafts · 100 MB storage</li>
+                </ul>
+                <a href="/install">Add to Discord</a>
+              </article>
+              <article class="recommended">
+                <b class="recommended-label">RECOMMENDED</b><small>PREMIUM</small>
+                <h3>Level up one community</h3>
+                <div class="stripe-prices">{{PREMIUM_PRICES}}</div>
+                <ul>
+                  <li>Paid features for 1 assigned Discord server</li>
+                  <li>More ticket types, advanced ticket tools and Events</li>
+                  <li>No plan quantity limit on player links or managed messages</li>
+                  <li>1 GB managed storage · monthly or yearly billing</li>
+                </ul>
+                <a href="/admin/billing?plan=premium&amp;frequency=yearly">Choose Premium</a>
+              </article>
+              <article>
+                <small>PREMIUM PLUS</small>
+                <h3>Run a bigger network</h3>
+                <div class="stripe-prices">{{PREMIUM_PLUS_PRICES}}</div>
+                <ul>
+                  <li>Paid features for up to 3 assigned Discord servers</li>
+                  <li>Same per-server features as Premium</li>
+                  <li>1 shared white-label bot name and brand</li>
+                  <li>1 GB managed storage per assigned server</li>
+                </ul>
+                <a href="/admin/billing?plan=premium_plus&amp;frequency=yearly"
+                  >Choose Premium Plus</a
+                >
+              </article>
+            </div>
+            <p class="pricing-note">{{PRICING_NOTE}}</p>
+            <p class="pricing-note">
+              Discord limits, storage allowances and abuse safeguards still apply. Steam and Xbox
+              links use platform sign-in; PlayStation IDs are self-reported.
+            </p>
+          </section>
+
+          <section class="faq landing-shell" id="faq" aria-labelledby="faq-title">
+            <div class="reveal">
+              <p class="eyebrow">QUICK ANSWERS</p>
+              <h2 id="faq-title">Before you add another bot…</h2>
+            </div>
+            <div class="reveal">
+              <details open>
+                <summary>What is HAF Bot?</summary>
+                <p>
+                  HAF Bot is a Discord bot for gaming communities. It combines private support
+                  tickets, player account linking, LFG, Marketplace, Suggestions, moderation and
+                  audit logs with a web dashboard for staff.
+                </p>
+              </details>
+              <details>
+                <summary>Can I self-host HAF Bot?</summary>
+                <p>
+                  Yes. Run your own Discord application with Docker, PostgreSQL and private object
+                  storage, with optional Cloudflare Tunnel ingress. You manage hosting, credentials,
+                  backups and updates. The MIT-licensed source is available at
+                  github.com/rogersau/hafbot. The initial source release documents its
+                  live-installation testing limits. Self-hosted mode includes all core features with
+                  your own external services; resource and safety limits still apply.
+                  <a href="https://docs.hafbot.xyz/self-hosting">Read the self-hosting guide</a>.
+                </p>
+              </details>
+              <details>
+                <summary>What happens if I cancel?</summary>
+                <p>
+                  You keep paid features until the cancellation date shown in Billing. After that,
+                  saved configuration remains, paid-only processing stops and Free limits apply. HAF
+                  does not replay activity missed while paid features were inactive.
+                </p>
+              </details>
+              <details>
+                <summary>How are payments handled?</summary>
+                <p>
+                  Stripe handles checkout, invoices, and payment methods. HAF never stores your full
+                  card details.
+                </p>
+              </details>
+            </div>
+          </section>
+
+          <section class="final-cta landing-shell" aria-labelledby="cta-title">
+            <div class="final-cta-card reveal">
+              <div class="final-cta-ping" aria-hidden="true"></div>
+              <p class="eyebrow">READY WHEN YOU ARE</p>
+              <h2 id="cta-title">Get your evenings back.</h2>
+              <p>
+                Add HAF Bot to your Discord and hand over the busywork tonight. Free plan
+                included—upgrade only if you outgrow it.
+              </p>
+              <div class="hero-actions">
+                <a class="button button-primary" href="/install"
+                  >Add HAF Bot to Discord <span aria-hidden="true">↗</span></a
+                >
+                <a class="button button-ghost" href="https://docs.hafbot.xyz"
+                  >Browse the docs <span aria-hidden="true">↗</span></a
+                >
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <footer class="site-footer">
+        <div class="landing-shell">
+          <a class="footer-brand" href="/" aria-label="HAF Bot home"
+            ><img src="/logo.png" alt="" width="30" height="30" /><span>HAF BOT</span
+            ><small>HELPFUL AS F**K</small></a
+          >
+          <nav aria-label="Footer navigation">
+            <a href="https://docs.hafbot.xyz/">Docs</a><a href="/changelog">What's New</a>
+            <a href="/changelog.xml">Subscribe to updates</a>
+            <a href="https://docs.hafbot.xyz/self-hosting">Self-host</a>
+            <a href="https://discord.gg/HpRPkdm6dv">Support</a>
+            <a href="/terms">Terms</a><a href="/privacy">Privacy</a>
+          </nav>
+        </div>
+      </footer>
+    </div>
+    <script type="module" src="/landing/assets/home.js"></script>
+  </body>
+</html>
