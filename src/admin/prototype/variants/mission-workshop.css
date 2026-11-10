@@ -1,0 +1,224 @@
+/* PROTOTYPE — throwaway. Variant D: Mission Control x Workshop. */
+
+.ws-root--mission {
+  grid-template-columns: 236px minmax(0, 1fr);
+  background: var(--haf-ink);
+  color: #e8ebf5;
+}
+
+.ws-root--mission .ws-sidebar {
+  background:
+    radial-gradient(340px 420px at 50% -8%, rgba(114, 137, 251, 0.14), transparent 62%), #08090f;
+  border-right-color: rgba(114, 137, 251, 0.18);
+}
+
+.ws-root--mission .ws-brand {
+  padding-block: 13px 10px;
+}
+
+.ws-root--mission .ws-brand img {
+  width: 38px;
+  height: 38px;
+  box-shadow:
+    0 0 0 2px rgba(114, 137, 251, 0.72),
+    0 0 22px rgba(114, 137, 251, 0.5);
+}
+
+.ws-root--mission .ws-brand strong {
+  font-size: 1.25rem;
+  letter-spacing: 0.08em;
+}
+
+.ws-root--mission .ws-brand strong em {
+  text-shadow: 0 0 15px rgba(114, 137, 251, 0.8);
+}
+
+.ws-root--mission .ws-guildcard {
+  border-radius: 0;
+  border-color: rgba(114, 137, 251, 0.32);
+  background: linear-gradient(120deg, rgba(114, 137, 251, 0.17), rgba(114, 137, 251, 0.035));
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+}
+
+.ws-root--mission .ws-tree {
+  padding-inline: 7px;
+}
+
+.ws-root--mission .ws-tree__group {
+  margin-top: 10px;
+}
+
+.ws-root--mission .ws-tree__grouplabel {
+  color: var(--haf-blue-bright);
+  font-size: 0.56rem;
+}
+
+.ws-root--mission .ws-tree__item {
+  min-height: 31px;
+  padding-block: 6px;
+  border-radius: 3px;
+  color: #9098b6;
+}
+
+.ws-root--mission .ws-tree__item:hover {
+  background: rgba(114, 137, 251, 0.09);
+}
+
+.ws-root--mission .ws-tree__item.is-active {
+  background: linear-gradient(90deg, rgba(114, 137, 251, 0.32), rgba(114, 137, 251, 0.06));
+  box-shadow:
+    inset 2px 0 0 var(--haf-blue-bright),
+    0 0 16px rgba(114, 137, 251, 0.1);
+}
+
+.ws-root--mission .ws-tree__badge {
+  border-radius: 3px;
+  box-shadow: 0 0 9px rgba(114, 137, 251, 0.55);
+}
+
+.ws-root--mission .ws-sidebar__footer {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.ws-root--mission .ws-tabbar {
+  padding-top: 7px;
+  background: #05060b;
+  border-bottom-color: rgba(114, 137, 251, 0.2);
+}
+
+.ws-root--mission .ws-tab {
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+.ws-root--mission .ws-tab.is-active {
+  background: #10121c;
+  border-color: rgba(114, 137, 251, 0.52);
+  box-shadow: inset 0 2px 0 var(--haf-blue);
+}
+
+.ws-root--mission .ws-tab.is-active::after {
+  background: #10121c;
+}
+
+.ws-root--mission .ws-command {
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.ws-root--mission .ws-workspace {
+  padding: 20px 24px 34px;
+  background:
+    linear-gradient(rgba(114, 137, 251, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(114, 137, 251, 0.025) 1px, transparent 1px),
+    radial-gradient(900px 380px at 85% -10%, rgba(114, 137, 251, 0.11), transparent 60%), #08090f;
+  background-size:
+    36px 36px,
+    36px 36px,
+    auto,
+    auto;
+}
+
+.ws-root--mission .ws-overview__head h1,
+.ws-root--mission .ws-feature__head h1 {
+  font-size: 2.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+.ws-root--mission .ws-overview__head h1 em,
+.ws-root--mission .ws-feature__head h1 {
+  text-shadow: 0 0 22px rgba(114, 137, 251, 0.35);
+}
+
+.ws-root--mission .ws-overview__grid {
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.9fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.ws-root--mission .ws-panel,
+.ws-root--mission .ws-accordion {
+  border-radius: 0;
+  border-color: rgba(114, 137, 251, 0.24);
+  background: linear-gradient(155deg, rgba(20, 23, 37, 0.94), rgba(10, 11, 18, 0.96));
+  clip-path: polygon(
+    11px 0,
+    100% 0,
+    100% calc(100% - 11px),
+    calc(100% - 11px) 100%,
+    0 100%,
+    0 11px
+  );
+}
+
+.ws-root--mission .ws-panel {
+  padding: 13px;
+  margin-bottom: 12px;
+}
+
+.ws-root--mission .ws-panel__title,
+.ws-root--mission .ws-accordion__head strong {
+  color: var(--haf-blue-bright);
+  font-size: 1.16rem;
+}
+
+.ws-root--mission .ws-queue__row {
+  padding: 9px 11px;
+  margin-bottom: 6px;
+  border-radius: 0;
+  border-color: rgba(114, 137, 251, 0.2);
+  background: rgba(114, 137, 251, 0.035);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+
+.ws-root--mission .ws-queue__row:hover {
+  background: rgba(114, 137, 251, 0.13);
+  box-shadow: 0 0 16px rgba(114, 137, 251, 0.12);
+}
+
+.ws-root--mission .ws-queue__action {
+  color: var(--haf-blue-bright);
+}
+
+.ws-root--mission .ws-vital {
+  border-radius: 0;
+  background: rgba(114, 137, 251, 0.07);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+
+.ws-root--mission .ws-vital strong {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 800;
+  font-style: italic;
+}
+
+.ws-root--mission .ws-btn,
+.ws-root--mission .ws-pill,
+.ws-root--mission .ws-chip {
+  border-radius: 4px;
+}
+
+.ws-root--mission .ws-accordion__head {
+  padding-block: 11px;
+}
+
+.ws-root--mission .ws-flag {
+  min-height: 53px;
+}
+
+.ws-root--mission .ws-statusbar {
+  background: #05060b;
+  border-top-color: rgba(114, 137, 251, 0.35);
+  color: #7f88a8;
+}
+
+.ws-root--mission .ws-statusbar__pulse {
+  background: #fff;
+  box-shadow: 0 0 8px #fff;
+}

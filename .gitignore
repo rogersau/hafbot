@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-tests/
+dist-admin/
+dist-landing/
+dist-node/
+dist-e2e/
+
+# Test artifacts
+.playwright-mcp/
+.artifacts/
+artifacts/admin-bundle-report.json
+artifacts/admin-bundle-report.md
+artifacts/test-timings.json
+artifacts/release-assets.json
+/artifacts/stripe-connect/
+/reconciliation-*.json
+landing-preview.png
+
+# Wrangler
+.wrangler/
+.wrangler-*/
+backups/
+.dev.vars
+
+# Environment secrets (never commit these)
+.env
+.env.local
+.env.*
+!.env.example
+!.env.*.example
+*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Local git worktrees
+.worktrees/
+.tools/
+.scratch/
+src/runtime/admin-bundle.ts
+src/runtime/landing-bundle.ts
+
+docs-site/.vitepress/dist/
+docs-site/.vitepress/cache/
+db_backup/

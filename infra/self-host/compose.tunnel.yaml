@@ -1,0 +1,21 @@
+# Optional remotely managed Cloudflare Tunnel on the existing edge network.
+# Set CLOUDFLARED_IMAGE to a reviewed cloudflare/cloudflared@sha256:... digest.
+services:
+  tunnel:
+    image: ${CLOUDFLARED_IMAGE:?Set CLOUDFLARED_IMAGE to a pinned cloudflared image digest}
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run", "--token-file", "/run/secrets/tunnel-token"]
+    # The read-only token file must be readable by this non-root UID on the host.
+    user: "65532:65532"
+    volumes:
+      - ./tunnel-token:/run/secrets/tunnel-token:ro
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - edge

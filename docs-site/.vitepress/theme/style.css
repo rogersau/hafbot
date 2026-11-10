@@ -1,0 +1,672 @@
+/* HAF docs theme — aligned with the landing page (src/landing) and the
+   admin Ops Deck (src/admin). Dark-only site; tokens mirror both surfaces. */
+
+:root {
+  /* ─── Shared HAF tokens (same values as landing :root + admin html.dark) ─ */
+  --haf-background: 220 70% 3%;
+  --haf-foreground: 230 100% 98%;
+  --haf-card: 220 60% 8%;
+  --haf-secondary: 220 40% 13%;
+  --haf-muted-foreground: 220 20% 70%;
+  --haf-accent: 230 100% 70%;
+  --haf-accent-foreground: 230 100% 98%;
+  --haf-border: 220 40% 18%;
+  --haf-radius: 0.5rem;
+
+  /* ─── Ops palette (admin --ops-* + landing accents) ───────────────────── */
+  --haf-ops-bg: #020305;
+  --haf-ops-sidebar: #08090f;
+  --haf-ops-panel: #10121c;
+  --haf-ops-panel-subtle: #0c0e16;
+  --haf-ops-border: #242942;
+  --haf-ops-text: #e8ebf5;
+  --haf-ops-muted: #858da9;
+  --haf-ops-accent: #9eacff;
+  --haf-glow: 114 137 251; /* rgb triplet for rgba() glows */
+  --haf-accent-blue: #7289fb;
+  --haf-phosphor: oklch(0.88 0.16 168);
+  --haf-blurple: #5865f2;
+  --haf-blurple-hover: #4752c4;
+  --haf-blurple-border: #7480ff;
+  --haf-line: #313c51;
+
+  --haf-font-display:
+    "Oxanium", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  --haf-font-body:
+    "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+
+  /* ─── VitePress mapping ───────────────────────────────────────────────── */
+  --vp-c-bg: #05070c;
+  --vp-c-bg-soft: var(--haf-ops-panel-subtle);
+  --vp-c-bg-mute: var(--haf-ops-panel);
+  --vp-c-bg-alt: var(--haf-ops-sidebar);
+  --vp-c-bg-elv: var(--haf-ops-panel);
+
+  --vp-c-text: var(--haf-ops-text);
+  --vp-c-text-1: var(--haf-ops-text);
+  --vp-c-text-2: #a9b1c7;
+  --vp-c-text-3: var(--haf-ops-muted);
+
+  --vp-c-brand-1: var(--haf-ops-accent);
+  --vp-c-brand-2: #8f9fff;
+  --vp-c-brand-3: var(--haf-accent-blue);
+  --vp-c-brand-soft: rgb(var(--haf-glow) / 0.14);
+
+  --vp-c-divider: var(--haf-ops-border);
+  --vp-c-border: var(--haf-ops-border);
+  --vp-c-gutter: var(--haf-ops-border);
+
+  --vp-button-brand-bg: var(--haf-blurple);
+  --vp-button-brand-text: #fff;
+  --vp-button-brand-hover-bg: var(--haf-blurple-hover);
+  --vp-button-brand-active-bg: var(--haf-blurple-hover);
+  --vp-button-brand-border: var(--haf-blurple-border);
+  --vp-button-brand-hover-border: #8c95ff;
+  --vp-button-brand-active-border: #8c95ff;
+  --vp-button-alt-bg: color-mix(in oklab, #10121c 55%, transparent);
+  --vp-button-alt-text: #dbe1ec;
+  --vp-button-alt-border: var(--haf-line);
+  --vp-button-alt-hover-bg: color-mix(in oklab, #10121c 75%, transparent);
+  --vp-button-alt-hover-text: #f4f6fb;
+  --vp-button-alt-hover-border: color-mix(in oklab, var(--haf-ops-accent) 65%, var(--haf-line));
+  --vp-button-alt-active-bg: var(--vp-button-alt-hover-bg);
+  --vp-button-alt-active-text: var(--vp-button-alt-hover-text);
+  --vp-button-alt-active-border: var(--vp-button-alt-hover-border);
+
+  --vp-c-default-soft-bg: color-mix(
+    in srgb,
+    var(--haf-ops-panel-subtle) 92%,
+    var(--haf-accent-blue) 8%
+  );
+  --vp-c-brand-soft-bg: rgb(var(--haf-glow) / 0.1);
+  --vp-c-tip-soft-bg: oklch(0.88 0.16 168 / 0.08);
+  --vp-c-warning-soft-bg: rgb(184 140 72 / 0.1);
+  --vp-c-danger-soft-bg: rgb(219 107 101 / 0.12);
+
+  --vp-custom-block-info-bg: color-mix(
+    in srgb,
+    var(--haf-ops-panel-subtle) 92%,
+    var(--haf-accent-blue) 8%
+  );
+  --vp-custom-block-info-border: color-mix(
+    in srgb,
+    var(--haf-accent-blue) 32%,
+    var(--haf-ops-border)
+  );
+  --vp-custom-block-tip-bg: oklch(0.88 0.16 168 / 0.07);
+  --vp-custom-block-tip-border: oklch(0.88 0.16 168 / 0.45);
+  --vp-custom-block-warning-bg: rgb(184 140 72 / 0.09);
+  --vp-custom-block-warning-border: rgb(184 140 72 / 0.55);
+  --vp-custom-block-danger-bg: rgb(219 107 101 / 0.1);
+  --vp-custom-block-danger-border: rgb(219 107 101 / 0.55);
+
+  --vp-code-block-bg: #0a0d15;
+  --vp-code-block-divider-color: var(--haf-ops-border);
+  --vp-code-line-highlight-color: rgb(var(--haf-glow) / 0.1);
+  --vp-code-copy-code-hover-bg: var(--haf-ops-panel);
+  --vp-code-copy-code-active-text: var(--haf-ops-text);
+  --vp-code-copy-code-bg: var(--haf-ops-panel-subtle);
+
+  --vp-sidebar-bg-color: var(--haf-ops-sidebar);
+  --vp-sidebar-divider: var(--haf-ops-border);
+
+  --vp-nav-bg-color: #090d15c9;
+  --vp-nav-screen-bg-color: #090d15;
+
+  --vp-local-nav-bg-color: #090d15c9;
+
+  --vp-local-search-bg: var(--haf-ops-panel);
+  --vp-local-search-result-border: var(--haf-ops-border);
+  --vp-local-search-result-bg: var(--haf-ops-bg);
+  --vp-local-search-highlight-bg: rgb(var(--haf-glow) / 0.2);
+  --vp-local-search-highlight-text: var(--haf-ops-accent);
+
+  --vp-input-bg-color: var(--haf-ops-panel-subtle);
+  --vp-input-border-color: color-mix(in srgb, var(--haf-accent-blue) 24%, var(--haf-ops-border));
+  --vp-input-hover-border-color: var(--haf-accent-blue);
+  --vp-input-focus-border-color: var(--haf-accent-blue);
+
+  --vp-switch-bg-color: var(--haf-ops-panel-subtle);
+
+  --vp-tip-color: var(--haf-phosphor);
+  --vp-warning-color: #d5a960;
+  --vp-danger-color: #ea817a;
+
+  --vp-font-family-base: var(--haf-font-body);
+
+  /* Hero name: solid ink, not a brand gradient (landing hero style). */
+  --vp-home-hero-name-color: #f4f6fb;
+  --vp-home-hero-name-background: none;
+}
+
+/* ─── Base ──────────────────────────────────────────────────────────────── */
+body {
+  /* Admin workspace grid + landing gradient, with the shared radial glow. */
+  background-image:
+    linear-gradient(rgb(var(--haf-glow) / 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--haf-glow) / 0.022) 1px, transparent 1px),
+    radial-gradient(circle at 72% -18%, rgb(var(--haf-glow) / 0.16), transparent 34rem),
+    linear-gradient(105deg, #070b12 8%, #0a101d 56%, #080c15 100%);
+  background-size:
+    36px 36px,
+    36px 36px,
+    auto,
+    auto;
+  background-attachment: fixed;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  color: #0b1019;
+  background: #aeb9ff;
+}
+
+:focus-visible {
+  outline: 2px solid #aeb9ff;
+  outline-offset: 3px;
+}
+
+/* ─── Eyebrow (landing signature element) ───────────────────────────────── */
+.haf-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 26px;
+  color: #92a0ef;
+  font: 700 10px var(--haf-font-display);
+  letter-spacing: 0.14em;
+  text-wrap: balance;
+}
+.haf-eyebrow-dot {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--haf-phosphor);
+  box-shadow: 0 0 8px var(--haf-phosphor);
+}
+.haf-eyebrow-dot::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 1px solid var(--haf-phosphor);
+  border-radius: 50%;
+  animation: haf-eyebrow-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes haf-eyebrow-ping {
+  0% {
+    scale: 0.6;
+    opacity: 0.9;
+  }
+  80%,
+  100% {
+    scale: 2.1;
+    opacity: 0;
+  }
+}
+
+/* ─── Top navigation (landing .site-header) ─────────────────────────────── */
+.VPNav {
+  border-bottom-color: color-mix(in srgb, var(--haf-accent-blue) 18%, transparent) !important;
+}
+
+.VPNavBar .wrapper {
+  background-color: var(--vp-nav-bg-color);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+}
+
+.VPNavBar .divider {
+  display: none;
+}
+
+.VPNavBarTitle .title {
+  color: #f5f6fa;
+  font: 700 15px var(--haf-font-display);
+  letter-spacing: 0.03em;
+  transition: color 0.2s;
+}
+.VPNavBarTitle:hover .title {
+  color: #fff;
+}
+
+.VPNavBar .VPNavBarTitle img {
+  border-radius: 50%;
+  transition: rotate 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.VPNavBarTitle:hover img {
+  rotate: -8deg;
+}
+
+.VPNavBarMenuLink,
+.VPNavBarMenuGroup .button {
+  color: #bdc4d1 !important;
+  font: 600 12px var(--haf-font-display) !important;
+  letter-spacing: 0.03em;
+  transition: color 0.2s;
+}
+.VPNavBarMenuLink:hover,
+.VPNavBarMenuGroup:hover .button {
+  color: #f3f5fa !important;
+}
+.VPNavBarMenuLink.active {
+  color: var(--haf-ops-accent) !important;
+}
+.VPNavBarMenuLink.active::before {
+  background-color: var(--haf-ops-accent);
+}
+
+.VPNavBarAppearance,
+.VPNavScreenAppearance,
+.VPSwitchAppearance {
+  display: none !important;
+}
+
+.VPNavScreen .VPNavScreenMenuLink,
+.VPNavScreen .VPNavScreenMenuGroup .button {
+  font-family: var(--haf-font-display);
+  letter-spacing: 0.03em;
+}
+
+.VPLocalNav {
+  background-color: var(--vp-local-nav-bg-color);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border-bottom-color: color-mix(in srgb, var(--haf-accent-blue) 18%, transparent) !important;
+}
+.VPLocalNav .menu-text,
+.VPLocalNav .top-link {
+  font-family: var(--haf-font-display);
+}
+
+/* ─── Sidebar (admin Ops Deck rail) ─────────────────────────────────────── */
+.VPSidebar {
+  background:
+    radial-gradient(340px 420px at 50% -8%, rgb(var(--haf-glow) / 0.14), transparent 62%),
+    var(--haf-ops-sidebar) !important;
+  border-right-color: color-mix(in srgb, var(--haf-accent-blue) 22%, transparent) !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--haf-ops-border) transparent;
+}
+
+.VPSidebarItem .item {
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+
+/* Group headings — tiny Oxanium caps like admin section labels. */
+.VPSidebarItem.level-0 > .item > .text {
+  color: var(--haf-ops-accent);
+  font: 700 10px var(--haf-font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.VPSidebarItem .text {
+  font-family: var(--haf-font-display);
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.VPSidebarItem.level-1 .text,
+.VPSidebarItem.level-2 .text,
+.VPSidebarItem.level-3 .text {
+  color: var(--haf-ops-muted);
+  font-weight: 600;
+}
+
+.VPSidebarItem.is-link > .item {
+  padding: 2px 10px;
+  margin-inline: -10px;
+}
+
+.VPSidebarItem.is-link > .item:hover {
+  background: rgb(var(--haf-glow) / 0.09);
+}
+
+.VPSidebarItem.is-link > .item:hover .text {
+  color: var(--haf-ops-text);
+}
+
+.VPSidebarItem.is-active > .item {
+  background: linear-gradient(90deg, rgb(var(--haf-glow) / 0.3), rgb(var(--haf-glow) / 0.055));
+  box-shadow: inset 2px 0 0 var(--haf-accent-blue);
+}
+
+.VPSidebarItem.is-active > .item .link > .text,
+.VPSidebarItem.level-1.is-active > .item .link > .text {
+  color: var(--haf-ops-text);
+}
+
+.VPSidebarItem.has-active > .item > .text {
+  color: var(--haf-ops-accent);
+}
+
+.VPSidebarItem .caret {
+  color: var(--haf-ops-muted);
+}
+.VPSidebarItem .caret-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ─── Home hero (landing hero) ──────────────────────────────────────────── */
+.VPHero .name,
+.VPHero .text {
+  max-width: 700px;
+  font-family: var(--haf-font-display);
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+  text-transform: uppercase;
+  text-shadow: 0 0 28px rgb(var(--haf-glow) / 0.16);
+  text-wrap: balance;
+}
+.VPHero .name {
+  color: #f4f6fb;
+  -webkit-text-fill-color: #f4f6fb;
+}
+.VPHero .text {
+  color: var(--haf-ops-accent);
+  text-shadow: 0 0 28px rgb(var(--haf-glow) / 0.32);
+}
+.VPHero .tagline {
+  max-width: 560px;
+  padding-top: 18px;
+  color: var(--haf-ops-muted);
+  font-size: 16.5px;
+  font-weight: 400;
+  line-height: 1.68;
+  text-wrap: pretty;
+}
+.VPHero .actions {
+  padding-top: 34px;
+}
+.VPHero .VPButton {
+  min-height: 48px;
+  padding: 14px 22px;
+  font-size: 12px;
+}
+
+/* Landing buttons */
+.VPButton {
+  border-radius: 10px;
+  font-family: var(--haf-font-display);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition:
+    translate 0.18s ease,
+    box-shadow 0.25s ease,
+    border-color 0.18s ease,
+    background 0.25s ease;
+}
+.VPButton.brand {
+  box-shadow:
+    inset 0 1px 0 #ffffff26,
+    0 12px 34px -10px #5865f2b3;
+}
+.VPButton.brand:hover {
+  translate: 0 -2px;
+  box-shadow:
+    inset 0 1px 0 #ffffff2e,
+    0 18px 44px -10px #5865f2cc;
+}
+.VPButton.alt:hover {
+  translate: 0 -2px;
+  box-shadow: 0 12px 30px -14px #000c;
+}
+
+/* ─── Home feature cards (admin panel treatment) ────────────────────────── */
+.VPFeature .box {
+  position: relative;
+  height: 100%;
+  border: 1px solid color-mix(in srgb, var(--haf-accent-blue) 26%, var(--haf-ops-border));
+  border-radius: 4px;
+  background: linear-gradient(
+    155deg,
+    color-mix(in srgb, var(--haf-ops-panel) 96%, var(--haf-accent-blue) 4%),
+    color-mix(in srgb, var(--haf-ops-panel-subtle) 97%, #020305 3%)
+  );
+  box-shadow: none;
+  transition:
+    translate 0.25s cubic-bezier(0.2, 0.7, 0.2, 1),
+    border-color 0.2s,
+    box-shadow 0.3s;
+}
+.VPFeature .box::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 12px;
+  width: 36px;
+  height: 1px;
+  background: var(--haf-ops-accent);
+  box-shadow: 0 0 10px rgb(var(--haf-glow) / 0.55);
+}
+.VPFeature .box:hover {
+  translate: 0 -4px;
+  border-color: color-mix(in srgb, var(--haf-accent-blue) 55%, var(--haf-ops-border));
+  box-shadow: 0 30px 60px -30px #000d;
+}
+.VPFeature .title {
+  color: var(--haf-ops-accent);
+  font: italic 750 17px/1.25 var(--haf-font-display);
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  text-shadow: 0 0 16px rgb(var(--haf-glow) / 0.18);
+}
+.VPFeature .details {
+  color: var(--haf-ops-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.VPFeature .link-text-value {
+  color: var(--haf-ops-accent);
+  font: 700 10px var(--haf-font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ─── Document typography ───────────────────────────────────────────────── */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4,
+.vp-doc h5,
+.vp-doc h6 {
+  color: var(--haf-ops-text);
+  font-family: var(--haf-font-display);
+}
+
+/* Admin workspace page header */
+.vp-doc h1 {
+  font: italic 800 clamp(2rem, 3vw, 2.65rem) / 0.98 var(--haf-font-display);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-shadow: 0 0 22px rgb(var(--haf-glow) / 0.32);
+}
+
+.vp-doc h2 {
+  border-top-color: var(--haf-ops-border);
+  font: italic 750 1.45rem/1.25 var(--haf-font-display);
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  text-shadow: 0 0 16px rgb(var(--haf-glow) / 0.18);
+}
+
+.vp-doc h3 {
+  font-weight: 600;
+}
+
+.vp-doc p,
+.vp-doc li {
+  color: #b6bdd0;
+}
+
+.vp-doc strong {
+  color: var(--haf-ops-text);
+}
+
+.vp-doc a {
+  color: var(--haf-ops-accent);
+  text-underline-offset: 3px;
+  transition: color 0.15s;
+}
+.vp-doc a:hover {
+  color: #d3dbff;
+}
+
+.vp-doc hr {
+  border-color: var(--haf-ops-border);
+}
+
+.vp-doc :not(pre) > code {
+  padding: 2px 5px;
+  border: 1px solid rgb(var(--haf-glow) / 0.18);
+  border-radius: 3px;
+  color: #c7d0ff;
+  background-color: rgb(var(--haf-glow) / 0.1);
+  font-size: 0.875em;
+}
+
+.vp-doc blockquote {
+  border-left-color: var(--haf-accent-blue);
+  color: var(--haf-ops-muted);
+}
+
+/* Code blocks */
+.vp-doc div[class*="language-"] {
+  border: 1px solid var(--haf-ops-border);
+  border-radius: 4px;
+}
+.vp-doc div[class*="language-"] button.copy {
+  border-radius: 3px;
+}
+
+/* Tables (admin data tables) */
+.vp-doc table {
+  border-color: var(--haf-ops-border);
+}
+.vp-doc th {
+  border-color: var(--haf-ops-border);
+  background-color: color-mix(in srgb, var(--haf-ops-panel-subtle) 90%, var(--haf-accent-blue) 10%);
+  color: var(--haf-ops-accent);
+  font-family: var(--haf-font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.vp-doc td {
+  border-color: var(--haf-ops-border);
+}
+.vp-doc tr:nth-child(2n) {
+  background-color: transparent;
+}
+.vp-doc tbody tr {
+  transition: background 0.15s;
+}
+.vp-doc tbody tr:hover {
+  background-color: rgb(var(--haf-glow) / 0.07);
+}
+
+/* Custom blocks (admin alerts) */
+.vp-doc .custom-block {
+  border: 1px solid;
+  border-radius: 4px;
+}
+.vp-doc .custom-block .custom-block-title {
+  font-family: var(--haf-font-display);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.vp-doc .custom-block.info {
+  border-color: color-mix(in srgb, var(--haf-accent-blue) 32%, var(--haf-ops-border));
+}
+.vp-doc .custom-block.info .custom-block-title {
+  color: var(--haf-ops-accent);
+}
+
+/* ─── Aside outline ("On this page") ────────────────────────────────────── */
+.VPDocAsideOutline .outline-title {
+  color: var(--haf-ops-accent);
+  font: 700 10px var(--haf-font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.VPDocAsideOutline .outline-link {
+  color: var(--haf-ops-muted);
+  transition: color 0.15s;
+}
+.VPDocAsideOutline .outline-link:hover {
+  color: var(--haf-ops-text);
+}
+.VPDocAsideOutline .outline-link.active {
+  color: var(--haf-ops-accent);
+}
+.VPDocAsideOutline .outline-marker {
+  background-color: var(--haf-accent-blue);
+}
+
+/* ─── Pager + doc footer ────────────────────────────────────────────────── */
+.vp-doc .pager-link {
+  border: 1px solid color-mix(in srgb, var(--haf-accent-blue) 26%, var(--haf-ops-border));
+  border-radius: 4px;
+  background: linear-gradient(
+    155deg,
+    color-mix(in srgb, var(--haf-ops-panel) 96%, var(--haf-accent-blue) 4%),
+    color-mix(in srgb, var(--haf-ops-panel-subtle) 97%, #020305 3%)
+  );
+  transition:
+    border-color 0.2s,
+    translate 0.18s ease,
+    box-shadow 0.25s ease;
+}
+.vp-doc .pager-link:hover {
+  translate: 0 -2px;
+  border-color: var(--haf-accent-blue);
+  box-shadow: 0 12px 30px -14px #000c;
+}
+.vp-doc .pager-link .desc {
+  color: var(--haf-ops-muted);
+  font-family: var(--haf-font-display);
+}
+.vp-doc .pager-link .title {
+  color: var(--haf-ops-accent);
+  font-family: var(--haf-font-display);
+  transition: color 0.15s;
+}
+.vp-doc .pager-link:hover .title {
+  color: #d3dbff;
+}
+
+.VPDocFooter .edit-info .edit-link a {
+  color: var(--haf-ops-accent);
+}
+.VPDocFooter .last-updated,
+.VPDocFooter .edit-info .edit-link {
+  font-family: var(--haf-font-display);
+}
+
+/* ─── Site footer ───────────────────────────────────────────────────────── */
+.VPFooter {
+  border-top-color: var(--haf-ops-border) !important;
+}
+
+/* ─── Reduced motion ────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .haf-eyebrow-dot::after {
+    animation: none;
+  }
+  .VPButton,
+  .VPFeature .box,
+  .vp-doc .pager-link {
+    transition: none;
+  }
+}

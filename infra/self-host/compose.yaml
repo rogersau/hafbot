@@ -1,0 +1,89 @@
+name: haf-bot-self-hosted
+
+services:
+  app:
+    image: ${HAF_IMAGE:?Set HAF_IMAGE to an immutable image digest}
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the local or managed PostgreSQL URL}
+      HAF_ROLE: ${HAF_ROLE:-all}
+      HAF_DEPLOYMENT_MODE: ${HAF_DEPLOYMENT_MODE:-self-hosted}
+      HAF_RUN_MIGRATIONS: ${HAF_RUN_MIGRATIONS:-true}
+      HAF_GATEWAY_ENABLED: ${HAF_GATEWAY_ENABLED:-false}
+      HAF_JOBS_ENABLED: ${HAF_JOBS_ENABLED:-false}
+      HAF_SCHEDULER_ENABLED: ${HAF_SCHEDULER_ENABLED:-false}
+      HAF_MAINTENANCE_MODE: ${HAF_MAINTENANCE_MODE:-true}
+      PG_POOL_MAX: ${PG_POOL_MAX:-8}
+      PG_HTTP_POOL_MAX: ${PG_HTTP_POOL_MAX:-3}
+      PG_ALLOW_INSECURE_DOCKER_NETWORK: ${PG_ALLOW_INSECURE_DOCKER_NETWORK:-false}
+      NODE_ENV: production
+      PORT: "8080"
+    ports:
+      - "127.0.0.1:${HAF_BIND_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+    networks:
+      - edge
+      - data
+
+  postgres:
+    image: postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: haf
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_USER: haf
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=50
+      - -c
+      - log_statement=none
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haf -d haf"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    shm_size: 256mb
+    stop_grace_period: 60s
+    networks:
+      - data
+
+networks:
+  edge: {}
+  data:
+    internal: true
+
+volumes:
+  postgres-data: {}

@@ -1,0 +1,356 @@
+{
+  "releases": [
+    {
+      "version": "2026.08.28",
+      "date": "2026-08-28",
+      "title": "Server Levels beta",
+      "summary": "Server Levels is now available for Premium servers. Connect your DayZ servers with CFTools and give members more Server XP for playing while the server is quiet.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Add up to five DayZ servers from the admin dashboard."
+        },
+        {
+          "type": "new",
+          "text": "Members can check their level and the leaderboard with /serverlevel."
+        },
+        {
+          "type": "new",
+          "text": "Set a channel for level-up messages if you want them."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.29",
+      "date": "2026-07-29",
+      "title": "Bring additional participants into Tickets",
+      "summary": "Support teams can now invite another Guild member into an active Ticket when extra context or collaboration is needed, without exposing which staff member granted access.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Enable staff-managed participants separately for each Ticket type from the admin dashboard."
+        },
+        {
+          "type": "new",
+          "text": "Use /ticket add-user and /ticket remove-user inside an active Ticket to safely grant or revoke a Guild member's access."
+        },
+        {
+          "type": "improved",
+          "text": "Keep participant notifications neutral while retaining a staff-visible access history in the Ticket transcript for accountability."
+        },
+        {
+          "type": "improved",
+          "text": "Optionally require members to relink Player Link accounts after leaving and rejoining, while retaining their existing account records as inactive."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.24",
+      "date": "2026-07-24",
+      "title": "Introducing Suggestions and the Operations Inbox",
+      "summary": "Communities can now collect structured suggestions while Guild admins can see important automation problems in one place and take the next safe action from the Guild overview.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Configure Suggestions from the admin dashboard, then publish a permanent panel that guides members through structured proposals in a Discord Forum."
+        },
+        {
+          "type": "new",
+          "text": "Help members improve proposals with duplicate warnings, configurable categories and questions, author revisions, and Considered Replies."
+        },
+        {
+          "type": "new",
+          "text": "Let eligible members privately Support or Oppose a Suggestion while showing only aggregate participation totals to the community."
+        },
+        {
+          "type": "new",
+          "text": "Move Suggestions through its review lifecycle with a written staff outcome for every final decision."
+        },
+        {
+          "type": "new",
+          "text": "See an Operations Inbox when a scheduled Managed Message fails, a published message disappears, a Webhook destination repeatedly fails, or a Player Count server goes offline."
+        },
+        {
+          "type": "new",
+          "text": "Review each problem's affected feature, severity, timing, impact, and recommended next step without exposing provider errors or credentials."
+        },
+        {
+          "type": "improved",
+          "text": "Suggestions includes guided resource setup, readiness checks, and repair tools, while Guild admins with write access can retry eligible Managed Message and Player Count operations directly."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.19",
+      "date": "2026-07-19",
+      "title": "Clan Management is now in beta",
+      "summary": "Guilds can now create and manage Clans through a guided Discord workflow. This feature is in beta, and we would love your feedback in the HAF Bot Discord.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Configure Clan eligibility, reviewer roles, managed Discord resources, recruitment, and lifecycle settings from the Clan Management dashboard."
+        },
+        {
+          "type": "new",
+          "text": "Publish a customizable Clan creation panel where members can submit requests without learning a slash command."
+        },
+        {
+          "type": "new",
+          "text": "Review each request with the applicant in a private Discord ticket using Approve, Request changes, and Reject actions."
+        },
+        {
+          "type": "improved",
+          "text": "Recover interrupted Clan provisioning and lifecycle work automatically while keeping Clan history and audit events consistent."
+        },
+        {
+          "type": "improved",
+          "text": "Clan Management is a beta feature. Share feedback with us at https://discord.gg/HpRPkdm6dv."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.18",
+      "date": "2026-07-18",
+      "title": "More reliable Tickets and managed storage",
+      "summary": "Guild admins can now see managed-storage usage at a glance, while Ticket recovery and background processing are more resilient to temporary failures.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "View stored, temporarily reserved, and total managed-storage usage from the Guild overview."
+        },
+        {
+          "type": "improved",
+          "text": "Recover incomplete Ticket creation, closure, panel publication, and template-reply operations automatically after temporary Discord failures."
+        },
+        {
+          "type": "improved",
+          "text": "Process failed background jobs independently so one problem is less likely to delay unrelated moderation, webhook, storage, or Platform Link activity."
+        },
+        {
+          "type": "fixed",
+          "text": "Prevent duplicate processing when Discord gateway events are delivered more than once."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.17.2",
+      "date": "2026-07-17",
+      "title": "Reuse embed templates across messages and Tickets",
+      "summary": "Guild admins can save polished embed layouts once, then reuse them for Managed Messages and consistent Ticket replies.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Create, edit, duplicate, and reuse Guild-wide embed templates from the Managed Messages dashboard."
+        },
+        {
+          "type": "new",
+          "text": "Send approved template replies from a Ticket or Staff Discussion Thread with autocomplete and a private preview before sending."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.17.1",
+      "date": "2026-07-17",
+      "title": "Better Ticket workflows and custom panel colours",
+      "summary": "Guild staff can review and respond to Tickets more reliably, while admins gain more control over the appearance and privacy of their Discord panels.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "View a member's Ticket History from Discord, including links to open Tickets and available transcripts."
+        },
+        {
+          "type": "improved",
+          "text": "Staff Discussion Thread messages now remain private by default. When Anonymous Support is enabled, use !send to publish a response to the member."
+        },
+        {
+          "type": "new",
+          "text": "Choose custom embed colours for Ticket, LFG Noticeboard, and Player Link panels."
+        },
+        {
+          "type": "fixed",
+          "text": "Fixed an issue that could cause an Anonymous Support response to appear twice in a Ticket."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.17",
+      "date": "2026-07-17",
+      "title": "Turnstile verification is now available",
+      "summary": "Premium and Premium Plus communities can add a Turnstile challenge to Member Verification before members receive their verified role.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Choose Turnstile as the verification method for Welcome DMs or Welcome Panels, giving new members a simple challenge before HAF grants access."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.16",
+      "date": "2026-07-16",
+      "title": "Draft and schedule Managed Messages",
+      "summary": "Guild admins can prepare Managed Messages without publishing immediately and schedule one future publication.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Save Managed Message drafts without creating a Discord message, then publish immediately or schedule a one-time future publication."
+        },
+        {
+          "type": "improved",
+          "text": "Edit, reschedule, or cancel scheduled drafts while ensuring the latest saved content is published at the chosen time."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.14",
+      "date": "2026-07-14",
+      "title": "More automatic responses for Bot Defense",
+      "summary": "Guild admins can now choose how each Bot Defense detector responds when suspicious message activity is detected.",
+      "changes": [
+        {
+          "type": "improved",
+          "text": "Configure the Honeypot Detector and Rate Detector independently to warn the member, delete the triggering message, do both, or only raise a flag."
+        },
+        {
+          "type": "improved",
+          "text": "Apply each detector's selected response on every trip, including while the member already has an open Bot Defense flag."
+        },
+        {
+          "type": "improved",
+          "text": "Retry temporary Discord failures safely without repeatedly retrying permanent permission errors."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.13.2",
+      "date": "2026-07-13",
+      "title": "More control over audit logs and messages",
+      "summary": "Guild admins can reduce expected Discord noise in the audit log and format Managed Messages more easily.",
+      "changes": [
+        {
+          "type": "improved",
+          "text": "Exclude selected channels or member roles from eligible Discord audit events while keeping HAF activity and protected lifecycle events visible."
+        },
+        {
+          "type": "improved",
+          "text": "Apply channel exclusions to threads and Forum posts through their parent channel, and record every exclusion-policy change in the audit log."
+        },
+        {
+          "type": "improved",
+          "text": "Format Managed Message embed descriptions with the Markdown toolbar and preview without exceeding Discord's description limit."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.13.1",
+      "date": "2026-07-13",
+      "title": "Introducing Managed Messages",
+      "summary": "Publish polished, bot-authored information messages and keep them up to date from the admin dashboard.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Build messages with multiple Discord embeds, fields, colours, images, and live previews."
+        },
+        {
+          "type": "new",
+          "text": "Publish to a server channel, optionally notify selected roles, and edit or remove the message later."
+        },
+        {
+          "type": "new",
+          "text": "See when a published message has been removed from Discord and repair it from the admin dashboard."
+        },
+        {
+          "type": "improved",
+          "text": "Record Managed Message creation, updates, repairs, and deletion in the Guild Audit Log."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.13",
+      "date": "2026-07-13",
+      "title": "Introducing Mention Protection",
+      "summary": "Paid-plan communities can now protect selected staff and respond consistently to direct-user mention spam.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Enable Admin Mention Protection and Mention Spam Protection independently with shared channel scope and role exclusions."
+        },
+        {
+          "type": "new",
+          "text": "Configure initial and repeat warnings, message deletion, Discord timeouts, or Timed Role restrictions."
+        },
+        {
+          "type": "new",
+          "text": "Record every Mention Protection deletion in the Guild Audit Log without requiring an Audit Destination."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.12",
+      "date": "2026-07-12",
+      "title": "Discord previews now match published messages",
+      "summary": "Discord message previews in the admin dashboard now provide a more accurate representation of what members will see after a message is published.",
+      "changes": [
+        {
+          "type": "fixed",
+          "text": "Render Discord Markdown correctly in preview descriptions, message content, and embed fields."
+        },
+        {
+          "type": "fixed",
+          "text": "Match production embed colours, buttons, emojis, fields, footers, and plain-message fallbacks across feature previews."
+        },
+        {
+          "type": "fixed",
+          "text": "Remove unsupported formatting controls from embed title editors."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.10.1",
+      "date": "2026-07-10",
+      "title": "Introducing Bot Defense",
+      "summary": "Bot Defense gives paid-plan communities a review-first way to spot suspicious accounts without handing enforcement decisions to automation.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Detect suspicious accounts with configurable honeypot and cross-channel rate signals."
+        },
+        {
+          "type": "new",
+          "text": "Set up a recommended #do-not-post honeypot channel directly from the admin dashboard."
+        },
+        {
+          "type": "new",
+          "text": "Send evidence-backed flags to a staff queue where authorized reviewers can confirm or dismiss them."
+        },
+        {
+          "type": "new",
+          "text": "Keep enforcement in staff hands: confirmed flags are recorded but never automatically ban, kick, or change a member's roles."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.10",
+      "date": "2026-07-10",
+      "title": "Introducing Events",
+      "summary": "The first version of Events brings scheduled activities and Discord-native signups to HAF Bot communities.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Create, schedule, and publish Events from the admin dashboard."
+        },
+        {
+          "type": "new",
+          "text": "Build flexible rosters with Signup Groups, capacity limits, automatic waitlists, and role eligibility."
+        },
+        {
+          "type": "new",
+          "text": "Let members join from one Discord message, with event times shown in their own timezone."
+        },
+        {
+          "type": "new",
+          "text": "Keep attendees informed with optional Event Threads and configurable reminders."
+        }
+      ]
+    }
+  ]
+}

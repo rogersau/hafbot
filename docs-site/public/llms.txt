@@ -1,0 +1,55 @@
+# HAF Bot
+
+> HAF Bot is a Discord bot built for gaming communities. Members use its workflows in Discord; staff configure them in a web dashboard. Start with one useful workflow on the Free plan.
+
+## Product and setup
+
+- [HAF Bot](https://hafbot.xyz/): Product overview and current paid pricing.
+- [Documentation](https://docs.hafbot.xyz/): Customer setup and feature reference.
+- [Getting started](https://docs.hafbot.xyz/getting-started): Install, configure, publish and test a member workflow.
+- [Self-host with Docker](https://docs.hafbot.xyz/self-hosting): Run your own Discord application, PostgreSQL and private storage with optional Cloudflare Tunnel. Self-hosted mode includes all core features with operator-owned external services and existing resource/safety limits. Source access is required while the public release is prepared.
+- [Deploy with Cloudflare](https://docs.hafbot.xyz/deploy-cloudflare): Tunnel, private R2 and Pages setup. A deployment entirely on Cloudflare is not currently maintained or tested.
+- [Plans](https://docs.hafbot.xyz/plans): Free and paid limits, storage, billing and conditional Founder Pricing.
+- [Dashboard](https://docs.hafbot.xyz/admin-dashboard): Staff configuration, permissions and troubleshooting.
+- [Discord commands](https://docs.hafbot.xyz/commands): Member and staff command reference.
+
+## Community workflows
+
+- [Tickets](https://docs.hafbot.xyz/features/tickets): Private support channels, claiming, intake questions and transcripts; advanced tools require a paid plan.
+- [Player Link](https://docs.hafbot.xyz/features/player-link): Steam and Xbox platform sign-in. PlayStation IDs are self-reported, not verified account ownership.
+- [Member Verification](https://docs.hafbot.xyz/features/member-verification): Role-granting verification flows. The free Discord button is not proof of human or game-account identity.
+- [LFG](https://docs.hafbot.xyz/features/lfg): Find people to play with; interest notifications and optional approval.
+- [Marketplace](https://docs.hafbot.xyz/features/marketplace): Community trade listings, not automatic in-game trading.
+- [Suggestions](https://docs.hafbot.xyz/features/suggestions): Structured proposals, discussion, voting and staff outcomes.
+- [Events](https://docs.hafbot.xyz/features/events): Paid scheduled signups, rosters and reminders.
+- [Clan Management](https://docs.hafbot.xyz/features/clan-management): Beta persistent teams with managed Discord roles and channels.
+
+## Staff tools and integrations
+
+- [Evidence Vault](https://docs.hafbot.xyz/features/evidence-vault): Restricted staff records of supported Discord content; read storage, access and retention limitations.
+- [Reaction Rules](https://docs.hafbot.xyz/features/reaction-rules): Emoji blocklists and reaction limits.
+- [Mention Protection](https://docs.hafbot.xyz/features/mention-protection): Configurable staff-mention and mention-spam responses.
+- [Image Rules](https://docs.hafbot.xyz/features/image-rules): Paid topic classification and review; automated decisions can be wrong.
+- [Bot Defense](https://docs.hafbot.xyz/features/bot-defense): Suspicious-message detectors and staff review, not an automatic account-ban system.
+- [Ban Cases](https://docs.hafbot.xyz/features/ban-cases): Paid staff review threads from supported incoming ban reports, not an anti-cheat engine.
+- [Timed Roles](https://docs.hafbot.xyz/features/timed-roles): Temporary role assignment and configured role suspension.
+- [Managed Messages](https://docs.hafbot.xyz/features/managed-messages): Bot-owned announcements, edits and one-time scheduled publication.
+- [Guild Audit Log](https://docs.hafbot.xyz/features/guild-audit-log): Staff visibility into configured HAF and Discord events.
+- [Channel permissions](https://docs.hafbot.xyz/features/channel-permissions): Preview and copy Discord channel permission overwrites.
+- [Player Count](https://docs.hafbot.xyz/features/player-count): Paid Steam-directory population updates; support depends on the listed game server.
+- [Server Levels](https://docs.hafbot.xyz/features/server-levels): Paid beta for confirmed DayZ attendance through CFTools, not generic Discord chat XP.
+- [Webhooks](https://docs.hafbot.xyz/features/webhook-proxy): Paid inbound routing and payload rules.
+- [Commerce](https://docs.hafbot.xyz/features/commerce): Restricted pilot documentation, not a generally available selling feature. Buying Premium does not grant pilot approval.
+
+## Guides and policies
+
+- [Discord ticket bot](https://docs.hafbot.xyz/guides/discord-ticket-bot): Start a player-support queue.
+- [DayZ community](https://docs.hafbot.xyz/guides/dayz-discord-bot): Choose a Discord workflow for a DayZ community.
+- [WARDOGS Discord community](https://docs.hafbot.xyz/guides/wardogs-discord-community): Set up current Discord workflows and read the dated, non-promissory WARDOGS integration status.
+- [Billing](https://docs.hafbot.xyz/features/premium-entitlements): Server assignments, cancellation and the shared white-label identity.
+- [Release notes](https://hafbot.xyz/changelog): Historical changes; use current feature docs for availability.
+- [Updates feed](https://hafbot.xyz/changelog.xml): Public Atom subscription feed.
+- [Terms](https://hafbot.xyz/terms): Service terms.
+- [Privacy](https://hafbot.xyz/privacy): Data handling and privacy-request route.
+
+Free is not a time-limited trial. Premium covers one assigned Discord server; Premium Plus covers up to three and includes one shared white-label bot identity. Quantity, storage, Discord and provider limits still apply. Consult current plans instead of assuming historical prices or Founder Pricing availability. This directory contains only public product information, not private member records, credentials or support transcripts.

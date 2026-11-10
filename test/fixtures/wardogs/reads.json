@@ -1,0 +1,19 @@
+{
+  "provenance": "synthetic",
+  "reference": "warcon-app/warcon@cb899a1e4f5430d4e14f2e545877894b3cf50418/docs/wardogs-api.md",
+  "note": "Handwritten candidate-shape examples; not launch-server captures or provider guarantees.",
+  "capabilities": {
+    "routes": ["GET /v1/status", "GET /v1/players", "POST /v1/bans"],
+    "config": { "writable": true }
+  },
+  "status": {
+    "players": { "current": 1, "max": 64 },
+    "serverName": "Synthetic server",
+    "map": "Synthetic map",
+    "matchSeconds": 10,
+    "additive": true
+  },
+  "roster": {
+    "players": [{ "steamId": "76561198000000001", "name": "Synthetic player", "kills": 2 }]
+  }
+}

@@ -1,0 +1,3 @@
+# The shared logo has a stable filename, so cache it briefly and revalidate in the background.
+/logo.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
