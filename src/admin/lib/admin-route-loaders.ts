@@ -522,25 +522,8 @@ const evidenceVaultRoute: AdminRouteTableRow<
 > = {
   path: "/admin/api/evidence-vault",
   entitlementGate: "attach",
-  fetchErrorFallback: buildEvidenceVaultFallback,
   transform: (data, _ctx, entitlement) => ({ ...data, entitlement }),
 };
-
-function buildEvidenceVaultFallback(
-  ctx: AdminLoaderContext,
-  entitlement: EntitlementInfo | null,
-): EvidenceVaultLoaderData {
-  return {
-    guildId: getGuildId(ctx),
-    config: null,
-    enumValueUsage: {},
-    recordUsage: {
-      used: 0,
-      max: entitlement?.limits.evidenceVaultMaxRecords ?? null,
-    },
-    entitlement,
-  };
-}
 
 export const loadEvidenceVaultRoute = (ctx: AdminLoaderContext) =>
   client(ctx).loadRoute(evidenceVaultRoute, ctx, loadOptionalEntitlement);
@@ -600,12 +583,11 @@ const imageRulesRoute: AdminRouteTableRow<
 > = {
   path: "/admin/api/image-rules",
   entitlementGate: "return-null-on-free",
-  freeTierFallback: buildImageRulesFallback,
-  fetchErrorFallback: buildImageRulesFallback,
+  freeTierFallback: buildFreeTierImageRulesFallback,
   transform: (data, _ctx, entitlement) => ({ ...data, entitlement }),
 };
 
-function buildImageRulesFallback(
+function buildFreeTierImageRulesFallback(
   ctx: AdminLoaderContext,
   entitlement: EntitlementInfo | null,
 ): ImageRulesLoaderData {
@@ -625,12 +607,11 @@ const botDefenseRoute: AdminRouteTableRow<
 > = {
   path: "/admin/api/bot-defense",
   entitlementGate: "return-null-on-free",
-  freeTierFallback: buildBotDefenseFallback,
-  fetchErrorFallback: buildBotDefenseFallback,
+  freeTierFallback: buildFreeTierBotDefenseFallback,
   transform: (data, _ctx, entitlement) => ({ ...data, entitlement }),
 };
 
-function buildBotDefenseFallback(
+function buildFreeTierBotDefenseFallback(
   ctx: AdminLoaderContext,
   entitlement: EntitlementInfo | null,
 ): BotDefenseLoaderData {
@@ -702,28 +683,12 @@ const memberVerificationRoute: AdminRouteTableRow<
 > = {
   path: "/admin/api/member-verification",
   entitlementGate: "attach",
-  fetchErrorFallback: buildMemberVerificationFallback,
   transform: (data, _ctx, entitlement) => ({
     ...data,
     steamLinkConfigured: data.steamLinkConfigured ?? false,
     entitlement,
   }),
 };
-
-function buildMemberVerificationFallback(
-  ctx: AdminLoaderContext,
-  entitlement: EntitlementInfo | null,
-): MemberVerificationLoaderData {
-  return {
-    guildId: getGuildId(ctx),
-    config: null,
-    entitlement,
-    paidMethodsAvailable: false,
-    turnstileAvailable: false,
-    steamLinkAvailable: false,
-    steamLinkConfigured: false,
-  };
-}
 
 export const loadMemberVerificationRoute = (ctx: AdminLoaderContext) =>
   client(ctx).loadRoute(memberVerificationRoute, ctx, loadOptionalEntitlement);
