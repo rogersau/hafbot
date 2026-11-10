@@ -1,6 +1,26 @@
 {
   "releases": [
     {
+      "version": "2026.11.10.1",
+      "date": "2026-11-10",
+      "title": "HAF Bot is now open source",
+      "summary": "HAF Bot's source is now public under the MIT license. Explore the code, contribute improvements, or run HAF on your own infrastructure.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Read the source, report issues and contribute at https://github.com/rogersau/hafbot."
+        },
+        {
+          "type": "new",
+          "text": "Self-host with Docker, PostgreSQL and your own Discord application. Follow https://docs.hafbot.xyz/self-hosting for setup requirements and current installation limits."
+        },
+        {
+          "type": "improved",
+          "text": "Hosted HAF remains available with the same dashboard, features and subscription plans."
+        }
+      ]
+    },
+    {
       "version": "2026.11.10",
       "date": "2026-11-10",
       "title": "Standard subscription pricing",
