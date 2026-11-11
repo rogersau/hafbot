@@ -8,7 +8,7 @@ checksum, ledger and historical admission requirements do not apply to this publ
 ## Current checkpoint
 
 All reviewed implementations and integration corrections are committed through
-`3f84b94411613a44bf54110da3d4f37e89e63cc5`. Final combined acceptance is in progress.
+`cc6feaef65a4e99779878dd4963f3d8678010263`. Final combined acceptance is recorded below.
 No implementation delegate is active locally or remotely (global zero). Normal slot reservation
 remains architecture two / task coordinator three, within the global cap of five. Cancelled duplicate
 assignments remain stopped; their worktrees, commits, drafts and evidence are preserved.
@@ -44,7 +44,7 @@ The R01 implementation used that authorized fallback. No other provider was subs
 
 ## Reconciled task coverage
 
-“Integrated” identifies source reconciliation; final acceptance remains subject to the combined run.
+“Integrated” identifies individually reviewed source reconciliation. The combined acceptance below checks the resulting architecture.
 
 | Task    | Reconciliation                                                                                         |
 | ------- | ------------------------------------------------------------------------------------------------------ |
@@ -71,17 +71,17 @@ The R01 implementation used that authorized fallback. No other provider was subs
 | C21     | One stored entitlement plan field                                                                      |
 | C22     | Current four Billing prices and self-hosted policy; historical paid data removed                       |
 | C23     | Canonical Offering row `b57a102` (source `30a48f1`, reviewed combination `4b7fd28`)                    |
-| C24     | Canonical error envelope and strict client parsing; final endpoint/transport acceptance pending run    |
-| P01–P14 | Native stores and current provider/context selection integrated; full PG acceptance pending run        |
+| C24     | Canonical error envelope and strict client parsing; combined endpoint/transport tests included         |
+| P01–P14 | Native stores and current provider/context selection; full native PG acceptance passed                 |
 | P04     | Real-PG Event atomicity tests `9f02d5b` + `62b315e` preserve public-store rollback/CAS/Guild contracts |
 | P08     | Moderation lock/rollback reconciliation `3d1bb9e` with proven concurrency regression                   |
 | R01     | Shared composition `983822d`, root corrections `0d91d1a` and strict Admin selection `a3a1e17`          |
 | R02     | Direct native outcomes `d69aba9`, canonical persisted reason `3d82916`                                 |
 | R03     | Production Worker/DO/D1 host and SQL bridge removed; SQLite is test-only                               |
 | B01     | Current fresh schema; Offering consolidation, job reason and current incident feature checks included  |
-| B02     | Current Node/browser/test boundaries; fresh artifact rebuild pending acceptance                        |
-| B03     | Current install docs; final documentation/contract drift checks pending acceptance                     |
-| V01     | Final combined builds/types/contracts/public/PG/container validation in progress                       |
+| B02     | Current Node/browser/test boundaries; clean artifact builds and boundary checks passed                 |
+| B03     | Current install docs; documentation build and contract drift checks passed                             |
+| V01     | Final combined builds/types/contracts/public/PG/container validation passed                            |
 
 ## Integration corrections and regressions
 
@@ -116,6 +116,11 @@ The R01 implementation used that authorized fallback. No other provider was subs
   current Player Link incidents were rejected by the DB feature constraint. SQLite and PostgreSQL
   both reproduced the failure. The baseline now permits the current feature; real persistence and
   resolution pass (6/6 SQLite/API tests and 1/1 real PG), with Guild isolation/history assertions.
+- The final broad run exposed two remaining fixture adaptations: Honeypot setup now checks its
+  completed persisted setup run, and JavaScript workspace-security fixtures compose the required
+  graph before app construction. The focused checks passed 8/8 and 17/17 without weakening
+  authorization assertions. The repeated build/browser checks passed after a transient
+  `ERR_NETWORK_CHANGED` during disposable Docker network removal; no UI code was changed.
 - Current Admin/Marketplace terminology cleanup passed 138/138. API route tests compose complete
   selected services before dispatch and use current API/SPA handlers. Production cannot import fixtures.
 
@@ -125,20 +130,41 @@ and 24 real-PG checks passed with zero skips. Its source and evidence remain pre
 
 ## Final combined acceptance
 
-| Check                                            | Current result                                                              |
-| ------------------------------------------------ | --------------------------------------------------------------------------- |
-| Clean application and test artifact builds       | Pending                                                                     |
-| Node/Admin/shared types and Admin contract drift | Pending final run                                                           |
-| Public behavior suite                            | Pending final run; PG-only skips are verified separately with configured PG |
-| Native PostgreSQL and concurrency suite          | Pending final run with zero skips required                                  |
-| Build behavior / architecture                    | Pending final run                                                           |
-| Lint / formatting / diff whitespace              | Pending final run                                                           |
-| Documentation                                    | Pending final run                                                           |
-| Production image / empty-PostgreSQL readiness    | Pending final run                                                           |
+| Check                                            | Current result                                                               |
+| ------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Clean application and test artifact builds       | Passed; application and test outputs rebuilt from empty artifact directories |
+| Node/Admin/shared types and Admin contract drift | Passed                                                                       |
+| Public behavior suite                            | 3,562 passed / 0 failed; 89 PG-only skips covered by the configured PG run   |
+| Native PostgreSQL and concurrency suite          | 141 passed / 0 failed / 0 skipped, official serial PG runner                 |
+| Build behavior / architecture                    | 19 build/browser checks and 7 architecture checks passed, zero skips         |
+| Lint / formatting / diff whitespace              | Passed; 10 existing React Effect advisory warnings, zero lint errors         |
+| Documentation                                    | Build and public documentation check passed                                  |
+| Production image / empty-PostgreSQL readiness    | Image build and fresh-schema/full-readiness container smoke passed           |
 
-The root disposable database for final validation is loopback PostgreSQL16, one CPU / 256 MB,
-32 MB shared buffers / 20 connections. No live Discord/OAuth/provider action, push, PR or deployment
-is part of this source audit.
+Final acceptance used `pnpm test:prebuilt` with `TEST_POSTGRES_URL` unset. It passed all
+three groups: 19 build/browser checks, 3,562 behavior tests and 7 architecture checks. All
+89 behavior-suite skips require PostgreSQL; the separate official `pnpm test:postgres:prebuilt`
+run passed 141 tests with zero skips, including nested concurrency scenarios. The earlier serial
+behavior run exposed the two fixture adaptations recorded above; the final official run passed
+on the corrected source.
+
+Other accepted commands were `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm build:test`,
+all three type checks, `pnpm admin-contract:check`, `pnpm lint`, `pnpm format:check`,
+`git diff --check`, `pnpm docs:build`, and `pnpm audit --prod --audit-level=high`.
+The production image `hafbot-public-audit:188ced50` built successfully (image SHA-256
+`e629731cd1252b5aedf70a75dcb59ea3c2d88ae8faf226cc0f07d6b48f2f6d48`).
+`node scripts/container-smoke.mjs hafbot-public-audit:188ced50` passed empty-schema
+initialization and full readiness. Later commits changed only test fixtures and audit evidence.
+
+The production dependency audit passes the repository’s high-severity threshold. It reports one
+low-severity transitive advisory in Azure Blob’s `fast-xml-parser` 5.11.0
+([GHSA-474x-hrwr-fgx4](https://github.com/advisories/GHSA-474x-hrwr-fgx4)); dependency upgrades
+are separate from the architectural cleanup. The ten lint advisories ask whether existing React
+Effects are needed; they are not suppressed.
+
+The root disposable database used loopback PostgreSQL16, one CPU / 256 MB,
+32 MB shared buffers / 20 connections, and was removed after validation. No live Discord/OAuth/provider
+action, push, PR or deployment is part of this source audit.
 
 ## Preserved work
 
