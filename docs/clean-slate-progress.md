@@ -65,14 +65,14 @@ The task coordinator adapts distinct completed shared-validation and service-ato
 offering lifecycle consolidation (C23), retired selector plumbing (C06) and unused aliases (C09)
 still need explicit reconciliation. None is assumed covered merely because native stores exist.
 
-| Slot                 | Task ID                                                                                                                           | Base          | Owned paths                                                     |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------- |
-| Architecture 1       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A4122985e-4394-4ede-96df-0ba903391392` | `915455f`     | Mention Protection native store; new moderation invariant test  |
-| Architecture 2       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A82952271-086d-4b90-98d1-429e285e12df` | `9dc7190`     | Residual C13 Admin route/page/diagnostic aliases from `0f656bc` |
-| Task coordinator 1–3 | Reserved to task coordinator                                                                                                      | See IDs below | C09/C10/C11 with disjoint paths agreed in coordination          |
+| Slot                 | Task ID                                                                                                                           | Base          | Owned paths                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------- |
+| Architecture 1       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A7681cfcd-44cd-4501-bce9-488a0e1c6aea` | `864d2a0`     | Direct native queue payload/outcome delivery; scoped consumers/tests |
+| Architecture 2       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A82952271-086d-4b90-98d1-429e285e12df` | `9dc7190`     | Residual C13 Admin route/page/diagnostic aliases from `0f656bc`      |
+| Task coordinator 1–3 | Reserved to task coordinator                                                                                                      | See IDs below | C09/C10/C11 with disjoint paths agreed in coordination               |
 
-Mention Protection is integrated; its freed architecture slot is reserved for direct native queue
-outcome implementation. C13 UI reconciliation is running. C03 and the narrow C09 Commerce slice
+Mention Protection is integrated; its architecture slot now runs direct native queue outcome
+implementation (R02). C13 UI reconciliation is running. C03 and the narrow C09 Commerce slice
 are integrated; C10 and C11 remain in the task coordinator's allocation. The coordinator reviews
 and integrates each returned change before final
 combined validation. Mention Protection must retain the proven RED/GREEN concurrency regression.
@@ -134,7 +134,7 @@ required. It is not a claim that the original finding is closed by the existence
 | P08     | Integrated `3d1bb9e`; 8 real-PG moderation checks pass, including race and rollback regressions                           |
 | P09–P14 | Native remaining stores, credentials, auth and context selection at checkpoint                                            |
 | R01     | Open: one selected service graph shared by HTTP/jobs/handlers                                                             |
-| R02     | Open: direct native job payload/outcome path; bounded cache/native enqueue already implemented                            |
+| R02     | Running: direct native job payload/outcome path; bounded cache/native enqueue already implemented                         |
 | R03     | Checkpoint: production Worker/DO/D1 host and SQL bridge removed; SQLite fixtures are test-only                            |
 | B01     | Current fresh schema at checkpoint; C23 will change only its offering baseline                                            |
 | B02     | Checkpoint: supported Node/test boundaries and retained tooling; final clean artifact build required                      |
