@@ -67,13 +67,15 @@ limited to one CPU, 256 MB, `shared_buffers=32MB`, `max_connections=20`.
 | Reserved allocation  | Assignment                  | State/base                                                             |
 | -------------------- | --------------------------- | ---------------------------------------------------------------------- |
 | Architecture 1       | R02 recovery                | Running on `17acff9` (source equal verified `fa1fe4e`)                 |
-| Architecture 2       | Required Ticket persistence | Running on `c80b5af`; excludes C23/shared fixtures and R02 queue paths |
+| Architecture 2       | Required Ticket persistence | Running on `2a07da4`; excludes C23/shared fixtures and R02 queue paths |
 | Task coordinator 1   | C23 offering lifecycle      | Running on `fa1fe4e`; approved readers included                        |
 | Task coordinator 2–3 | None                        | Empty; no work created solely to occupy slots                          |
 
-Active Ticket residual: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A7e5d3f49-d1f4-46d9-bb28-c5a7f1e0bacf`, base `c80b5af5697e526257d3d641ccd22d339d055636`. It owns the Ticket contract, dedicated Ticket services/Admin Ticket callsites/tests only; no stores/schema/queue or shared C23 fixtures. Architecture has two active implementers; the task coordinator has one (global three). R01 shared composition remains queued until its dependencies release.
+Active Ticket residual replacement: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Adf8136b7-7c3b-435f-937e-aa875892e28d`, base `2a07da4beadeaac6376c74395c5d80f705f0ca0c`. It owns the Ticket contract, dedicated Ticket services/Admin Ticket callsites/tests only; no stores/schema/queue or shared C23 fixtures. Architecture has two active implementers; the task coordinator has one (global three). R01 shared composition remains queued until its dependencies release.
 
 Active C23: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Acc83b1ee-a638-4257-b4e3-6506a2063fc6`, exact base `fa1fe4e3d9d40a3fa17d75654b8e20a374adb598`. Approved reader exceptions and all R02 exclusions below remain in force.
+
+Original Ticket task `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A7e5d3f49-d1f4-46d9-bb28-c5a7f1e0bacf` failed from provider overload before commands/edits and is terminal cancelled. Its clean checkout is preserved. Capability discovery still offers the approved model; replacement uses the same provider/model/max without adding a slot.
 
 Residual Ticket persistence is confirmed open: current adapters implement multi-panel reads/list/delete, scoped open counts, member history and template-reply claims, but contracts/services still allow weaker missing-method paths. A bounded second architecture assignment will require these ports without schema/native/queue work. It excludes C23-owned `guild-overview.ts` and `test/runtime-app.test.ts`; root will update their Ticket-only callsites after integration.
 
