@@ -1,268 +1,178 @@
 # Public clean-slate integration
 
-This is the authoritative combined inventory for the architecture audit and task audit.
-The integration base is `t3/architectural-clean-slate-audit`. Public installations start empty;
-there are no active deployments, inherited compatibility requirements or upgrade migrations.
+This is the authoritative combined inventory for both audit threads. The integration branch is
+`t3/architectural-clean-slate-audit`. Public installations start empty: there are no active
+deployments, inherited compatibility requirements or upgrade migrations. Private upgrade,
+checksum, ledger and historical admission requirements do not apply to this public baseline.
 
-## Current checkpoint and ownership
+## Current checkpoint
 
-Verified source checkpoint: `3b7595fc04b9301bd9430ae31e4a171ec8e17ff8`. Current Admin and Node
-types, contract drift and test compilation pass. Focused coordinator checks pass: C06 Admin
-149/149, C11 service/runtime 262/262 and real PostgreSQL 3/3, C12 handler/runtime 368/368,
-and P04 Event atomicity plus recurrence 7/7 real PostgreSQL. All focused runs have zero skips.
-The broad validation below predates these integrations and must be rerun after remaining work.
+All reviewed implementations and integration corrections are committed through
+`3f84b94411613a44bf54110da3d4f37e89e63cc5`. Final combined acceptance is in progress.
+No implementation delegate is active locally or remotely (global zero). Normal slot reservation
+remains architecture two / task coordinator three, within the global cap of five. Cancelled duplicate
+assignments remain stopped; their worktrees, commits, drafts and evidence are preserved.
 
-| Area                                                          | Owner                    | Current state                                                                                                |
-| ------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Native stores, fresh schema, Worker/D1 removal                | Architecture             | Implemented; final combined acceptance pending                                                               |
-| Shared validation, service capabilities and handler injection | Architecture integration | C03/C10/C11/C12 integrated individually                                                                      |
-| Offering lifecycle consolidation C23                          | Task coordinator         | Approved brief released after user reports restored Go access                                                |
-| Direct native job outcomes R02                                | Architecture integration | Integrated `d69aba9` + `8a0917f`; 109 public and 11 PG checks pass; queued reason persistence follow-up open |
-| Shared HTTP/job service graph R01                             | Architecture             | Bounded implementation running on verified `8a0917f`                                                         |
-| Final contracts/builds/types/public/PG/container validation   | Architecture             | Pending remaining integrations                                                                               |
+Root owns final review, integration and validation. Completed implementers used isolated checkouts,
+serial tests and disposable PostgreSQL limited to one CPU / 256 MB, 32 MB shared buffers and
+20 connections. DeepSeek Go/max was primary; the user authorized GLM 5.3 Flash/max on failure.
+The R01 implementation used that authorized fallback. No other provider was substituted.
 
-## Reconciled evidence
+## Current architecture
 
-- The distinct-fix manifest is preserved in [`task-audit-handoff.md`](task-audit-handoff.md).
-  C01/C05 and native/schema portions of C13/P08 are superseded implementations, not permission
-  to discard meaningful regressions. All integrations use individual reviewed changes.
-- C03 is `230b35b` with whitespace-only name/label rejection corrected in `5a45465`.
-  The endpoint regression failed with 200 before correction; 33 current contract/validation checks pass.
-- Mention Protection is `3d1bb9e` (source `c247265`). Config replacement/delete/clear take an
-  exclusive Guild transaction lock; burst recording takes a shared Guild lock, then a member lock,
-  through insert/prune/count. Eight coordinator real-PG moderation checks pass, including proven
-  race and rollback regressions plus stronger Image Rules/Bot Defense contracts.
-- Object metadata conversion mode is removed in `b8edd9a` (source `fc9a023`): 10 object-store
-  checks pass. S3 uses one current encoding and rejects incomplete security metadata.
-- Steam authorization uses `/auth/steam/start` in `9dc7190`; 97 current Platform Link/verification
-  checks pass. C13 UI is `0bbc4b6` (source `c297751`) plus `537036a` alias/unused type cleanup:
-  195 checks and the Admin build/budgets pass. Current Steam verification is retained.
-- C09 client cleanup is `408d976` (source `34033ba`); 14 client/webhook checks pass.
-- C10 is `f8d7bd7` (source `d7d0a47`) plus `10743b5` required delivery composition: 91 checks pass.
-- C11 is `5eb98c8` (source `7b98124`). Required persistence ports replace weak fallbacks. Native
-  timed-role replacement/clear locks the whole set before deleting and inserting in one transaction.
-  Forced-insert rollback and deterministic competing-writer regressions pass; removing the lock
-  produced the recorded RED before restored GREEN.
-- C12 is `d1988ea` (source `ecf465b`): required selected service picks replace handler factories.
-  Same-instance/no-reconstruction and authentication-boundary regressions went from 5 failed to
-  5 passed; coordinator combined handler/runtime acceptance passes 368/368.
-- P04 is tests-only `9f02d5b` + `62b315e` (sources `a3f3f09` + `e9cd8ba`). The native Event adapter
-  already satisfies Team/proposal/lifecycle/bulk rollback, CAS and Guild isolation. Configured PG
-  runs pass all seven Event tests; unconfigured public runs use the standard skip guard. Proposal
-  late-outbox failure proves rollback of a newly inserted signup. Native guard functions remain.
-- C06 is `fa1fe4e` (source `9701e7f`): inert selector/context/page-policy plumbing is removed.
-  Current workspace scope, authorization, navigation, directory and error/retry behavior remain.
-  All 149 focused Admin checks pass.
+- Node selects native PostgreSQL stores, object capabilities, credentials and processing ports
+  before composing the feature graph. HTTP, native jobs and scheduled work share selected
+  service instances. Maintenance HTTP has a separate read-only graph and pool.
+- Production has no Worker entrypoint, Durable Objects, D1 SQL bridge, SQL dialect translator,
+  disabled persistence factory or in-memory incident fallback. SQLite and flat test overrides are
+  isolated under test support. Full service construction has one composition entry point.
+- Native jobs receive payload plus native metadata and return explicit outcomes. Missing outcomes
+  are terminal. One current `reason_code` / `reasonCode` field retains retry and terminal reasons;
+  completion and operator retry clear it. Retry delay, exhaustion and lease fencing remain durable.
+- `commerce_offerings` owns state and lifecycle metadata, including explicit `repair_previous_state`.
+  There is no Offering lifecycle side table or old `active` projection. Repair restores prior published
+  versus unpublished state directly; financial, retirement, checkout and outbox guards remain.
+- Ticket persistence capabilities and handler lifecycle dependencies are required. Current mutations,
+  availability toggles and Server Levels processing leases use required ports. Platform Link metadata
+  and supplied enabled state persist in one UPSERT; omitted enabled preserves the existing flag.
+- The install schema is the current empty-database baseline. Startup initializes it atomically and can
+  reopen the matching current schema. No migrations, conversion CLI, ledger, compatibility view or
+  historical reader is provided.
+- Current platform identities, ordered Reaction Role panels, Ticket response rules, Evidence Vault
+  roles/private media, encrypted webhook references, signed controls and v2 Gateway documents are
+  canonical. Public errors use `fieldIssues`, `staleReason` and `retryAfterSeconds`.
 
-## Shared implementer allocation
+## Reconciled task coverage
 
-The global cap is five active implementers across both coordinators and all machines. Normal
-reservation is architecture two, task coordinator three; the temporary three/two loan has ended.
-Earlier failed implementers are terminal. R01, C23, Ticket handler injection and current-port cleanup are active (global four). Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
-worktrees, drafts, commits and evidence are preserved. No remote audit implementer is active.
-All new implementation tasks use isolated checkouts with OpenCode Go
-`opencode-go/deepseek-v4.1-flash`, `variant=max`, serial focused tests and disposable PostgreSQL
-limited to one CPU, 256 MB, `shared_buffers=32MB`, `max_connections=20`.
+“Integrated” identifies source reconciliation; final acceptance remains subject to the combined run.
 
-| Reserved allocation  | Assignment                                           | State/base                                                                |
-| -------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
-| Architecture 1       | R01 shared graph                                     | GLM 5.3 Flash/max fallback running on `751cec8`                           |
-| Architecture 2       | Required current ports / atomic Platform Link config | Running on `3b7595f`; no schema or R01/shared fixture edits               |
-| Task coordinator 1   | C23 offering lifecycle                               | Running restored-access attempt on `d1ff7ad`                              |
-| Task coordinator 2–3 | Ticket handler injection / one empty slot            | Handler task running on verified `d72367c`; prior Ticket ports integrated |
+| Task    | Reconciliation                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------------------ |
+| C01     | Native database driver and store failure/read contracts; no SQL bridge                                 |
+| C02     | Admin loading/error UI `02cbf2e`; error/retry/editor regressions retained                              |
+| C03     | Shared Webhook validation `230b35b`, whitespace correction `5a45465`                                   |
+| C04     | Fresh-install policy; private pre-upgrade and ledger requirements superseded                           |
+| C05     | Native selected persistence; disabled/memory fallback deletion `0d91d1a`, test-only type relocation    |
+| C06     | Retired selector/context/page-policy plumbing removed `fa1fe4e`                                        |
+| C07     | Abandoned prototype removed `4af4df0`                                                                  |
+| C08     | Retired Worker/dev tooling removed; test-only provider types remain isolated                           |
+| C09     | Current Commerce client calls `408d976`, unused Admin claims `537036a`; Event aliases removed          |
+| C10     | Mandatory Event capabilities `f8d7bd7`, unconditional delivery composition `10743b5`                   |
+| C11     | Required role/suggestion ports and atomic whole-set timed rules `5eb98c8`                              |
+| C12     | Narrow handlers `d1988ea`; final Ticket lifecycle injection `2c217cb`                                  |
+| C13     | Native identities/API, current Player Link UI `0bbc4b6`, aliases/types `537036a`                       |
+| C14     | One ordered Reaction Role panel table and explicit panel identity                                      |
+| C15     | Current Ticket rules/flags; required persistence `ce2fa5d`, interaction reads `d72367c` / `bcae419`    |
+| C16     | Evidence role list and private explicit object metadata                                                |
+| C17     | Encrypted credential references in configuration/history/queues/logs                                   |
+| C18     | Current signed controls, actor/generation fencing and signing-key rotation                             |
+| C19     | Strict current Gateway envelope and event key                                                          |
+| C20     | Canonical S3 metadata `b8edd9a`; incomplete security metadata fails closed                             |
+| C21     | One stored entitlement plan field                                                                      |
+| C22     | Current four Billing prices and self-hosted policy; historical paid data removed                       |
+| C23     | Canonical Offering row `b57a102` (source `30a48f1`, reviewed combination `4b7fd28`)                    |
+| C24     | Canonical error envelope and strict client parsing; final endpoint/transport acceptance pending run    |
+| P01–P14 | Native stores and current provider/context selection integrated; full PG acceptance pending run        |
+| P04     | Real-PG Event atomicity tests `9f02d5b` + `62b315e` preserve public-store rollback/CAS/Guild contracts |
+| P08     | Moderation lock/rollback reconciliation `3d1bb9e` with proven concurrency regression                   |
+| R01     | Shared composition `983822d`, root corrections `0d91d1a` and strict Admin selection `a3a1e17`          |
+| R02     | Direct native outcomes `d69aba9`, canonical persisted reason `3d82916`                                 |
+| R03     | Production Worker/DO/D1 host and SQL bridge removed; SQLite is test-only                               |
+| B01     | Current fresh schema; Offering consolidation, job reason and current incident feature checks included  |
+| B02     | Current Node/browser/test boundaries; fresh artifact rebuild pending acceptance                        |
+| B03     | Current install docs; final documentation/contract drift checks pending acceptance                     |
+| V01     | Final combined builds/types/contracts/public/PG/container validation in progress                       |
 
-Terminal failed Ticket replacement: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Adf8136b7-7c3b-435f-937e-aa875892e28d`, base `2a07da4beadeaac6376c74395c5d80f705f0ca0c`. It owns the Ticket contract, dedicated Ticket services/Admin Ticket callsites/tests only; no stores/schema/queue or shared C23 fixtures. Those failed attempts use no active slots; current assignments are listed above. R01 shared composition remains queued until its dependencies release.
+## Integration corrections and regressions
 
-Terminal failed C23: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Acc83b1ee-a638-4257-b4e3-6506a2063fc6`, exact base `fa1fe4e3d9d40a3fa17d75654b8e20a374adb598`. Approved reader exceptions and all R02 exclusions below remain in force.
+- Mention Protection configuration replacement/delete/clear takes an exclusive Guild transaction lock.
+  Burst recording takes a shared lock on the same key, then a member lock. Real PG reproduced the
+  pre-fix interleaving and failed-clear partial commit; both are corrected. Root moderation acceptance
+  passed 8/8, including preserved Image Rules/Bot Defense evidence.
+- C11 locks a complete timed-role rule set before delete/insert in one transaction, including empty
+  clear. Forced-insert rollback and deterministic competing-writer regressions pass (3/3 real PG).
+- P04 adds public native EventStore rollback, Team/proposal/lifecycle/bulk CAS and Guild isolation
+  coverage. The current adapter already satisfied them; no production fix was invented. Root Event
+  atomicity plus recurrence passed 7/7 real PG. Normal public runs use the standard PG env guard.
+- C23 preserves repeated repair's original state, unpublished after earlier publication, role uniqueness,
+  guarded publication, checkout/retirement/refund/ledger/outbox rollback and tenant boundaries.
+  The three disclosed extra consumer readers were individually reviewed and accepted. Three-way
+  integration preserved R02 native/SQLite Game Access delivery. Root adapted the four excluded
+  Game Access SQL fixture fragments in `202397f`; no old side-table fixture remains there.
+- Required Ticket ports were reviewed/integrated individually. Root combined Ticket/interaction/runtime
+  acceptance passed 352/352. Ticket lifecycle construction now belongs to composition, with a repeated
+  dispatch/no-store-reconstruction regression. Guild overview reads all panels through its required port.
+- R01's returned implementation required root corrections: the factory still contained disabled Suggestions
+  and memory Incident substitutes. Those actual paths were deleted, selected media capability and
+  processor telemetry were forwarded, flat RuntimeStore types moved out of production, and the final
+  Admin factory alternatives/unused route wrapper were removed. Root focused integration passed 232/232.
+- Platform Link config save's second write could fail after metadata committed. The real-PG trigger
+  regression observed RED, then GREEN after one-UPSERT persistence. Eight remaining mutation/lease
+  methods are required; native/SQLite adapters and scoped consumers agree.
+- Native jobs did not retain a queued retry's reason. Root observed RED (missing
+  `provider_rate_limited`) before the canonical field correction; the complete 11-test PG queue/Gateway
+  group then passed with zero skips, including delay/reason restart behavior, exhaustion and fencing.
+- Removing the unused memory Incident implementation exposed a genuine fresh-schema mismatch:
+  current Player Link incidents were rejected by the DB feature constraint. SQLite and PostgreSQL
+  both reproduced the failure. The baseline now permits the current feature; real persistence and
+  resolution pass (6/6 SQLite/API tests and 1/1 real PG), with Guild isolation/history assertions.
+- Current Admin/Marketplace terminology cleanup passed 138/138. API route tests compose complete
+  selected services before dispatch and use current API/SPA handlers. Production cannot import fixtures.
 
-Original Ticket task `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A7e5d3f49-d1f4-46d9-bb28-c5a7f1e0bacf` failed from provider overload before commands/edits and is terminal cancelled. Its clean checkout is preserved. Capability discovery still offers the approved model; replacement uses the same provider/model/max without adding a slot.
+Focused counts above identify their scopes; they are not summed or presented as final broad totals.
+The task coordinator additionally reviewed C23 on combined source: 108 affected Commerce tests
+and 24 real-PG checks passed with zero skips. Its source and evidence remain preserved.
 
-Residual Ticket persistence is confirmed open: current adapters implement multi-panel reads/list/delete, scoped open counts, member history and template-reply claims, but contracts/services still allow weaker missing-method paths. A bounded second architecture assignment will require these ports without schema/native/queue work. It excludes C23-owned `guild-overview.ts` and `test/runtime-app.test.ts`; root will update their Ticket-only callsites after integration.
+## Final combined acceptance
 
-Current R01 GLM fallback: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A336d8da9-27da-4220-a5ee-45211847c1c0`, exact base `751cec87ce08b900735c9d56803da9c2a14ea599` (source equal verified `8a0917f`). It owns Node/application composition, required runtime services, shared factory/processor selection and dedicated/shared runtime composition tests. No Ticket domain, Offering/schema, SQL store, Admin contract, queue outcome or Guild summary edits.
+| Check                                            | Current result                                                              |
+| ------------------------------------------------ | --------------------------------------------------------------------------- |
+| Clean application and test artifact builds       | Pending                                                                     |
+| Node/Admin/shared types and Admin contract drift | Pending final run                                                           |
+| Public behavior suite                            | Pending final run; PG-only skips are verified separately with configured PG |
+| Native PostgreSQL and concurrency suite          | Pending final run with zero skips required                                  |
+| Build behavior / architecture                    | Pending final run                                                           |
+| Lint / formatting / diff whitespace              | Pending final run                                                           |
+| Documentation                                    | Pending final run                                                           |
+| Production image / empty-PostgreSQL readiness    | Pending final run                                                           |
 
-R01 original DeepSeek task `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Ab15027f9-41a9-481e-8ffb-64a615df6978` is terminal failed/cancelled after inference overload, with a clean preserved checkout and no implementation/test result. User-authorized GLM fallback reuses the exact scope/design/acceptance in the same slot; no extra task or provider was substituted.
+The root disposable database for final validation is loopback PostgreSQL16, one CPU / 256 MB,
+32 MB shared buffers / 20 connections. No live Discord/OAuth/provider action, push, PR or deployment
+is part of this source audit.
 
-Completed required Ticket: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A085a21eb-9ab5-415a-a64c-05dd83bd8b28`, same verified `8a0917f` base. The task coordinator owns this within its three reserved slots. Scope remains the seven Ticket contract/service/Admin Ticket files and dedicated tests; shared Guild/runtime fixtures and all native/schema/queue/composition files remain excluded. Current allocation: architecture one active, task coordinator two active, global three.
+## Preserved work
 
-Current required-port/atomic-config task: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A638b91ef-e0e2-4284-9399-19b617c420d9`, exact base `3b7595fc04b9301bd9430ae31e4a171ec8e17ff8`, DeepSeek Go/max. It owns eight required methods in five current store contracts, scoped mutation/lease callers, and only the native/SQLite Platform Link config UPSERT for atomic metadata+provided-enabled persistence. Public service/store rollback regression uses real PG, with omitted enabled preserving existing state. No schema, R01/shared fixture, Ticket, Offering or queue work.
+The distinct handoff evidence is [`task-audit-handoff.md`](task-audit-handoff.md). Earlier broad
+ports and stopped duplicate worktrees were not wholesale transplanted. C04's private migration
+and upgrade draft remains superseded by the explicit public policy.
 
-Current Ticket handler injection: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Ad1070517-9344-48d0-92c8-67ee5cb92701`, exact base `d72367c7129595a884cb4d1dedc3567a196e567b`. It owns the Ticket interaction handler plus only Ticket dispatch calls in the two injected parent handlers, dedicated Ticket/UX tests and one meaningful injection regression. It removes the final optional lifecycle constructor path without touching R01 types/factory/context/shared tests. Global allocation is now architecture two active, task coordinator two active (four total).
+Provider-overload/subscription failures were terminal cancelled before replacement. R02's
+preserved full drafts are identical (149,846 bytes), SHA-256
+`300818c476e299f20905706567be38c3dab2faddbc94a514d533c0cb06dd3e6a`.
+Task briefs, cancellation receipts, source patches and exact execution logs remain in the handoff
+artifacts under `/tmp`; no failed task is running or queued.
 
-Required Ticket persistence is integrated as `ce2fa5d` (source `a5816b3`) plus `d72367c` required interaction reads/dead unsupported failure removal. Root test compilation/contract drift and Node/Admin types pass; 352 combined Ticket/interaction/runtime checks pass with zero skips. The Guild overview Ticket list fallback waits for C23 to release the file. Admin terminology cleanup `3b7595f` passes 138 focused Admin/Marketplace/route checks with zero skips and test compilation.
+<details>
+<summary>Preserved implementation task IDs (all terminal)</summary>
 
-Completed implementation task IDs (all terminal):
+- `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Adf8136b7-7c3b-435f-937e-aa875892e28d`.
+- `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Acc83b1ee-a638-4257-b4e3-6506a2063fc6`.
+- `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A7e5d3f49-d1f4-46d9-bb28-c5a7f1e0bacf`.
+- `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A336d8da9-27da-4220-a5ee-45211847c1c0`.
+- `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Ab15027f9-41a9-481e-8ffb-64a615df6978`.
+- `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A085a21eb-9ab5-415a-a64c-05dd83bd8b28`.
+- `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A638b91ef-e0e2-4284-9399-19b617c420d9`.
+- `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Ad1070517-9344-48d0-92c8-67ee5cb92701`.
+- `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A3c6658bd-5161-4f50-a576-247fd119296e`.
+- `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A291b2e09-c67d-4430-b23a-762a68234cce`.
+- `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aeb7c02b8-96eb-4120-ae4e-45d565d19891`.
+- `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A53875c36-1a32-4f41-aaf1-c11a734d936f`.
+- `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A8ed3b428-ef6f-4ca5-bd81-8126a88cdd02`.
+- `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aca78aeb1-fdb9-4303-940c-29ccd508d410`.
+- `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A4ea26bd9-298b-4d35-9410-b037c9ce5b89`.
+- `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A1af5370d-6900-430c-af56-541c95c2fabc`.
+- `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A7681cfcd-44cd-4501-bce9-488a0e1c6aea`.
+- `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A87580670-82d9-4f4c-b4e2-006283264438`.
+- `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aa5aacc97-628f-4561-946b-fab4111b24d5`.
 
-- C03: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A3c6658bd-5161-4f50-a576-247fd119296e`.
-- C10: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A291b2e09-c67d-4430-b23a-762a68234cce`.
-- C11: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aeb7c02b8-96eb-4120-ae4e-45d565d19891`.
-- C09: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A53875c36-1a32-4f41-aaf1-c11a734d936f`.
-- C12: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A8ed3b428-ef6f-4ca5-bd81-8126a88cdd02`.
-- P04: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aca78aeb1-fdb9-4303-940c-29ccd508d410`.
-- C06: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A4ea26bd9-298b-4d35-9410-b037c9ce5b89`.
-
-Terminal failed R02 recovery: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A1af5370d-6900-430c-af56-541c95c2fabc`, base `17acff9b61396043a74938de43d19c34ca7be9c3`. Owned production paths are queue contracts/consumers, narrow Billing/Commerce queue entrypoints, native job metadata/outcome handling and Node job registration; tests cover those seams and native settlement. No SQL stores, offering domain/schema or HTTP composition.
-
-Failed original R02 task (terminal, cancelled to prevent continuation):
-`node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A7681cfcd-44cd-4501-bce9-488a0e1c6aea`.
-Full tracked/untracked draft: `/tmp/haf-R02-preserved-overload.patch` (149,846 bytes), original
-worktree unchanged. Recovery must reuse it, resolve meaningful failed assertions and preserve
-native retry reasons/backoff. PostgreSQL settlement regressions belong in a discovered
-`test/postgres-queue-outcomes.test.ts`, separate from pure direct-port tests.
-
-## Go access recovery and authorized fallback
-
-R02 `1af5370d`, Ticket `df8136b7` and C23 `cc83b1ee` failed with an active-Go-subscription
-requirement. All are terminal cancelled with no queued continuation or pending request.
-The user initially chose to restore Go access, then reported it should be ready and authorized
-resumption. New attempts use the same bounded scopes; earlier checkouts remain preserved.
-
-Current R02: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A87580670-82d9-4f4c-b4e2-006283264438`,
-base `d1ff7ad3ea01de310e4e52be720ef5b146ff3f9e`, OpenCode Go DeepSeek V4.1 Flash/max.
-R02 actual successful implementation/acceptance confirms restored access. C23 replacement is running on that same explicit base, which differs from verified `fa1fe4e`
-only in inventory docs. Its task ID is
-`node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aa5aacc97-628f-4561-946b-fab4111b24d5`.
-Actual execution has now confirmed access. R01 and Ticket were released on the integrated
-verified R02 checkpoint; C23 continues on its original approved base.
-
-The user explicitly authorized GLM 5.3 Flash if DeepSeek fails. Discovery confirms provider
-`opencode`, model `opencode-go/glm-5.3-flash`, `variant=max`. Keep DeepSeek first; a failed
-attempt may be preserved/cancelled and replaced by one new same-scope GLM task within the
-same reserved slot. No other provider/model substitution is authorized. If Go access rejects
-both models, preserve/report instead of retrying indefinitely.
-
-R02's two preserved complete patches are identical, SHA-256
-`300818c476e299f20905706567be38c3dab2faddbc94a514d533c0cb06dd3e6a` (149,846 bytes).
-The second copy and manifest are `/tmp/haf-R02-preserved-subscription.patch` and
-`/tmp/haf-R02-preserved-subscription.json`; tracked and untracked files are preserved.
-No draft is integrated/accepted: timing/backoff assertions need correction and its two PG
-settlement cases must move into a discovered `postgres-*.test.ts` file.
-
-The failed Ticket checkout is clean at `2a07da4`; no implementation result exists. Failed C23
-checkout is clean at `fa1fe4e`; approved brief and reader exceptions are preserved in
-`/tmp/hafbot-C23-approved-task-brief.md`, recovery manifest in
-`/tmp/hafbot-C23-subscription-blocked-manifest.md`. The old incomplete offering draft remains
-read-only design evidence, with no accepted SQL/schema result.
-
-## Accepted direct-queue integration and remaining persistence gap
-
-R02 is integrated as `d69aba9` (source `d69219a`) plus `8a0917f` fresh-schema test naming.
-Coordinator reruns pass 109 public/direct-consumer checks and 11 real-PostgreSQL job/Gateway
-checks, zero skips. Node/Admin types, contract drift and test compilation pass. Exact retained
-Gateway lease delay, deterministic timing, deleted credentials and strict Game Access input
-assertions preserve current semantics. No production batch/callback protocol remains.
-
-Native settlement receives exact retry reason/delay and persists delay plus terminal/exhaustion
-reason. The current jobs schema does not persist a non-exhausted retry's reason. This remains a
-root-owned persistence follow-up, not a claimed completed invariant. Root will reconcile one
-canonical reason representation after C23 releases `schema/postgres.sql`; R01 and Ticket must
-not edit the job queue/schema/tests. No migration or compatibility alias is needed.
-
-## Remaining integration boundaries
-
-C23 may consolidate only the approved offering model/consumers, offering-only baseline and
-Drizzle declarations, six owning Commerce SQL stores and matching test SQLite stores/fixtures.
-Use one `commerce_offerings` lifecycle with explicit `repair_previous_state`; remove the side
-table and `active` projection. Preserve checkout gates, publication uniqueness, repair restoration,
-retirement/refund/ledger/outbox atomicity and tenant scope. No migrations, views or compatibility
-readers. Require meaningful fresh-schema, rollback and concurrency regressions on real PostgreSQL.
-
-C23 also owns the narrow offering row/read mapping in `postgres-commerce-store.ts`,
-`postgres-commerce-snapshot-provider.ts` and their test SQLite mirrors
-`sqlite-commerce-store.ts`/`commerce/stripe-snapshot-provider.ts`. This exception changes only
-current offering row types, selected columns and mappings; financial/provider behavior is excluded.
-
-R02 alone owns `test/commerce-game-access-workflow.test.ts` queue invocation changes. C23 must
-leave it untouched. Architecture will adapt that file's four old offering-lifecycle fixture fragments
-after both tasks return. Test SQLite store mirrors are C23-owned; queue/runtime wrappers are R02-owned.
-R02 may also update `test/postgres-gateway-retries.test.ts` only for direct queue calls.
-
-R01 must build services from selected stores and supply the same instances to HTTP/jobs/scheduled
-handlers. Preserve scheduled suspension filtering, lifecycle tracking, request origin semantics and
-the genuine read-only maintenance boundary. It does not reopen C12 handler reconstruction work.
-
-Flat `RuntimeStore` and `ClosableRuntimeStore` types in `src/runtime/contracts.ts` have no production consumer; they support only the old flat runtime-app test override fixture. Root will move those types to test support after R01 releases that fixture, without rebuilding a production compatibility facade.
-
-## Shared-composition review notes
-
-R01 source review confirms that HTTP builds feature services then spreads overrides, whereas job
-registration constructs a second graph. Node application context builds Billing/Commerce/Paid Role
-runtimes which job registration and Gateway dependencies reconstruct. This is current open work.
-
-The intended composition is one writable application graph after all stores, blobs, credentials,
-Gateway controller, analytics and lifecycle tracking are selected. HTTP, scheduled services and
-native job handlers receive that graph and already-selected processing ports. `createRuntimeApp`
-should consume required services; a test-only builder may supply partial test overrides before
-construction. No request-time factory, build-then-replace capture, generic DI container or first-request
-origin cache is needed. Preserve actual `waitUntil` tracking through host shutdown.
-
-Move current scheduled-store filtering to the composition stage: timed roles, LFG, Events,
-Player Count and Managed Message scheduled scans must still exclude suspended Guilds. The
-maintenance HTTP context remains an explicit separate read-only graph/pool; sharing writable
-services into it would violate its existing security boundary.
-
-A second confirmed residual is `service-factory.ts`'s disabled Suggestion store and in-memory
-incident store substitution. Native and test contexts already provide these stores. Required
-current persistence must be selected before graph construction, not supplied by hidden no-op
-fallbacks. Optional external capabilities and disabled current product features remain explicit.
-This design is prepared for implementation; no R01 source change is claimed.
-
-## Original task coverage
-
-"Checkpoint" means implemented in the architecture baseline; final combined acceptance is still
-required. It is not a claim that the original finding is closed by the existence of a port.
-
-| Task             | Current reconciliation                                                                                                              |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| C01              | Direct supported database driver; query failure/single-read regressions retained                                                    |
-| C02              | Integrated `02cbf2e`; 33 loading/error checks pass                                                                                  |
-| C03              | Integrated `230b35b`; 33 validation/contract checks pass; whitespace regression corrected                                           |
-| C04              | Fresh-install policy documented; old private-upgrade requirements superseded by user policy                                         |
-| C05              | Native ports selected; residual disabled factory removal in R01; test-only flat RuntimeStore type relocation remains root follow-up |
-| C06              | Integrated `fa1fe4e` (source `9701e7f`); 149 focused Admin/error/loader checks and current types pass                               |
-| C07              | Integrated `4af4df0`; abandoned prototype removed                                                                                   |
-| C08              | Checkpoint: unused Worker/dev/test tooling removed; retain test-only Workers types                                                  |
-| C09              | Integrated `408d976` + unused claims `537036a`; event aliases already removed; 14 focused client checks pass                        |
-| C10              | Integrated `f8d7bd7` + composition `10743b5`; 91 focused checks and Node/Admin/shared/test types pass                               |
-| C11              | Integrated `5eb98c8` (source `7b98124`); required ports, atomic whole-set rules; 262 focused + 3 real-PG checks pass                |
-| C12              | Four-handler injection `d1988ea` verified; final Ticket lifecycle constructor fallback cleanup running separately                   |
-| C13              | Native identity/API checkpoint + UI `0bbc4b6` + final aliases `537036a`; 195 checks/types/Admin build/budgets pass                  |
-| C14              | Checkpoint: one ordered Reaction Role panel table and explicit panel identity                                                       |
-| C15              | Checkpoint: current Ticket response rules and independent feature flags                                                             |
-| C16              | Checkpoint: Evidence Vault role list and private object metadata                                                                    |
-| C17              | Checkpoint: encrypted credential references in config/history/queues/logs                                                           |
-| C18              | Checkpoint: current signed controls; actor/generation enforcement and key rotation                                                  |
-| C19              | Checkpoint: strict current Gateway document and event key                                                                           |
-| C20              | Integrated `b8edd9a`; explicit media classification and no old metadata decoder                                                     |
-| C21              | Checkpoint: one stored entitlement plan field                                                                                       |
-| C22              | Checkpoint: current Billing prices and self-hosted policy                                                                           |
-| C23              | Running same-scope restored-access replacement on `d1ff7ad`; earlier clean failed checkout preserved                                |
-| C24              | Canonical public error fields/client parsing; complete endpoint/transport acceptance still pending                                  |
-| P01–P03, P05–P07 | Native identity, roles, Tickets, content, social and community stores at checkpoint                                                 |
-| P04              | Integrated `9f02d5b` + `62b315e` (sources `a3f3f09` + `e9cd8ba`); 7 real-PG Event atomicity/recurrence checks pass                  |
-| P08              | Integrated `3d1bb9e`; 8 real-PG moderation checks pass, including race and rollback regressions                                     |
-| P09–P14          | Native remaining stores, credentials, auth and context selection at checkpoint                                                      |
-| R01              | Running: one selected graph, scheduled suspension filters, selected processing ports and read-only maintenance isolation            |
-| R02              | Integrated `d69aba9`; direct protocol/native settlement 109+11 pass; transient retry reason persistence remains root follow-up      |
-| R03              | Checkpoint: production Worker/DO/D1 host and SQL bridge removed; SQLite fixtures are test-only                                      |
-| B01              | Current fresh schema at checkpoint; C23 will change only its offering baseline                                                      |
-| B02              | Checkpoint: supported Node/test boundaries and retained tooling; final clean artifact build required                                |
-| B03              | Current install docs at checkpoint; reconcile final service/queue/offering changes                                                  |
-| V01              | Pending exact combined source validation, including fresh container and concurrency contracts                                       |
-
-## Historical broad checkpoint validation
-
-These counts predate the integrations above and are not final acceptance.
-
-| Check                                                          | Historical result                                                                  |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Native PostgreSQL suite                                        | 111 passed, 0 failed                                                               |
-| Build behavior                                                 | 19 passed, 0 failed                                                                |
-| Architecture                                                   | 7 passed, 0 failed                                                                 |
-| Public suite                                                   | 3,513 passed, 2 failed, 59 skipped; obsolete error fixtures subsequently corrected |
-| Application/test builds and Node/Admin/shared types            | Passed at architecture checkpoint                                                  |
-| Lint                                                           | No errors; 13 existing React Effect warnings                                       |
-| Formatting, documentation and fresh-schema container readiness | Passed at architecture checkpoint                                                  |
-
-Final combined validation will replace these historical counts after R01/R02/C23 integration,
-including all PostgreSQL concurrency regressions, current artifacts and fresh installation.
+</details>

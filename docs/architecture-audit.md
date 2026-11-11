@@ -13,10 +13,11 @@ or choose a database based on an absent binding.
 Production contains no Worker entrypoint, Durable Objects, D1 facade or SQL dialect translator.
 Process caches use a small cache contract. S3 and Azure object stores are current provider adapters.
 
-Interaction and command handlers now require selected service instances, with behavioral
-regressions proving reuse and no reconstruction. HTTP and jobs now use direct native payload/outcome delivery without former batch/callback
-settlement. They still assemble separate feature graphs; one selected graph and persistence of
-non-exhausted retry reasons remain tracked in the combined inventory.
+Services are composed after native stores, object capabilities and credentials are selected.
+HTTP, native job delivery and scheduled work consume the same instances; maintenance HTTP
+has a separate read-only composition. Handlers and Admin routes require selected services.
+Native jobs use payload/metadata inputs and explicit outcomes, retaining retry/terminal reasons
+and delay without former batch callbacks. Missing outcomes are terminal.
 
 SQLite implementations and their current schema fixture live under `test/support` for isolated
 service tests. Production cannot import those fixtures. Architecture tests enforce that boundary,
@@ -35,6 +36,8 @@ CLIs and stale source-assembly manifests were also removed.
 
 ## Canonical contracts
 
+- Commerce Offerings use one lifecycle row with explicit pre-repair state, without a side-table
+  projection. Platform Link config and enabled state save atomically.
 - Billing recognizes the four configured plan/interval prices. Historical cohorts, Founder fields,
   the private paid-role archive and duplicate stored plan fields are removed.
 - Player Links use one platform-wide representation, with no Steam-specific persistence, fallback
@@ -62,15 +65,9 @@ architecture rules, native PostgreSQL contracts and fresh container initializati
 checks use an isolated local PostgreSQL 16 database. Public tests use fictional credentials and
 local service boundaries.
 
-At the architecture checkpoint, native PostgreSQL contracts pass 111/111, build checks pass
-19/19, architecture checks pass 7/7, and the production container starts with a fresh schema and
-full readiness. Application builds, source/test type checks, formatting and the documentation
-build pass. Lint has no errors and 13 existing React Effect warnings.
-
-The latest broad public run passes 3,513 tests, skips 59 PostgreSQL-only checks and fails two
-obsolete error fixtures. Those fixtures and the remaining error-field aliases have since been
-corrected; that correction still needs its rerun. Combined integration and the Mention Protection
-configuration/burst concurrency regression are tracked in
+The current combined source includes the preserved PostgreSQL concurrency regressions and
+fresh-install fixes. Final broad builds, types, public/native tests, documentation and container
+readiness are being rerun together. Exact results and accepted source SHAs are recorded in
 [`clean-slate-progress.md`](clean-slate-progress.md).
 
 Live Discord, OAuth, provider operations and an independently operated deployment/restore
