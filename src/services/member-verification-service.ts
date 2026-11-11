@@ -928,7 +928,7 @@ export class MemberVerificationService {
     }
 
     const state = await this.options.createSteamLinkState(guildId, userId);
-    const steamLinkUrl = `${this.options.publicUrl.replace(/\/$/, "")}/auth/steam?state=${encodeURIComponent(
+    const steamLinkUrl = `${this.options.publicUrl.replace(/\/$/, "")}/auth/steam/start?state=${encodeURIComponent(
       state,
     )}`;
 

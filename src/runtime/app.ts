@@ -968,12 +968,7 @@ async function readOpaqueRouteGuildId(
   services: Pick<ServiceFactory, "platformLinkService" | "memberVerificationService">,
 ): Promise<string | null> {
   const state = url.searchParams.get("state");
-  if (
-    state &&
-    (url.pathname === "/auth/steam" ||
-      url.pathname === "/auth/steam/start" ||
-      url.pathname === "/auth/steam/callback")
-  ) {
+  if (state && (url.pathname === "/auth/steam/start" || url.pathname === "/auth/steam/callback")) {
     return (await services.platformLinkService.readPendingLink(state))?.guildId ?? null;
   }
   if (state && (url.pathname === "/auth/xbox/start" || url.pathname === "/auth/xbox/callback")) {

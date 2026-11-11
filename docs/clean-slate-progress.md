@@ -26,8 +26,9 @@ there are no active deployments, inherited compatibility requirements or upgrade
 - Port the configuration/clear versus burst-recording serialization invariant from `94baa1a`,
   preserving its PostgreSQL concurrency regression. Do not overwrite native adapters with the
   overlapping `fb3065a` ports.
-- Inspect and remove the unused R2 Workers metadata conversion mode. The conversion CLI is
-  already removed; the current S3 adapter still exposes that mode.
+- R2 Workers metadata conversion mode removed as `b8edd9a` (source `fc9a023`). Coordinator
+  verification: 10 object-store tests, test type build and Node types pass. S3 head/get use
+  canonical metadata and reject incomplete provider metadata.
 - Current game-access transmission markers require their operation identity; 52 focused tests
   and the test type build pass.
 - Accept only distinct remaining task work adapted onto the architecture checkpoint. Verify
@@ -55,9 +56,20 @@ still need explicit reconciliation. None is assumed covered merely because nativ
 | Architecture 2       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A766003cd-614e-4828-ab87-21da714ee538` | `915455f` | S3 adapter; retired R2 metadata reader; object-store tests         |
 | Task coordinator 1–3 | Reserved to task coordinator                                                                                                      | `915455f` | C03/C10/C11 adaptations with disjoint paths agreed in coordination |
 
-Both architecture tasks are running. Their reports must include commit SHAs, exact focused check
-results and limitations. The coordinator reviews and integrates each returned change before final
+Mention Protection is running. The R2 metadata task is integrated; its slot will reconcile the
+remaining C13 UI aliases from completed source `0f656bc`. C03, C10 and C11 run in the three task
+coordinator slots. The coordinator reviews and integrates each returned change before final
 combined validation. Mention Protection must retain the proven RED/GREEN concurrency regression.
+
+Task-coordinator implementation IDs on base `915455f`:
+
+- C03: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A3c6658bd-5161-4f50-a576-247fd119296e`.
+- C10: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A291b2e09-c67d-4430-b23a-762a68234cce`.
+- C11: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aeb7c02b8-96eb-4120-ae4e-45d565d19891`.
+
+C10 owns the interaction-route fixture; C11 owns the runtime-app fixture and the narrowly granted
+native/SQLite timed-rule whole-set replacement changes. C03 owns a new isolated validation test.
+The C13 UI reconciliation must remain disjoint from those files and all native/schema work.
 
 ## Checkpoint validation
 

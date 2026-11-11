@@ -1703,7 +1703,9 @@ test("MemberVerificationService.handleVerifyButton with steam-link method return
   })) as { data: { content: string } };
 
   assert.equal(roleCalls.length, 0);
-  assert.ok(response.data.content.includes("https://example.com/auth/steam?state=steam-state-1"));
+  assert.ok(
+    response.data.content.includes("https://example.com/auth/steam/start?state=steam-state-1"),
+  );
 
   const requiredEvent = auditEvents.find(
     (e) => e.eventId === "member-verification.steam-link-required",
