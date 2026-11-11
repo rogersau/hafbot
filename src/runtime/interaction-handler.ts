@@ -58,7 +58,7 @@ import {
   handleBanCaseComponentInteraction,
   isBanCaseComponentInteraction,
 } from "./ban-case-interaction-handler";
-import { createServiceFactory } from "./service-factory";
+import type { InteractionServices } from "./handler-services";
 import {
   buildMemberVerificationCustomId,
   parseMemberVerificationCustomId,
@@ -86,35 +86,15 @@ import {
 
 const DISCORD_INTERACTION_MAX_AGE_SECONDS = 5 * 60;
 
+export type InteractionHandlerOptions = Omit<RuntimeAppOptions, "services"> & {
+  services: InteractionServices;
+};
+
 export async function handleInteractionRequest(
   request: Request,
-  options: RuntimeAppOptions,
+  options: InteractionHandlerOptions,
 ): Promise<Response> {
   const features = options.features ?? ALL_FEATURES_ENABLED;
-  const services = {
-    ...createServiceFactory({
-      stores: options.stores,
-      discordBotToken: options.discordBotToken,
-      discordCache: options.discordCache,
-      steamWebApiKey: options.steamWebApiKey,
-      wardogs: options.wardogs,
-      banEnforcementStore: options.banEnforcementStore,
-      banIncidentStore: options.banIncidentStore,
-      banCasesEnabled: features.banCases,
-      wardogsPlayerCountEnabled: options.wardogsPlayerCountEnabled,
-      playerCountEnabled: features.playerCount,
-      webhookProxyLogPersistenceEnabled: options.webhookProxyLogPersistenceEnabled,
-      ticketRecoveryQueue: options.ticketRecoveryQueue,
-      evidenceVaultBlobs: options.evidenceVaultBlobs,
-      origin: new URL(request.url).origin,
-      publicUrl: new URL(request.url).origin,
-      waitUntil: options.waitUntil,
-      whiteLabelBotStore: options.stores.whiteLabelBots,
-      steamLinkAvailable: features.steamLink,
-      componentIdSigner: options.componentIdSigner,
-    }),
-    ...options.services,
-  };
   const signature = request.headers.get("x-signature-ed25519");
   const timestamp = request.headers.get("x-signature-timestamp");
   const body = await request.text();
@@ -135,6 +115,7 @@ export async function handleInteractionRequest(
     return new Response("Unauthorized", { status: 401 });
   }
 
+  const services = options.services;
   let interaction = JSON.parse(body) as DiscordInteraction;
   if (interaction?.type === DISCORD_PING_INTERACTION) {
     return Response.json({ type: DISCORD_PONG_RESPONSE });
@@ -261,8 +242,7 @@ export async function handleInteractionRequest(
       return handleMarketplaceComponentInteraction(
         interaction,
         options.stores,
-        options.discordBotToken,
-        services,
+        services.marketplaceService,
       );
     }
 
@@ -281,7 +261,7 @@ export async function handleInteractionRequest(
         interaction,
         options.stores,
         options.discordBotToken,
-        services,
+        services.lfgService,
         options.componentIdSigner,
       );
     }
@@ -380,12 +360,7 @@ export async function handleInteractionRequest(
     }
 
     if (features.marketplace && isMarketplaceInteraction(interaction)) {
-      return handleMarketplaceModalSubmitInteraction(
-        interaction,
-        options.stores,
-        options.discordBotToken,
-        services,
-      );
+      return handleMarketplaceModalSubmitInteraction(interaction, services.marketplaceService);
     }
 
     if (features.clans !== false && services.clanService && isClanInteraction(interaction)) {
@@ -401,8 +376,7 @@ export async function handleInteractionRequest(
       return handleLfgModalSubmitInteraction(
         interaction,
         options.stores,
-        options.discordBotToken,
-        services,
+        services.lfgService,
         options.waitUntil,
       );
     }

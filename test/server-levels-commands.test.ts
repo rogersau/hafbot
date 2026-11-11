@@ -11,6 +11,7 @@ import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { createSqliteServerLevelStore } from "./support/sqlite/runtime/sqlite-server-level-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
+import { applicationCommandServices } from "./support/handler-services";
 
 test("Server Levels leaderboard rechecks current Guild membership across stale pages", async () => {
   const database = new SqliteD1Database();
@@ -66,7 +67,11 @@ test("a retried support interaction appends its Server XP adjustment only once",
         ],
       },
     } as any;
-    const options = { hafAdminGuildId: "haf-admin-guild", hafAdminRoleId: "haf-admin-role" };
+    const options = {
+      hafAdminGuildId: "haf-admin-guild",
+      hafAdminRoleId: "haf-admin-role",
+      services: applicationCommandServices(),
+    };
 
     await handleApplicationCommand(
       interaction,
@@ -122,7 +127,11 @@ test("a restricted support interaction completes Server Levels personal-data era
       fixture.stores,
       "discord-token",
       ALL_FEATURES_ENABLED,
-      { hafAdminGuildId: "haf-admin-guild", hafAdminRoleId: "haf-admin-role" },
+      {
+        hafAdminGuildId: "haf-admin-guild",
+        hafAdminRoleId: "haf-admin-role",
+        services: applicationCommandServices(),
+      },
     );
 
     assert.equal(response.status, 200);

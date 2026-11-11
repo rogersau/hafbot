@@ -1,5 +1,6 @@
 import { afterEach } from "node:test";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
+import { interactionServices } from "./support/handler-services";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -2817,10 +2818,7 @@ test("createInteractionRoutes handles Discord PING interactions through route mo
     verifyDiscordRequest: async () => true,
     stores: createTestRuntimeStores(),
     gateway: {} as never,
-    services: {
-      timedRoleService: {} as never,
-      blocklistService: {} as never,
-    },
+    services: interactionServices(),
     handleInteractionRequest: async (request) => {
       const body = JSON.parse(await request.text());
       if (body?.type === 1) {
@@ -2845,7 +2843,7 @@ test("createInteractionRoutes handles exhausted Discord rate limits", async () =
     discordBotToken: "bot-token",
     stores: createTestRuntimeStores(),
     gateway: {} as never,
-    services: {},
+    services: interactionServices(),
     handleInteractionRequest: async () => {
       throw new DiscordApiError("rate limited", 429, "redacted", {
         retryAfterMs: 251,
@@ -2876,7 +2874,7 @@ test("createInteractionRoutes maps Marketplace rate limits after feature handlin
     discordBotToken: "bot-token",
     stores,
     gateway: {} as never,
-    services: {},
+    services: interactionServices(),
     handleInteractionRequest: async () =>
       handleMarketplaceModalSubmitInteraction(
         {
@@ -2886,18 +2884,14 @@ test("createInteractionRoutes maps Marketplace rate limits after feature handlin
           member: { user: { id: "user-1" } },
           data: { custom_id: "market:modal:have:~", components: [] },
         },
-        stores,
-        "bot-token",
         {
-          marketplaceService: {
-            createPost: async () => {
-              throw new DiscordApiError("rate limited", 429, "redacted", {
-                retryAfterMs: 250,
-                globalRateLimit: false,
-              });
-            },
-          } as never,
-        },
+          createPost: async () => {
+            throw new DiscordApiError("rate limited", 429, "redacted", {
+              retryAfterMs: 250,
+              globalRateLimit: false,
+            });
+          },
+        } as never,
       ),
   });
 

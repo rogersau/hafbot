@@ -24,6 +24,7 @@ import {
   reportOperationalEvent,
 } from "../src/observability/operational-reporter";
 import { handleApplicationCommand } from "../src/runtime/application-command-handler";
+import { applicationCommandServices } from "./support/handler-services";
 import type { Env } from "./support/test-env";
 import type { CustomerSession } from "../src/runtime/auth/customer-session";
 const STEAM = "76561198000000001",
@@ -1422,6 +1423,7 @@ test("restricted personal erasure preserves cadence and the durable slot across 
       hafAdminGuildId: "haf-admin-guild",
       hafAdminRoleId: "support-role",
       eraseAttendanceObservationMember: (guildId, userId) => h.service.eraseMember(guildId, userId),
+      services: applicationCommandServices(),
     },
   );
   assert.equal(response.status, 200);
@@ -1518,6 +1520,7 @@ test("restricted support erasure removes observation identity after unlink and f
         hafAdminRoleId: "support-role",
         eraseAttendanceObservationMember: (guildId, userId) =>
           h.service.eraseMember(guildId, userId),
+        services: applicationCommandServices(),
       },
     );
     assert.equal(response.status, 200);

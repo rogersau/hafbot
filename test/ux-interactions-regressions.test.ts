@@ -18,6 +18,7 @@ import { buildTicketClaimCustomId } from "../src/tickets";
 import type { TicketInstance, TicketPanelConfig } from "../src/types";
 import type { DiscordInteraction } from "../src/runtime/app-types";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
+import { applicationCommandServices } from "./support/handler-services";
 
 for (const root of ["blocklist", "timedrole", "playercount"] as const) {
   test(`/${root} list dispatches its own registered root/subcommand`, () => {
@@ -48,6 +49,15 @@ test("Free Timed Roles lists assignments while Free Player Count gives the real 
         fixture.stores,
         "fictional-token",
         ALL_FEATURES_ENABLED,
+        {
+          services: applicationCommandServices({
+            timedRoleService: new TimedRoleService(
+              fixture.stores.timedRoles,
+              "fictional-token",
+              createStaticGuildResourceValidator({ guilds: {} }),
+            ),
+          }),
+        },
       );
       assert.match(
         ((await response.json()) as { data: { content: string } }).data.content,
@@ -64,6 +74,7 @@ test("Free Timed Roles lists assignments while Free Player Count gives the real 
       fixture.stores,
       "fictional-token",
       ALL_FEATURES_ENABLED,
+      { services: applicationCommandServices() },
     );
     assert.match(((await denied.json()) as { data: { content: string } }).data.content, /admin/i);
   } finally {
@@ -111,7 +122,7 @@ test("Free Timed Roles completes add/list/remove through the real service and re
       fixture.stores,
       "fictional-token",
       ALL_FEATURES_ENABLED,
-      { services: { timedRoleService: service } },
+      { services: applicationCommandServices({ timedRoleService: service }) },
     );
     return ((await response.json()) as { data: { content: string } }).data.content;
   }
@@ -770,6 +781,15 @@ test("paid Player Count list reaches its handler instead of Unsupported command"
       fixture.stores,
       "fictional-token",
       ALL_FEATURES_ENABLED,
+      {
+        services: applicationCommandServices({
+          playerCountService: {
+            async listServers() {
+              return [];
+            },
+          } as any,
+        }),
+      },
     );
     assert.match(
       ((await response.json()) as { data: { content: string } }).data.content,
@@ -973,8 +993,7 @@ test("slow LFG submission acknowledges immediately and duplicate retry links to 
     const response = await handleLfgModalSubmitInteraction(
       interaction,
       fixture.stores,
-      "fictional-token",
-      { lfgService: service },
+      service,
       (task) => tasks.push(task),
     );
     assert.deepEqual(await response.json(), { type: 5, data: { flags: 64 } });
@@ -983,12 +1002,7 @@ test("slow LFG submission acknowledges immediately and duplicate retry links to 
     await Promise.all(tasks);
     assert.match(completions[0] ?? "", /LFG post created/);
     assert.match(completions[0] ?? "", /View post/);
-    const retry = await handleLfgModalSubmitInteraction(
-      interaction,
-      fixture.stores,
-      "fictional-token",
-      { lfgService: service },
-    );
+    const retry = await handleLfgModalSubmitInteraction(interaction, fixture.stores, service);
     assert.match(((await retry.json()) as { data: { content: string } }).data.content, /View post/);
     assert.equal(published, 2, "one post plus one noticeboard; retry creates neither");
     assert.equal((await fixture.stores.lfg.listLfgPosts("guild-1", { limit: 50 })).length, 1);

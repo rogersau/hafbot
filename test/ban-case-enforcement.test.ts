@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import test from "node:test";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
+import { interactionServices } from "./support/handler-services";
 import {
   createSqliteBanEnforcementStore,
   createSqliteWardogsStore,
@@ -609,9 +610,8 @@ test("signed Discord runtime confirmation rejects a different actor and acknowle
       stores: f.fixture.stores,
       gateway: { start: async () => {}, status: async () => ({}) },
       wardogs: f.wardogs,
-      banEnforcementStore: f.store,
       componentIdSigner: signer,
-      services: { banCaseEnforcement: f.service },
+      services: interactionServices({ banCaseEnforcement: f.service }),
     };
     async function request(actor: string) {
       const body = JSON.stringify({

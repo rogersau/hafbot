@@ -43,7 +43,7 @@ import { createGuildBrandingResolver } from "./guild-branding";
 import type { RuntimeStores } from "./app-types";
 import type { DiscordInteraction } from "./app-types";
 import type { FeatureFlags } from "./features";
-import { createServiceFactory, type ServiceFactory } from "./service-factory";
+import type { ApplicationCommandServices } from "./handler-services";
 import { assertGuildPremiumTier, QuantityLimitError } from "./entitlement-checks";
 import {
   hasInteractionAdminAccess,
@@ -71,28 +71,30 @@ import type { SelfHostedSite } from "./self-hosted-site";
 
 const DISCORD_MESSAGE_CONTENT_LIMIT = 2_000;
 
+export interface ApplicationCommandHandlerOptions {
+  communityTools?: import("../community-tools/service").CommunityToolsService;
+  reputationServiceForGuild?: (
+    guildId: string,
+  ) => Promise<import("../reputation/service").ReputationService>;
+  hafAdminGuildId?: string;
+  hafAdminRoleId?: string;
+  eraseAttendanceObservationMember?: (guildId: string, userId: string) => Promise<void>;
+  services: ApplicationCommandServices;
+  waitUntil?: (promise: Promise<unknown>) => void;
+  requestOrigin?: string;
+  selfHostedSite?: SelfHostedSite;
+  ticketTranscriptBlobs?: TicketTranscriptBlobStore;
+  ticketTranscriptCapabilities?: TicketTranscriptCapabilityAccess;
+  aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv;
+  componentIdSigner?: ComponentIdSigner;
+}
+
 export async function handleApplicationCommand(
   interaction: DiscordInteraction,
   stores: RuntimeStores,
   discordBotToken: string,
   features: FeatureFlags,
-  options: {
-    communityTools?: import("../community-tools/service").CommunityToolsService;
-    reputationServiceForGuild?: (
-      guildId: string,
-    ) => Promise<import("../reputation/service").ReputationService>;
-    hafAdminGuildId?: string;
-    hafAdminRoleId?: string;
-    eraseAttendanceObservationMember?: (guildId: string, userId: string) => Promise<void>;
-    services?: Partial<ServiceFactory>;
-    waitUntil?: (promise: Promise<unknown>) => void;
-    requestOrigin?: string;
-    selfHostedSite?: SelfHostedSite;
-    ticketTranscriptBlobs?: TicketTranscriptBlobStore;
-    ticketTranscriptCapabilities?: TicketTranscriptCapabilityAccess;
-    aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv;
-    componentIdSigner?: ComponentIdSigner;
-  } = {},
+  options: ApplicationCommandHandlerOptions,
 ): Promise<Response> {
   if (typeof interaction?.guild_id !== "string" || interaction.guild_id.length === 0) {
     return Response.json(buildEphemeralMessage("This command can only be used inside a server."));
@@ -167,15 +169,7 @@ export async function handleApplicationCommand(
 
   const brandingResolver = createGuildBrandingResolver(stores.whiteLabelBots);
 
-  const services = {
-    ...createServiceFactory({
-      stores,
-      discordBotToken,
-      whiteLabelBotStore: stores.whiteLabelBots,
-      playerCountEnabled: features.playerCount,
-    }),
-    ...options.services,
-  };
+  const services = options.services;
 
   if (invocation.commandName === "serverlevel") {
     if (features.serverLevels === false || !stores.serverLevels) {
@@ -311,7 +305,7 @@ export async function handleApplicationCommand(
       options.waitUntil,
       options.aiTranscriptSummarizerEnv,
       invocation.subcommandName === "reply" ? invocation.templateId : undefined,
-      options.services?.ticketLifecycle,
+      options.services.ticketLifecycle,
       invocation.subcommandName === "add-user" || invocation.subcommandName === "remove-user"
         ? invocation.userId
         : undefined,
@@ -1114,15 +1108,14 @@ async function handleHafAdminCommand(
   invocation: Extract<ReturnType<typeof extractCommandInvocation>, { commandName: "haf-admin" }>,
   stores: RuntimeStores,
   discordBotToken: string,
-  options: {
-    reputationServiceForGuild?: (
-      guildId: string,
-    ) => Promise<import("../reputation/service").ReputationService>;
-    hafAdminGuildId?: string;
-    hafAdminRoleId?: string;
-    eraseAttendanceObservationMember?: (guildId: string, userId: string) => Promise<void>;
-    services?: Partial<ServiceFactory>;
-  },
+  options: Pick<
+    ApplicationCommandHandlerOptions,
+    | "reputationServiceForGuild"
+    | "hafAdminGuildId"
+    | "hafAdminRoleId"
+    | "eraseAttendanceObservationMember"
+    | "services"
+  >,
 ): Promise<Response> {
   if (!options.hafAdminGuildId || interaction.guild_id !== options.hafAdminGuildId) {
     return Response.json(
@@ -1143,7 +1136,7 @@ async function handleHafAdminCommand(
   }
 
   if (invocation.subcommandName === "repair-verification-panel") {
-    const service = options.services?.memberVerificationService;
+    const service = options.services.memberVerificationService;
     if (!service) {
       return Response.json(buildEphemeralMessage("Member Verification is unavailable."));
     }
@@ -1296,7 +1289,7 @@ async function handleHafAdminCommand(
     invocation.subcommandName === "gateway-status" ||
     invocation.subcommandName === "start-gateway"
   ) {
-    const gatewayService = options.services?.gatewayService;
+    const gatewayService = options.services.gatewayService;
     if (!gatewayService) {
       return Response.json(buildEphemeralMessage("Gateway control is unavailable."));
     }

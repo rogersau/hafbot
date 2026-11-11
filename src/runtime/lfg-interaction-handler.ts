@@ -15,7 +15,7 @@ import {
 } from "../lfg";
 import type { ComponentIdSigner } from "../security/component-id-signer";
 import { signSensitiveMessageComponentIds } from "../security/sensitive-component-ids";
-import { LfgActivePostError, LfgConfigError } from "../services/lfg-service";
+import { LfgActivePostError, LfgConfigError, type LfgService } from "../services/lfg-service";
 import type { LfgPost } from "../types";
 import type { DiscordInteraction, RuntimeStores } from "./app-types";
 import {
@@ -26,13 +26,12 @@ import {
 } from "./discord-interaction-parsers";
 import { hasInteractionAdminAccess } from "./interaction-admin-access";
 import { GUILD_BOUND_INTERACTION_DENIAL_MESSAGE } from "./interaction-guild-binding";
-import { createServiceFactory, type ServiceFactory } from "./service-factory";
 
 export async function handleLfgComponentInteraction(
   interaction: DiscordInteraction,
   stores: RuntimeStores,
   discordBotToken: string,
-  services: Partial<ServiceFactory> = {},
+  service: LfgService,
   componentIdSigner?: ComponentIdSigner,
 ): Promise<Response> {
   const customId = getInteractionCustomId(interaction);
@@ -82,8 +81,6 @@ export async function handleLfgComponentInteraction(
   if (!guildId) {
     return Response.json(buildEphemeralMessage("Unsupported LFG interaction."));
   }
-
-  const service = resolveLfgService(stores, discordBotToken, services);
 
   if (["create", "create-clan", "server", "server-clan", "toggle-alerts"].includes(parsed.action)) {
     const availability = await service.getConfig(guildId);
@@ -315,13 +312,12 @@ export async function handleLfgComponentInteraction(
 export async function handleLfgModalSubmitInteraction(
   interaction: DiscordInteraction,
   stores: RuntimeStores,
-  discordBotToken: string,
-  services: Partial<ServiceFactory> = {},
+  service: LfgService,
   waitUntil?: (promise: Promise<unknown>) => void,
 ): Promise<Response> {
   if (waitUntil) {
     waitUntil(
-      handleLfgModalSubmitInteraction(interaction, stores, discordBotToken, services)
+      handleLfgModalSubmitInteraction(interaction, stores, service)
         .then(async (response) => {
           const body = (await response.json()) as { data: { content: string } };
           if (interaction.application_id && interaction.token) {
@@ -366,7 +362,6 @@ export async function handleLfgModalSubmitInteraction(
 
   const fields = parseInteractionModalFieldValues(interaction);
   try {
-    const service = resolveLfgService(stores, discordBotToken, services);
     if (parsed.action === "modal" || parsed.action === "modal-clan") {
       const post = await service.createPost({
         guildId: interaction.guild_id,
@@ -427,14 +422,6 @@ function lfgPostLink(post: LfgPost): string {
   return post.active && post.guildId && post.channelId && post.messageId
     ? `\n\n[View post](https://discord.com/channels/${post.guildId}/${post.channelId}/${post.messageId})`
     : "";
-}
-
-function resolveLfgService(
-  stores: RuntimeStores,
-  discordBotToken: string,
-  services: Partial<ServiceFactory>,
-) {
-  return services.lfgService ?? createServiceFactory({ stores, discordBotToken }).lfgService;
 }
 
 function describeLfgError(error: unknown): string {
