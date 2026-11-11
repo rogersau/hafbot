@@ -1,4 +1,5 @@
-Describe the problem, resulting behaviour and relevant validation.
+<!-- Briefly explain the problem and the fix. Add detail only when it helps review. -->
 
-Use fictional examples. Do not attach credentials, production logs or private member/evidence data.
-Report vulnerabilities privately using SECURITY.md.
+Validation:
+
+<!-- Keep credentials and private data out of the PR. -->
