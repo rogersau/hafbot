@@ -759,7 +759,7 @@ function actionFeedbackTestPage() {
         import { createRoot } from "react-dom/client";
         import "/src/admin/styles.css";
         import { AdminBottomActionBarProvider } from "/src/admin/components/admin-bottom-action-bar.tsx";
-        import { AdminSteamLinkPage } from "/src/admin/components/admin-steam-link-page.tsx";
+        import { AdminPlatformLinkPage } from "/src/admin/components/admin-platform-link-page.tsx";
         import { AdminSuggestionsPage } from "/src/admin/components/admin-suggestions-page.tsx";
         import { ToastProvider } from "/src/admin/components/toast.tsx";
         import { defaultSuggestionsConfig } from "/src/suggestions.ts";
@@ -810,7 +810,7 @@ function actionFeedbackTestPage() {
                   throw new Error("Route reload unavailable.");
                 },
               })
-            : createElement(AdminSteamLinkPage, {
+            : createElement(AdminPlatformLinkPage, {
                 selectedWorkspaceId: "workspace-1",
                 selectedGuildId: "guild-1",
                 activePlatform: "steam",

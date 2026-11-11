@@ -483,7 +483,7 @@ export const loadReactionRolesRoute = (ctx: AdminLoaderContext) =>
     panels?: import("../../reaction-roles").ReactionRolePanel[];
   }>({ path: "/admin/api/reaction-roles" }, ctx, loadOptionalEntitlement);
 
-export async function loadPlayerLinkRoute(ctx: AdminLoaderContext) {
+export const loadPlayerLinkRoute = async (ctx: AdminLoaderContext) => {
   const { playerLinkClient } = await import("../generated/admin-client/player-link");
   const data = await playerLinkClient.get(
     {
@@ -494,9 +494,7 @@ export async function loadPlayerLinkRoute(ctx: AdminLoaderContext) {
     ctx.abortController?.signal,
   );
   return wrapLoaded<PlayerLinkLoaderData>(data);
-}
-
-export const loadSteamLinkRoute = loadPlayerLinkRoute;
+};
 
 function communityPageLoader<T>(path: string) {
   return (ctx: AdminLoaderContext) =>

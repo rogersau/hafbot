@@ -117,7 +117,6 @@ export const ADMIN_GUILD_DASHBOARD_SECTIONS = [
   "wardogs",
   "server-levels",
   "player-link",
-  "steam-link",
   "evidence-vault",
   "image-rules",
   "bot-defense",

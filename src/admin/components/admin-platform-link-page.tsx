@@ -47,7 +47,7 @@ type PlayerLinkConfig = PlatformLinkConfig;
 type PlayerLinkRecord = PlatformLink;
 type PlayerLinkPageLoaderData = AdminPlayerLinkLoaderData;
 
-type SteamLinkAutoSaveKey = "allowRelink" | "allowMultipleLinks" | "requireRelinkOnRejoin";
+type PlatformLinkAutoSaveKey = "allowRelink" | "allowMultipleLinks" | "requireRelinkOnRejoin";
 
 interface PlayerLinkResource {
   guildId: string;
@@ -77,11 +77,11 @@ interface PlayerLinkDraft {
 type PlatformLinkMetadata = (typeof PLATFORM_METADATA)[PlayerLinkPlatform];
 
 /**
- * Builds the full config POST body for the current Player Link config endpoint (or the
- * player-link variant). Shared by the manual Save button and the auto-save
- * toggles so both send an identical payload.
+ * Builds the full config POST body for /admin/api/player-link/config. Shared by
+ * the manual Save button and the auto-save toggles so both send an identical
+ * payload.
  */
-export function buildSteamLinkSavePayload(
+export function buildPlatformLinkSavePayload(
   draft: PlayerLinkDraft,
   activePlatform: PlayerLinkPlatform,
   metadata: PlatformLinkMetadata,
@@ -213,7 +213,7 @@ export const PLATFORM_METADATA = {
   },
 } as const;
 
-export function AdminSteamLinkPage({
+export function AdminPlatformLinkPage({
   selectedWorkspaceId,
   selectedGuildId,
   entitlement,
@@ -289,7 +289,7 @@ function PlayerLinkEditor({
   );
   const [savedDraft, setSavedDraft] = useState(draft);
   const [savedDraftSnapshot, setSavedDraftSnapshot] = useState(() =>
-    createSteamLinkSaveSnapshot(draft, activePlatform, metadata),
+    createPlatformLinkSaveSnapshot(draft, activePlatform, metadata),
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -298,13 +298,13 @@ function PlayerLinkEditor({
   const [refreshError, setRefreshError] = useState<unknown>(null);
   const api = useAdminApi();
   const toast = useToast();
-  const autoSave = useAutoSaveToggle<SteamLinkAutoSaveKey>({
+  const autoSave = useAutoSaveToggle<PlatformLinkAutoSaveKey>({
     onSave: async (key, nextValue) => {
       const nextDraft = { ...draft, [key]: nextValue };
       const { refreshError: nextRefreshError } = await reconcileAdminMutation(
         () =>
           playerLinkClient.save({
-            ...buildSteamLinkSavePayload(nextDraft, activePlatform, metadata),
+            ...buildPlatformLinkSavePayload(nextDraft, activePlatform, metadata),
             workspaceId: selectedWorkspaceId,
           }),
         onRouteDataRefresh,
@@ -334,7 +334,7 @@ function PlayerLinkEditor({
         setResource(nextResource);
         setDraft(nextDraft);
         setSavedDraft(nextDraft);
-        setSavedDraftSnapshot(createSteamLinkSaveSnapshot(nextDraft, activePlatform, metadata));
+        setSavedDraftSnapshot(createPlatformLinkSaveSnapshot(nextDraft, activePlatform, metadata));
       },
     );
   }
@@ -362,14 +362,14 @@ function PlayerLinkEditor({
 
     try {
       await playerLinkClient.save({
-        ...buildSteamLinkSavePayload(draft, activePlatform, metadata),
+        ...buildPlatformLinkSavePayload(draft, activePlatform, metadata),
         workspaceId: selectedWorkspaceId,
       });
 
       toast.success(`${metadata.title} settings saved.`);
       setSaved(true);
       setSavedDraft(draft);
-      setSavedDraftSnapshot(createSteamLinkSaveSnapshot(draft, activePlatform, metadata));
+      setSavedDraftSnapshot(createPlatformLinkSaveSnapshot(draft, activePlatform, metadata));
       const { refreshError: nextRefreshError } = await reconcileAdminMutation(
         async () => undefined,
         onRouteDataRefresh,
@@ -438,7 +438,7 @@ function PlayerLinkEditor({
   }
 
   const hasUnsavedChanges = !areAdminActionSnapshotsEqual(
-    createSteamLinkSaveSnapshot(draft, activePlatform, metadata),
+    createPlatformLinkSaveSnapshot(draft, activePlatform, metadata),
     savedDraftSnapshot,
   );
 
@@ -464,14 +464,14 @@ function PlayerLinkEditor({
           </Button>
         </div>
       ) : null}
-      <SteamLinkSummary
+      <PlatformLinkSummary
         links={resource?.links ?? []}
         activePlatform={activePlatform}
         onRefresh={() => void loadPlayerLinks()}
         loading={api.loading}
         entitlement={entitlement}
       />
-      <SteamLinkConfigForm
+      <PlatformLinkConfigForm
         actions={
           resource?.config ? (
             <ConfigurationAvailabilityActions
@@ -527,11 +527,11 @@ function PlayerLinkEditor({
           });
         }}
       />
-      <SteamLinkPanelPreview draft={draft} activePlatform={activePlatform} />
+      <PlatformLinkPanelPreview draft={draft} activePlatform={activePlatform} />
       {activePlatform === "steam" ? (
-        <SteamLinkCustomLinksTest customLinks={draft.customLinks} />
+        <PlatformLinkCustomLinksTest customLinks={draft.customLinks} />
       ) : null}
-      <SteamLinkLinksTable links={resource?.links ?? []} activePlatform={activePlatform} />
+      <PlatformLinkLinksTable links={resource?.links ?? []} activePlatform={activePlatform} />
       <PageFeedback error={api.error} />
       <AdminBottomActionBar
         actions={[
@@ -578,7 +578,7 @@ function PlayerLinkEditor({
   );
 }
 
-function SteamLinkSummary({
+function PlatformLinkSummary({
   links,
   activePlatform,
   loading,
@@ -643,7 +643,7 @@ function SteamLinkSummary({
   );
 }
 
-function SteamLinkConfigForm({
+function PlatformLinkConfigForm({
   actions,
   draft,
   activePlatform,
@@ -664,10 +664,10 @@ function SteamLinkConfigForm({
   selectedGuildId: string;
   selectedWorkspaceId: string;
   autoSaveToggleStatus?: {
-    savingKey: SteamLinkAutoSaveKey | null;
-    savedKey: SteamLinkAutoSaveKey | null;
+    savingKey: PlatformLinkAutoSaveKey | null;
+    savedKey: PlatformLinkAutoSaveKey | null;
   };
-  onAutoSaveToggle?: (key: SteamLinkAutoSaveKey, nextValue: boolean) => void;
+  onAutoSaveToggle?: (key: PlatformLinkAutoSaveKey, nextValue: boolean) => void;
 }) {
   const metadata = PLATFORM_METADATA[activePlatform];
   return (
@@ -688,10 +688,10 @@ function SteamLinkConfigForm({
               />
             </span>
           }
-          htmlFor="steam-linked-role-id"
+          htmlFor="platform-linked-role-id"
         >
           <RoleSelect
-            id="steam-linked-role-id"
+            id="platform-linked-role-id"
             roles={roles}
             value={draft.linkedRoleId}
             onChange={(value) => onChange({ ...draft, linkedRoleId: value })}
@@ -707,12 +707,12 @@ function SteamLinkConfigForm({
         </FormField>
         <FormField
           label="Log channel"
-          htmlFor="steam-log-channel-id"
+          htmlFor="platform-log-channel-id"
           hint="Optional channel where successful links, failed links, and manual link actions are posted."
         >
           <ChannelSelect
             allowClear
-            id="steam-log-channel-id"
+            id="platform-log-channel-id"
             channels={channels}
             value={draft.logChannelId}
             onChange={(value) => onChange({ ...draft, logChannelId: value })}
@@ -956,7 +956,7 @@ function SteamLinkConfigForm({
   );
 }
 
-function SteamLinkPanelPreview({
+function PlatformLinkPanelPreview({
   draft,
   activePlatform,
 }: {
@@ -983,7 +983,7 @@ function SteamLinkPanelPreview({
   );
 }
 
-function SteamLinkCustomLinksTest({
+function PlatformLinkCustomLinksTest({
   customLinks,
 }: {
   customLinks: PlayerLinkDraft["customLinks"];
@@ -1231,7 +1231,7 @@ function WhoisFieldEditor({
   );
 }
 
-function SteamLinkLinksTable({
+function PlatformLinkLinksTable({
   links,
   activePlatform,
 }: {
@@ -1531,7 +1531,7 @@ function createDefaultDraft(guildId: string, activePlatform: PlayerLinkPlatform)
   };
 }
 
-function createSteamLinkSaveSnapshot(
+function createPlatformLinkSaveSnapshot(
   draft: PlayerLinkDraft,
   activePlatform: PlayerLinkPlatform,
   metadata: (typeof PLATFORM_METADATA)[PlayerLinkPlatform],

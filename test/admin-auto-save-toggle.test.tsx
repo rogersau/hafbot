@@ -55,10 +55,10 @@ for (const feature of ["Steam", "Evidence Vault", "Image Rules", "Tickets"] as c
       const value = "Changed draft";
       let expectedPath: string;
       if (feature === "Steam") {
-        const { AdminSteamLinkPage } =
-          await import("../src/admin/components/admin-steam-link-page");
+        const { AdminPlatformLinkPage } =
+          await import("../src/admin/components/admin-platform-link-page");
         page = (
-          <AdminSteamLinkPage
+          <AdminPlatformLinkPage
             {...scope}
             activePlatform="steam"
             initialData={{

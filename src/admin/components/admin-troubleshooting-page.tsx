@@ -58,11 +58,6 @@ const FEATURE_SECTIONS: Array<{
     description: "Target credentials, secure connection approval, and read verification.",
   },
   {
-    feature: "steam-link",
-    label: "Steam Link",
-    description: "Steam link role assignment and log channel access.",
-  },
-  {
     feature: "evidence-vault",
     label: "Evidence Vault",
     description: "Audit channel and access role checks.",
@@ -423,7 +418,6 @@ const TROUBLESHOOTING_PATHS: Record<AdminPermissionFeature, string> = {
   "player-count": "/admin/playercount",
   wardogs: "/admin/wardogs",
   "server-levels": "/admin/server-levels",
-  "steam-link": "/admin/steam-link",
   "evidence-vault": "/admin/evidence-vault",
   "managed-messages": "/admin/managed-messages",
   "member-verification": "/admin/member-verification",

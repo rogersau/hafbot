@@ -166,7 +166,7 @@ test("Ops Workshop shell opens a deep-linked feature beside pinned Overview", ()
 test("workspace route identity ignores page-local query state", () => {
   assert.equal(getAdminWorkspaceRouteId("/admin/guild-1", "guild-1"), "overview");
   assert.equal(getAdminWorkspaceRouteId("/admin/guild-1/tickets", "guild-1"), "tickets");
-  assert.equal(getAdminWorkspaceRouteId("/admin/guild-1/steam-link", "guild-1"), "player-link");
+  assert.equal(getAdminWorkspaceRouteId("/admin/guild-1/player-link", "guild-1"), "player-link");
   assert.equal(getAdminWorkspaceRouteId("/admin/profile", "guild-1"), "profile");
 });
 
@@ -1017,7 +1017,6 @@ test("Troubleshooting page renders diagnostics from raw loader data", () => {
       marketplace: [],
       lfg: [],
       "player-count": [],
-      "steam-link": [],
       "evidence-vault": [],
       "mention-protection": [],
     },

@@ -286,25 +286,6 @@ test("GET /admin/api/player-link preserves workspaceId in the access requirement
   });
 
   const response = await handler(
-    new Request("https://example.com/admin/api/player-link?workspaceId=ws-1&guildId=guild-1"),
-    new URL("https://example.com/admin/api/player-link?workspaceId=ws-1&guildId=guild-1"),
-  );
-
-  assert.equal(response?.status, 403);
-  assert.deepEqual(capture.requirements, [
-    { mode: "read", guildId: "guild-1", workspaceId: "ws-1" },
-  ]);
-});
-
-test("GET /admin/api/player-link preserves workspaceId in the access requirement", async () => {
-  const { capture, access } = createCapturingAccess();
-  const handler = createAdminApiHandler({
-    stores: createStores(),
-    discordBotToken: "token",
-    adminAccess: access,
-  });
-
-  const response = await handler(
     new Request(
       "https://example.com/admin/api/player-link?workspaceId=ws-1&guildId=guild-1&platform=xbox",
     ),
@@ -669,11 +650,6 @@ function createStores(options?: {
     guildRbac: {
       readGuildAdminRoleId: async () => null,
       upsertGuildAdminRoleId: async () => {},
-    },
-    steamLink: {
-      readSteamLinkConfig: async () => null,
-      upsertSteamLinkConfig: async () => {},
-      listSteamLinks: async () => [],
     },
     webhookProxy: {
       listWebhookProxyConfigs: async () => [],

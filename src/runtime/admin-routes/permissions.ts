@@ -56,7 +56,6 @@ const ADMIN_PERMISSION_FEATURES = [
   "player-count",
   "wardogs",
   "server-levels",
-  "steam-link",
   "evidence-vault",
   "mention-protection",
   "managed-messages",
@@ -139,9 +138,6 @@ export function createPermissionsAdminRoutes(
           return Response.json({ error: "Not found" }, { status: 404 });
         }
         if (featureParam === "player-count" && !features.playerCount) {
-          return Response.json({ error: "Not found" }, { status: 404 });
-        }
-        if (featureParam === "steam-link" && !features.steamLink) {
           return Response.json({ error: "Not found" }, { status: 404 });
         }
         if (featureParam === "evidence-vault" && !features.evidenceVault) {
@@ -394,17 +390,6 @@ async function buildAdminPermissionResponse(
       guildId,
       feature,
       checks: buildServerLevelsPermissionChecks(context, config?.announcementChannelId ?? null),
-    };
-  }
-
-  if (feature === "steam-link") {
-    return {
-      guildId,
-      feature,
-      checks: buildSteamLinkPermissionChecks(
-        context,
-        await stores.platformLink.readPlatformLinkConfig(guildId, "steam"),
-      ),
     };
   }
 
@@ -674,9 +659,6 @@ async function buildAdminPermissionDiagnosticsResponse(
             context,
             serverLevelConfig?.announcementChannelId ?? null,
           )
-        : [],
-      "steam-link": features.steamLink
-        ? buildSteamLinkPermissionChecks(context, steamLinkConfig)
         : [],
       "evidence-vault": features.evidenceVault
         ? buildEvidenceVaultPermissionChecks(context, evidenceVaultConfig)

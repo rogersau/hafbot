@@ -254,7 +254,7 @@ test("admin guild directory maps repeated Discord rate limits to a controlled er
   }
 });
 
-test("admin Steam Link compatibility API stores custom links in Platform Link", async () => {
+test("admin Player Link API stores Steam custom links", async () => {
   let savedCustomLinks: PlatformLinkConfig["customLinks"] | null = null;
   const handler = createAdminApiHandler({
     stores: createStores({
@@ -300,7 +300,7 @@ test("admin Steam Link compatibility API stores custom links in Platform Link", 
   ]);
 });
 
-test("admin Steam Link sync roles API returns sync counters", async () => {
+test("admin Player Link sync roles API returns sync counters", async () => {
   let syncedGuildId: string | null = null;
   const handler = createAdminApiHandler({
     stores: createStores(),

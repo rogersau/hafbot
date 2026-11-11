@@ -82,7 +82,6 @@ export type AdminPermissionFeature =
   | "player-count"
   | "wardogs"
   | "server-levels"
-  | "steam-link"
   | "evidence-vault"
   | "mention-protection"
   | "managed-messages"

@@ -7,13 +7,13 @@ import test from "node:test";
 import { renderToString } from "react-dom/server";
 
 import {
-  AdminSteamLinkPage,
+  AdminPlatformLinkPage,
   PLATFORM_METADATA,
-  buildSteamLinkSavePayload,
+  buildPlatformLinkSavePayload,
   getWhoisFieldOptions,
   getLinkTrustLabel,
   parseGameAppIdsInput,
-} from "../src/admin/components/admin-steam-link-page";
+} from "../src/admin/components/admin-platform-link-page";
 import type { PlayerLinkLoaderData } from "../src/admin/lib/admin-route-loaders";
 import type { PlatformLinkConfig } from "../src/runtime/contracts/platform-link-store";
 
@@ -51,7 +51,7 @@ function buildInitialData(overrides: Partial<PlatformLinkConfig> = {}): PlayerLi
 
 function renderPage(initialData: PlayerLinkLoaderData | null) {
   return renderToString(
-    <AdminSteamLinkPage
+    <AdminPlatformLinkPage
       selectedWorkspaceId="workspace-1"
       selectedGuildId="guild-1"
       activePlatform="steam"
@@ -60,7 +60,7 @@ function renderPage(initialData: PlayerLinkLoaderData | null) {
   );
 }
 
-test("AdminSteamLinkPage renders allowRelink checked and allowMultipleLinks unchecked", () => {
+test("AdminPlatformLinkPage renders allowRelink checked and allowMultipleLinks unchecked", () => {
   const html = renderPage(buildInitialData({ allowRelink: true, allowMultipleLinks: false }));
 
   assert.match(html, /aria-label="Allow relink"/);
@@ -82,7 +82,7 @@ test("AdminSteamLinkPage renders allowRelink checked and allowMultipleLinks unch
   );
 });
 
-test("AdminSteamLinkPage defers the panel preview until activation", () => {
+test("AdminPlatformLinkPage defers the panel preview until activation", () => {
   const html = renderPage(
     buildInitialData({
       panelTitle: "Verify your Steam account",
@@ -96,7 +96,7 @@ test("AdminSteamLinkPage defers the panel preview until activation", () => {
   assert.doesNotMatch(html, /<discord-messages|<discord-button/);
 });
 
-test("buildSteamLinkSavePayload includes platform and both toggle values from the draft", () => {
+test("buildPlatformLinkSavePayload includes platform and both toggle values from the draft", () => {
   // The helper is shared by manual save and auto-save; both must send an
   // identical payload with platform + the toggles.
   const draft = {
@@ -117,7 +117,7 @@ test("buildSteamLinkSavePayload includes platform and both toggle values from th
     customLinks: [{ label: "Discord", url: "https://discord.gg/x" }],
   };
 
-  const payload = buildSteamLinkSavePayload(draft, "steam", PLATFORM_METADATA.steam);
+  const payload = buildPlatformLinkSavePayload(draft, "steam", PLATFORM_METADATA.steam);
 
   assert.equal(payload.platform, "steam");
   assert.equal(payload.allowRelink, false);
@@ -168,7 +168,7 @@ test("PlayStation member links are visibly marked as self-attested while staff l
 
 test("Player Link renders validated App ID tokens, Whois controls, and responsive audit controls", () => {
   const html = renderToString(
-    <AdminSteamLinkPage
+    <AdminPlatformLinkPage
       selectedWorkspaceId="workspace-1"
       selectedGuildId="guild-1"
       activePlatform="steam"

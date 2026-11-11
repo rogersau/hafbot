@@ -8,7 +8,7 @@ import { renderToString } from "react-dom/server";
 import { AdminLfgPage } from "../src/admin/components/admin-lfg-page";
 import { AdminMarketplacePage } from "../src/admin/components/admin-marketplace-page";
 import { AdminSuggestionsPage } from "../src/admin/components/admin-suggestions-page";
-import { AdminSteamLinkPage } from "../src/admin/components/admin-steam-link-page";
+import { AdminPlatformLinkPage } from "../src/admin/components/admin-platform-link-page";
 import { defaultSuggestionsConfig } from "../src/suggestions";
 import type { LfgConfig, MarketplaceConfig } from "../src/types";
 import type { PlatformLinkConfig } from "../src/runtime/contracts/platform-link-store";
@@ -82,7 +82,7 @@ test("panel editors use Update copy when a Discord message already exists", () =
     />,
   );
   const player = renderToString(
-    <AdminSteamLinkPage
+    <AdminPlatformLinkPage
       selectedWorkspaceId="workspace-1"
       selectedGuildId="guild-1"
       initialData={{

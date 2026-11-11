@@ -435,7 +435,6 @@ function createStores(
       listDueLfgPostRenewalReminders: async () => [],
     },
     playerCount: { listPlayerCountServers: async () => [] },
-    steamLink: { readSteamLinkConfig: async () => null },
     appConfig: {},
     guildRbac: {},
     webhookProxy: {},
