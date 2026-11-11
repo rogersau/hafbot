@@ -99,6 +99,11 @@ table and `active` projection. Preserve checkout gates, publication uniqueness, 
 retirement/refund/ledger/outbox atomicity and tenant scope. No migrations, views or compatibility
 readers. Require meaningful fresh-schema, rollback and concurrency regressions on real PostgreSQL.
 
+C23 also owns the narrow offering row/read mapping in `postgres-commerce-store.ts`,
+`postgres-commerce-snapshot-provider.ts` and their test SQLite mirrors
+`sqlite-commerce-store.ts`/`commerce/stripe-snapshot-provider.ts`. This exception changes only
+current offering row types, selected columns and mappings; financial/provider behavior is excluded.
+
 R02 alone owns `test/commerce-game-access-workflow.test.ts` queue invocation changes. C23 must
 leave it untouched. Architecture will adapt that file's four old offering-lifecycle fixture fragments
 after both tasks return. Test SQLite store mirrors are C23-owned; queue/runtime wrappers are R02-owned.
