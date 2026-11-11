@@ -99,9 +99,9 @@ export interface EventStore {
     membership: EventTeamMembership;
   }): Promise<void>;
   /** Commits one authoritative Team mutation with its audit and delivery intents. */
-  commitEventTeamMutation?(input: EventTeamMutationCommitInput): Promise<void>;
+  commitEventTeamMutation(input: EventTeamMutationCommitInput): Promise<void>;
   /** Commits all membership leaves and disband side effects in one transaction. */
-  commitEventTeamDisband?(input: EventTeamDisbandCommitInput): Promise<void>;
+  commitEventTeamDisband(input: EventTeamDisbandCommitInput): Promise<void>;
   addEventTeamMembership(membership: EventTeamMembership): Promise<void>;
   leaveEventTeamMembership(input: {
     team: EventTeam;
@@ -110,30 +110,30 @@ export interface EventStore {
   }): Promise<void>;
   listEventTeams(guildId: string, eventId: string): Promise<EventTeam[]>;
   listActiveEventTeamMemberships(guildId: string, eventId: string): Promise<EventTeamMembership[]>;
-  readEventTeamStateVersion?(guildId: string, eventId: string): Promise<number>;
-  createEventTeamProposal?(proposal: EventTeamProposal): Promise<void>;
-  updateEventTeamProposal?(proposal: EventTeamProposal): Promise<void>;
-  readEventTeamProposal?(
+  readEventTeamStateVersion(guildId: string, eventId: string): Promise<number>;
+  createEventTeamProposal(proposal: EventTeamProposal): Promise<void>;
+  updateEventTeamProposal(proposal: EventTeamProposal): Promise<void>;
+  readEventTeamProposal(
     guildId: string,
     eventId: string,
     proposalId: string,
   ): Promise<EventTeamProposal | null>;
-  listEventTeamProposals?(input: {
+  listEventTeamProposals(input: {
     guildId: string;
     eventId: string;
     teamId?: string;
     status?: EventTeamProposal["status"];
     targetUserId?: string;
   }): Promise<EventTeamProposal[]>;
-  createEventTeamInvitationBlock?(block: EventTeamInvitationBlock): Promise<void>;
-  hasEventTeamInvitationBlock?(
+  createEventTeamInvitationBlock(block: EventTeamInvitationBlock): Promise<void>;
+  hasEventTeamInvitationBlock(
     guildId: string,
     eventId: string,
     teamId: string,
     userId: string,
   ): Promise<boolean>;
   /** Atomic pending/version CAS: signup, membership, and proposal transitions commit together. */
-  acceptEventTeamProposalAtomic?(input: {
+  acceptEventTeamProposalAtomic(input: {
     proposal: EventTeamProposal;
     membership: EventTeamMembership;
     signup?: EventSignup;
@@ -141,71 +141,71 @@ export interface EventStore {
     audit?: EventTeamAuditRecord;
     deliveries?: EventTeamDeliveryOutboxRecord[];
   }): Promise<void>;
-  cancelEventTeamProposals?(input: {
+  cancelEventTeamProposals(input: {
     guildId: string;
     eventId: string;
     teamId: string;
     status?: EventTeamProposal["status"];
     nowMs: number;
   }): Promise<void>;
-  updateEventTeam?(team: EventTeam): Promise<void>;
-  appendEventTeamAudit?(record: EventTeamAuditRecord): Promise<void>;
-  listEventTeamAudit?(input: {
+  updateEventTeam(team: EventTeam): Promise<void>;
+  appendEventTeamAudit(record: EventTeamAuditRecord): Promise<void>;
+  listEventTeamAudit(input: {
     guildId: string;
     eventId: string;
     limit?: number;
   }): Promise<EventTeamAuditRecord[]>;
   /** Inserts once and returns the existing row when a snapshot was already captured. */
-  captureEventTeamRosterSnapshot?(
+  captureEventTeamRosterSnapshot(
     snapshot: EventTeamRosterSnapshot,
   ): Promise<EventTeamRosterSnapshot>;
-  readEventTeamRosterSnapshot?(
+  readEventTeamRosterSnapshot(
     guildId: string,
     eventId: string,
     teamId: string,
   ): Promise<EventTeamRosterSnapshot | null>;
-  listEventTeamRosterSnapshots?(
+  listEventTeamRosterSnapshots(
     guildId: string,
     eventId: string,
   ): Promise<EventTeamRosterSnapshot[]>;
-  enqueueEventTeamDelivery?(
+  enqueueEventTeamDelivery(
     record: EventTeamDeliveryOutboxRecord,
   ): Promise<EventTeamDeliveryOutboxRecord>;
-  listEventTeamDeliveries?(input: {
+  listEventTeamDeliveries(input: {
     guildId: string;
     eventId: string;
     status?: EventTeamDeliveryOutboxRecord["status"];
     limit?: number;
   }): Promise<EventTeamDeliveryOutboxRecord[]>;
-  listDueEventTeamDeliveries?(input: {
+  listDueEventTeamDeliveries(input: {
     guildId?: string;
     eventId?: string;
     nowMs: number;
     limit?: number;
   }): Promise<EventTeamDeliveryOutboxRecord[]>;
-  claimEventTeamDelivery?(input: {
+  claimEventTeamDelivery(input: {
     record: EventTeamDeliveryOutboxRecord;
     nowMs: number;
     leaseMs: number;
   }): Promise<EventTeamDeliveryOutboxRecord | null>;
-  updateEventTeamDelivery?(
+  updateEventTeamDelivery(
     record: EventTeamDeliveryOutboxRecord,
     expected?: EventTeamDeliveryOutboxRecord,
   ): Promise<void>;
-  appendEventLifecycleHistory?(record: EventLifecycleHistoryRecord): Promise<void>;
+  appendEventLifecycleHistory(record: EventLifecycleHistoryRecord): Promise<void>;
   /** Commits lifecycle state, history, and all prebuilt roster snapshots atomically. */
-  commitEventLifecycleTransition?(input: EventLifecycleTransitionCommitInput): Promise<void>;
-  listEventLifecycleHistory?(
+  commitEventLifecycleTransition(input: EventLifecycleTransitionCommitInput): Promise<void>;
+  listEventLifecycleHistory(
     guildId: string,
     eventId: string,
   ): Promise<EventLifecycleHistoryRecord[]>;
-  pruneEventLifecycleHistory?(nowMs: number, limit?: number): Promise<number>;
+  pruneEventLifecycleHistory(nowMs: number, limit?: number): Promise<number>;
   /** Explicitly cascades all Event-owned team, audit, snapshot, outbox, history, signup rows. */
-  deleteEventPermanently?(input: { guildId: string; eventId: string }): Promise<void>;
+  deleteEventPermanently(input: { guildId: string; eventId: string }): Promise<void>;
   /** Revalidates the full preview revision and mutable lifecycle in its write transaction. */
-  commitEventTeamBulkFormation?(input: EventTeamBulkCommitInput): Promise<unknown>;
+  commitEventTeamBulkFormation(input: EventTeamBulkCommitInput): Promise<unknown>;
   /** Atomically advances a sliding-window Event Team abuse counter. */
-  consumeEventTeamRateLimit?(input: {
+  consumeEventTeamRateLimit(input: {
     guildId: string;
     eventId: string;
     action: EventTeamRateLimitAction;

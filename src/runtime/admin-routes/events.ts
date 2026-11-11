@@ -77,13 +77,6 @@ export function createEventsAdminRoutes(
         ]);
         const eventsWithSignups = await Promise.all(
           events.map(async (event) => {
-            const deliveryStore = options.stores.events as typeof options.stores.events & {
-              listEventTeamDeliveries?: (input: {
-                guildId: string;
-                eventId: string;
-                limit?: number;
-              }) => Promise<import("../../types").EventTeamDeliveryOutboxRecord[]>;
-            };
             const [signups, teams, memberships, proposals, audit, snapshots, deliveries] =
               await Promise.all([
                 options.stores.events.listSignups(guildId, event.id),
@@ -92,19 +85,18 @@ export function createEventsAdminRoutes(
                 event.participationMode === "team"
                   ? service.listEventTeamProposals({ guildId, eventId: event.id })
                   : Promise.resolve([]),
-                event.participationMode === "team" && options.stores.events.listEventTeamAudit
+                event.participationMode === "team"
                   ? options.stores.events.listEventTeamAudit({
                       guildId,
                       eventId: event.id,
                       limit: 200,
                     })
                   : Promise.resolve([]),
-                event.participationMode === "team" &&
-                options.stores.events.listEventTeamRosterSnapshots
+                event.participationMode === "team"
                   ? options.stores.events.listEventTeamRosterSnapshots(guildId, event.id)
                   : Promise.resolve([]),
-                event.participationMode === "team" && deliveryStore.listEventTeamDeliveries
-                  ? deliveryStore.listEventTeamDeliveries({
+                event.participationMode === "team"
+                  ? options.stores.events.listEventTeamDeliveries({
                       guildId,
                       eventId: event.id,
                       limit: 200,
