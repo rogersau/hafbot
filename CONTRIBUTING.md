@@ -10,8 +10,9 @@ Read [CONTEXT.md](CONTEXT.md) for vocabulary. Install the pinned pnpm dependency
 Runtime/database changes also need `pnpm test:postgres` on a disposable local `_test` database.
 Use your own development Discord identity; automated public CI uses no real Discord account.
 
-Keep PRs focused and explain observed behaviour, the change and meaningful validation. Preserve
-Discord authorization, tenant boundaries, job/operation identities and secret redaction. Update
+Keep PRs focused. Aim for a description under 100 words: one or two sentences on the problem and
+resulting behaviour, then one validation line. Include details or caveats only when needed for review.
+Preserve Discord authorization, tenant boundaries, job/operation identities and secret redaction. Update
 the current installation schema directly; this baseline contains no migration or historical
 compatibility path. Public CI validates fork PRs on fresh GitHub-hosted runners with read-only
 permissions. It has no deployment, cloud provisioning, package publishing or private-network access.
