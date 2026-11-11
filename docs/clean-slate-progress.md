@@ -63,15 +63,15 @@ The task coordinator adapts distinct completed shared-validation and service-ato
 offering lifecycle consolidation (C23), retired selector plumbing (C06) and unused aliases (C09)
 still need explicit reconciliation. None is assumed covered merely because native stores exist.
 
-| Slot                 | Task ID                                                                                                                           | Base      | Owned paths                                                        |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------ |
-| Architecture 1       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A4122985e-4394-4ede-96df-0ba903391392` | `915455f` | Mention Protection native store; new moderation invariant test     |
-| Architecture 2       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A82952271-086d-4b90-98d1-429e285e12df` | `9dc7190` | Residual C13 Admin route/page/diagnostic aliases from `0f656bc`    |
-| Task coordinator 1–3 | Reserved to task coordinator                                                                                                      | `915455f` | C03/C10/C11 adaptations with disjoint paths agreed in coordination |
+| Slot                 | Task ID                                                                                                                           | Base          | Owned paths                                                     |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------- |
+| Architecture 1       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A4122985e-4394-4ede-96df-0ba903391392` | `915455f`     | Mention Protection native store; new moderation invariant test  |
+| Architecture 2       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A82952271-086d-4b90-98d1-429e285e12df` | `9dc7190`     | Residual C13 Admin route/page/diagnostic aliases from `0f656bc` |
+| Task coordinator 1–3 | Reserved to task coordinator                                                                                                      | See IDs below | C09/C10/C11 with disjoint paths agreed in coordination          |
 
 Mention Protection is running. The R2 metadata task is integrated; its slot will reconcile the
 remaining C13 UI aliases from completed source `0f656bc`. C03, C10 and C11 run in the three task
-coordinator slots. The coordinator reviews and integrates each returned change before final
+coordinator slots; C03 has since returned and its slot now runs C09. The coordinator reviews and integrates each returned change before final
 combined validation. Mention Protection must retain the proven RED/GREEN concurrency regression.
 
 Task-coordinator implementation IDs on base `915455f`:
@@ -79,6 +79,7 @@ Task-coordinator implementation IDs on base `915455f`:
 - C03: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A3c6658bd-5161-4f50-a576-247fd119296e`.
 - C10: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A291b2e09-c67d-4430-b23a-762a68234cce`.
 - C11: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aeb7c02b8-96eb-4120-ae4e-45d565d19891`.
+- C09 (base `c7cb509`): `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A53875c36-1a32-4f41-aaf1-c11a734d936f`.
 
 C10 owns the interaction-route fixture; C11 owns the runtime-app fixture and the narrowly granted
 native/SQLite timed-rule whole-set replacement changes. C03 owns a new isolated validation test.
@@ -92,7 +93,8 @@ fields on `commerce_offerings`, retain explicit `repair_previous_state`, remove 
 side table and `active` projection, and preserve financial, retirement, ledger and outbox atomicity.
 It must test fresh schema, repair restoration, publication uniqueness/concurrency, checkout gates,
 tenant scope and rollback against real resource-limited PostgreSQL with zero skips. No migrations,
-views or compatibility readers may be added. C06 waits for C13-owned UI paths; C09 stays queued.
+views or compatibility readers may be added. C06 waits for C13-owned UI paths. C09 owns only its
+four Commerce client/webhook paths while C13 owns the Admin type/diagnostic surface.
 
 ## Original task coverage
 
