@@ -1,10 +1,10 @@
-export interface JsonKvCache<T> {
+export interface Cache<T> {
   get(key: string): Promise<T | null>;
   put(key: string, value: T, options?: { ttlSeconds?: number }): Promise<void>;
   delete(key: string): Promise<void>;
 }
 
-export function createJsonKvCache<T>(kv?: KVNamespace): JsonKvCache<T> {
+export function createJsonCache<T>(kv?: Cache<string>): Cache<T> {
   return {
     async get(key: string): Promise<T | null> {
       if (!kv) return null;
@@ -30,7 +30,7 @@ export function createJsonKvCache<T>(kv?: KVNamespace): JsonKvCache<T> {
         await kv.put(
           key,
           JSON.stringify(value),
-          options?.ttlSeconds ? { expirationTtl: options.ttlSeconds } : undefined,
+          options?.ttlSeconds ? { ttlSeconds: options.ttlSeconds } : undefined,
         );
       } catch {}
     },

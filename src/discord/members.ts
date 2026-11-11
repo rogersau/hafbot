@@ -24,7 +24,7 @@ export async function applyGuildMemberTimeout(
       body: JSON.stringify({ communication_disabled_until: new Date(untilMs).toISOString() }),
     },
   );
-  return response.json<DiscordGuildMember>();
+  return response.json() as Promise<DiscordGuildMember>;
 }
 
 export async function fetchGuildMember(

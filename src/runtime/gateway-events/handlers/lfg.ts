@@ -9,11 +9,11 @@ export const lfgGatewayHandler = defineGatewayEventHandler(
     key: "lfg-voice-cleanup",
     eventTypes: ["VOICE_STATE_UPDATE"],
     order: 10,
-    isEnabled: ({ env, features }, envelope) =>
-      Boolean(features.lfg && env.HAF_DB && envelope.emptiedVoiceChannelId),
+    isEnabled: ({ stores, features }, envelope) =>
+      Boolean(features.lfg && stores && envelope.emptiedVoiceChannelId),
     async handle({ stores, discord, operations }, envelope) {
       const service = new LfgService(
-        stores!.lfg,
+        stores.lfg,
         createLfgGatewayDiscordAdapters(discord),
         undefined,
         undefined,

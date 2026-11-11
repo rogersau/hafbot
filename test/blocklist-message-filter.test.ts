@@ -22,7 +22,8 @@ for (const source of ["member", "bot", "webhook"] as const) {
       },
       { DISCORD_BOT_TOKEN: "bot-token", BOT_USER_ID: "haf-bot" },
       {
-        readBlocklist: async () => ({
+        resolveBotDisplayName: async () => "HAF Bot",
+        readBlocklistForGuild: async () => ({
           guilds: { "guild-1": { enabled: true, emojis: ["😈"] } },
           botUserId: "haf-bot",
         }),
@@ -40,9 +41,8 @@ for (const source of ["member", "bot", "webhook"] as const) {
   });
 }
 
-test("moderateMessageCreate uses the per-Guild reader when one is provided", async () => {
+test("moderateMessageCreate reads configuration for the selected Guild", async () => {
   const targetedGuilds: string[] = [];
-  let fullConfigReads = 0;
   const deletedMessages: string[] = [];
 
   await moderateMessageCreate(
@@ -55,10 +55,8 @@ test("moderateMessageCreate uses the per-Guild reader when one is provided", asy
     },
     { DISCORD_BOT_TOKEN: "bot-token", BOT_USER_ID: "bot-1" },
     {
-      readBlocklist: async () => {
-        fullConfigReads += 1;
-        throw new Error("full config should not be read");
-      },
+      resolveBotDisplayName: async () => "HAF Bot",
+
       readBlocklistForGuild: async (guildId) => {
         targetedGuilds.push(guildId);
         return {
@@ -78,7 +76,6 @@ test("moderateMessageCreate uses the per-Guild reader when one is provided", asy
   );
 
   assert.deepEqual(targetedGuilds, ["guild-1"]);
-  assert.equal(fullConfigReads, 0);
   assert.deepEqual(deletedMessages, ["message-targeted-1"]);
 });
 
@@ -102,7 +99,8 @@ test("moderateMessageCreate skips the bot's own messages", async () => {
       BOT_USER_ID: "bot-1",
     },
     {
-      readBlocklist: async () => ({
+      resolveBotDisplayName: async () => "HAF Bot",
+      readBlocklistForGuild: async () => ({
         guilds: {
           "guild-1": {
             enabled: true,
@@ -145,7 +143,8 @@ test("moderateMessageCreate ignores messages without blocked emoji", async () =>
       BOT_USER_ID: "bot-1",
     },
     {
-      readBlocklist: async () => ({
+      resolveBotDisplayName: async () => "HAF Bot",
+      readBlocklistForGuild: async () => ({
         guilds: {
           "guild-1": {
             enabled: true,
@@ -193,7 +192,8 @@ test("moderateMessageCreate deletes messages containing blocked emoji and notifi
       BOT_USER_ID: "bot-1",
     },
     {
-      readBlocklist: async () => ({
+      resolveBotDisplayName: async () => "HAF Bot",
+      readBlocklistForGuild: async () => ({
         guilds: {
           "guild-1": {
             enabled: true,
@@ -257,7 +257,7 @@ test("moderateMessageCreate uses White-Label Bot display name in DM when configu
       BOT_USER_ID: "bot-1",
     },
     {
-      readBlocklist: async () => ({
+      readBlocklistForGuild: async () => ({
         guilds: {
           "guild-wl-1": {
             enabled: true,
@@ -310,7 +310,8 @@ test("moderateMessageCreate skips blocked emoji in excluded channels", async () 
       BOT_USER_ID: "bot-1",
     },
     {
-      readBlocklist: async () => ({
+      resolveBotDisplayName: async () => "HAF Bot",
+      readBlocklistForGuild: async () => ({
         guilds: {
           "guild-1": {
             enabled: true,
@@ -354,7 +355,8 @@ test("moderateMessageCreate deletes messages when blocked emoji only differs by 
       BOT_USER_ID: "bot-1",
     },
     {
-      readBlocklist: async () => ({
+      resolveBotDisplayName: async () => "HAF Bot",
+      readBlocklistForGuild: async () => ({
         guilds: {
           "guild-1": {
             enabled: true,
@@ -394,7 +396,8 @@ test("moderateMessageCreate matches blocked custom emoji by normalized name", as
       BOT_USER_ID: "bot-1",
     },
     {
-      readBlocklist: async () => ({
+      resolveBotDisplayName: async () => "HAF Bot",
+      readBlocklistForGuild: async () => ({
         guilds: {
           "guild-1": {
             enabled: true,
@@ -434,7 +437,8 @@ test("moderateMessageCreate deletes messages containing blocked custom emoji ton
       BOT_USER_ID: "bot-1",
     },
     {
-      readBlocklist: async () => ({
+      resolveBotDisplayName: async () => "HAF Bot",
+      readBlocklistForGuild: async () => ({
         guilds: {
           "guild-1": {
             enabled: true,
@@ -474,7 +478,8 @@ test("moderateMessageCreate ignores custom emoji with the same name but differen
       BOT_USER_ID: "bot-1",
     },
     {
-      readBlocklist: async () => ({
+      resolveBotDisplayName: async () => "HAF Bot",
+      readBlocklistForGuild: async () => ({
         guilds: {
           "guild-1": {
             enabled: true,
@@ -511,7 +516,8 @@ test("moderateMessageCreate keeps gateway handling alive when message deletion f
         BOT_USER_ID: "bot-1",
       },
       {
-        readBlocklist: async () => ({
+        resolveBotDisplayName: async () => "HAF Bot",
+        readBlocklistForGuild: async () => ({
           guilds: {
             "guild-1": {
               enabled: true,
@@ -551,7 +557,8 @@ test("moderateMessageCreate keeps gateway handling alive when DM delivery fails"
         BOT_USER_ID: "bot-1",
       },
       {
-        readBlocklist: async () => ({
+        resolveBotDisplayName: async () => "HAF Bot",
+        readBlocklistForGuild: async () => ({
           guilds: {
             "guild-1": {
               enabled: true,

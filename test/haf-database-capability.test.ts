@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { createHafDatabaseCapability } from "../src/runtime/haf-database-capability";
+import { createHafDatabaseCapability } from "./support/sqlite/runtime/haf-database-capability";
 
 function createDatabase(): D1Database {
   return {

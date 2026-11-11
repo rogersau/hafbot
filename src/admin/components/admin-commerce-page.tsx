@@ -423,7 +423,7 @@ function CommerceDashboard({
       offeringId: row.offering.id,
       name: row.offering.name,
       description: row.offering.description ?? "",
-      benefits: row.includedBenefits.join("\n"),
+      benefits: row.offering.includedBenefits.join("\n"),
       discordRoleId: row.offering.discordRoleId,
       currency: price?.currency ?? "AUD",
       amount: price ? (price.unitAmountMinor / 100).toFixed(2) : "5.00",
@@ -626,7 +626,7 @@ function CommerceDashboard({
     panelDescription.trim() !== (data.salesPanel?.description ?? "") ||
     panelChannelId !== (data.salesPanel?.channelId ?? data.panelChannels?.[0]?.id ?? "");
   const rows = data.dashboard?.offerings ?? [];
-  const publishedCount = rows.filter((row) => row.lifecycle === "published").length;
+  const publishedCount = rows.filter((row) => row.offering.state === "published").length;
   const salesBlockReasons = data.safeguards?.blockReasons ?? [];
   const operationalIssueCount = rows.reduce(
     (count, row) => count + row.roleFailures + row.reconciliationIncidents,
@@ -670,7 +670,7 @@ function CommerceDashboard({
     },
     {
       header: "State",
-      cell: (row) => <LifecycleBadge state={row.lifecycle} />,
+      cell: (row) => <LifecycleBadge state={row.offering.state} />,
     },
     {
       header: "Retirement",
@@ -704,7 +704,7 @@ function CommerceDashboard({
       header: "Actions",
       cell: (row) => (
         <div className="flex flex-wrap gap-2">
-          {["draft", "unpublished", "repair_required"].includes(row.lifecycle) ? (
+          {["draft", "unpublished", "repair_required"].includes(row.offering.state) ? (
             <>
               <Button
                 type="button"
@@ -725,7 +725,7 @@ function CommerceDashboard({
               </Button>
             </>
           ) : null}
-          {row.lifecycle === "published" ? (
+          {row.offering.state === "published" ? (
             <Button
               type="button"
               size="sm"
@@ -736,7 +736,7 @@ function CommerceDashboard({
               Make unavailable
             </Button>
           ) : null}
-          {["published", "unpublished", "suspended"].includes(row.lifecycle) ? (
+          {["published", "unpublished", "suspended"].includes(row.offering.state) ? (
             <Button
               type="button"
               size="sm"
@@ -1462,7 +1462,7 @@ function SellerSetupRequired({
   );
 }
 
-function LifecycleBadge({ state }: { state: OfferingRow["lifecycle"] }) {
+function LifecycleBadge({ state }: { state: OfferingRow["offering"]["state"] }) {
   const variant =
     state === "published"
       ? "success"
@@ -1477,9 +1477,9 @@ function LifecycleBadge({ state }: { state: OfferingRow["lifecycle"] }) {
 function canArchive(row: OfferingRow): boolean {
   const visibleSubscriptions =
     row.subscribers.active + row.subscribers.canceling + row.subscribers.pastDue;
-  if (row.lifecycle === "draft") return row.retirement === null && visibleSubscriptions === 0;
+  if (row.offering.state === "draft") return row.retirement === null && visibleSubscriptions === 0;
   return (
-    row.lifecycle === "retiring" &&
+    row.offering.state === "retiring" &&
     row.retirement?.status === "complete" &&
     row.retirement.activeSubscriptionCount === 0
   );

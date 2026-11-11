@@ -1,11 +1,10 @@
-import type { QueueBatch } from "./queue-types";
+import type { QueueJobMetadata } from "./queue-types";
+import { isRecord } from "../unknown-parse";
+import { isDatabaseUnavailable } from "./database-availability";
 import { DiscordApiError } from "../discord/client";
 import { reportOperationalEvent } from "../observability/operational-reporter";
 import { findGuildIdInValue } from "./guild-service-policy";
 import type { OperationalSeverity } from "../observability/operational-reporter";
-
-// wrangler.toml configures three retries after the initial delivery.
-export const DEFAULT_QUEUE_MAX_ATTEMPTS = 4;
 
 export type QueueParseResult<T> = { ok: true; value: T } | { ok: false; reasonCode: string };
 
@@ -13,6 +12,8 @@ export type QueueDeliveryOutcome =
   | { status: "complete" }
   | { status: "retry"; reasonCode: string; delaySeconds?: number }
   | { status: "terminal"; reasonCode: string };
+
+export type QueueDeliveryFailure = Exclude<QueueDeliveryOutcome, { status: "complete" }>;
 
 export interface QueueDeliveryEvent {
   event: "received" | "completed" | "retried" | "terminal" | "dead_lettered";
@@ -28,23 +29,13 @@ export interface QueueDeliveryLogger {
 }
 
 export interface QueueDeliveryOptions<T> {
-  maxAttempts: number;
+  metadata: QueueJobMetadata;
   parse(body: unknown): QueueParseResult<T>;
-  handle(value: T): Promise<QueueDeliveryOutcome>;
-  classifyError?(error: unknown): Exclude<QueueDeliveryOutcome, { status: "complete" }>;
+  handle(value: T, metadata: QueueJobMetadata): Promise<QueueDeliveryOutcome>;
+  classifyError?(error: unknown): QueueDeliveryFailure;
   emit?(event: QueueDeliveryEvent): void;
   nowMs?: () => number;
   reportOperationalEvent?: typeof reportOperationalEvent;
-}
-
-export interface QueueMessageDeliveryOptions {
-  maxAttempts: number;
-  emit?: (event: QueueDeliveryEvent) => void;
-  nowMs?: () => number;
-}
-
-export interface QueueMessageDelivery {
-  settle(outcome: QueueDeliveryOutcome): void;
 }
 
 export class QueueTerminalError extends Error {
@@ -81,9 +72,7 @@ export function queueDeliveryEmitter(
     });
 }
 
-export function classifyQueueDeliveryError(
-  error: unknown,
-): Exclude<QueueDeliveryOutcome, { status: "complete" }> {
+export function classifyQueueDeliveryError(error: unknown): QueueDeliveryFailure {
   if (error instanceof QueueRetryableError) {
     return {
       status: "retry",
@@ -109,123 +98,150 @@ export function classifyQueueDeliveryError(
     }
     return { status: "terminal", reasonCode: "provider_rejected" };
   }
-  if (isD1Error(error)) {
-    return { status: "retry", reasonCode: "d1_unavailable" };
+  if (isDatabaseUnavailable(error)) {
+    return { status: "retry", reasonCode: "database_unavailable" };
   }
   return { status: "retry", reasonCode: "unexpected_error" };
 }
 
-export function beginQueueMessageDelivery(
-  queue: string,
-  message: Message<unknown>,
-  options: QueueMessageDeliveryOptions,
-): QueueMessageDelivery {
+/**
+ * Executes one direct delivery for an already-claimed native job.
+ *
+ * The caller supplies the untrusted payload, native metadata, parser, and the owning consumer's
+ * selected ports. Every terminal path returns an explicit outcome; a missing or invalid handler
+ * outcome is terminal and is never converted into a fabricated acknowledgement.
+ */
+export async function deliverQueueJob<T>(
+  payload: unknown,
+  options: QueueDeliveryOptions<T>,
+): Promise<QueueDeliveryOutcome> {
+  const metadata = options.metadata;
   const nowMs = options.nowMs ?? Date.now;
   const startedAtMs = nowMs();
-  const maxAttempts = Math.max(1, Math.floor(options.maxAttempts));
-  emit(options.emit, buildEvent("received", queue, message, 0));
-
-  return {
-    settle(outcome) {
-      const durationMs = Math.max(0, nowMs() - startedAtMs);
-      if (outcome.status === "complete") {
-        message.ack();
-        emit(options.emit, buildEvent("completed", queue, message, durationMs));
-        return;
-      }
-
-      if (outcome.status === "terminal") {
-        message.ack();
-        emit(options.emit, buildEvent("terminal", queue, message, durationMs, outcome.reasonCode));
-        return;
-      }
-
-      message.retry({ delaySeconds: normalizeDelaySeconds(outcome.delaySeconds) });
-      emit(
-        options.emit,
-        buildEvent(
-          message.attempts >= maxAttempts ? "dead_lettered" : "retried",
-          queue,
-          message,
-          durationMs,
-          outcome.reasonCode,
-        ),
-      );
-    },
-  };
-}
-
-export async function deliverQueueBatch<T>(
-  batch: QueueBatch<unknown>,
-  options: QueueDeliveryOptions<T>,
-): Promise<void> {
   const report = options.reportOperationalEvent ?? reportOperationalEvent;
-  for (const message of batch.messages) {
-    const delivery = beginQueueMessageDelivery(batch.queue, message, options);
+  emit(options.emit, buildEvent("received", metadata, 0));
 
-    let parsed: QueueParseResult<T>;
-    try {
-      parsed = options.parse(message.body);
-    } catch (error) {
-      parsed = { ok: false, reasonCode: "parser_exception" };
+  let parsed: QueueParseResult<T>;
+  try {
+    parsed = options.parse(payload);
+  } catch (error) {
+    parsed = { ok: false, reasonCode: "parser_exception" };
+    reportQueueEvent(report, "warning", metadata, payload, "parser_exception", error, {}, false);
+  }
+
+  if (!parsed.ok) {
+    if (parsed.reasonCode !== "parser_exception") {
       reportQueueEvent(
         report,
         "warning",
-        batch.queue,
-        message,
-        "parser_exception",
-        error,
+        metadata,
+        payload,
+        parsed.reasonCode,
+        undefined,
         {},
         false,
       );
     }
-
-    if (!parsed.ok) {
-      if (parsed.reasonCode !== "parser_exception")
-        reportQueueEvent(
-          report,
-          "warning",
-          batch.queue,
-          message,
-          parsed.reasonCode,
-          undefined,
-          {},
-          false,
-        );
-      delivery.settle({ status: "terminal", reasonCode: parsed.reasonCode });
-      continue;
-    }
-
-    let outcome: QueueDeliveryOutcome;
-    let reported = false;
-    try {
-      outcome = await options.handle(parsed.value);
-    } catch (error) {
-      outcome = options.classifyError?.(error) ?? {
-        status: "retry",
-        reasonCode: "unexpected_error",
-      };
-      reportQueueOutcome(report, batch.queue, message, outcome, error, options.maxAttempts);
-      reported = true;
-    }
-
-    if (!reported && outcome.status !== "complete") {
-      reportQueueOutcome(report, batch.queue, message, outcome, undefined, options.maxAttempts);
-    }
-    delivery.settle(outcome);
+    const outcome: QueueDeliveryOutcome = { status: "terminal", reasonCode: parsed.reasonCode };
+    settleEvent(options, metadata, outcome, startedAtMs, nowMs);
+    return outcome;
   }
+
+  let outcome: QueueDeliveryOutcome;
+  try {
+    outcome = await options.handle(parsed.value, metadata);
+  } catch (error) {
+    const normalizedFailure = normalizeQueueDeliveryOutcome(
+      options.classifyError?.(error) ?? classifyQueueDeliveryError(error),
+    );
+    const classified: QueueDeliveryFailure =
+      normalizedFailure === null || normalizedFailure.status === "complete"
+        ? { status: "retry", reasonCode: "unexpected_error" }
+        : normalizedFailure;
+    reportQueueOutcome(report, metadata, payload, classified, error);
+    settleEvent(options, metadata, classified, startedAtMs, nowMs);
+    return classified;
+  }
+
+  const normalized = normalizeQueueDeliveryOutcome(outcome);
+  if (!normalized) {
+    const terminal: QueueDeliveryOutcome = {
+      status: "terminal",
+      reasonCode: "missing_delivery_outcome",
+    };
+    reportQueueOutcome(
+      report,
+      metadata,
+      payload,
+      terminal,
+      new Error(`Queue consumer returned no valid delivery outcome for ${metadata.queueName}.`),
+    );
+    settleEvent(options, metadata, terminal, startedAtMs, nowMs);
+    return terminal;
+  }
+
+  if (normalized.status !== "complete") {
+    reportQueueOutcome(report, metadata, payload, normalized);
+  }
+  settleEvent(options, metadata, normalized, startedAtMs, nowMs);
+  return normalized;
+}
+
+export function normalizeQueueDeliveryOutcome(value: unknown): QueueDeliveryOutcome | null {
+  if (!isRecord(value)) return null;
+  if (value.status === "complete") return { status: "complete" };
+  const reasonCode = readReasonCode(value.reasonCode);
+  if (!reasonCode) return null;
+  if (value.status === "terminal") return { status: "terminal", reasonCode };
+  if (value.status !== "retry") return null;
+  const delaySeconds = normalizeDelaySeconds(value.delaySeconds);
+  return {
+    status: "retry",
+    reasonCode,
+    ...(delaySeconds === undefined ? {} : { delaySeconds }),
+  };
+}
+
+function readReasonCode(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 && value.length <= 64 ? value : null;
+}
+
+function settleEvent<T>(
+  options: QueueDeliveryOptions<T>,
+  metadata: QueueJobMetadata,
+  outcome: QueueDeliveryOutcome,
+  startedAtMs: number,
+  nowMs: () => number,
+): void {
+  const durationMs = Math.max(0, nowMs() - startedAtMs);
+  if (outcome.status === "complete") {
+    emit(options.emit, buildEvent("completed", metadata, durationMs));
+    return;
+  }
+  if (outcome.status === "terminal") {
+    emit(options.emit, buildEvent("terminal", metadata, durationMs, outcome.reasonCode));
+    return;
+  }
+  emit(
+    options.emit,
+    buildEvent(
+      exhausted(metadata) ? "dead_lettered" : "retried",
+      metadata,
+      durationMs,
+      outcome.reasonCode,
+    ),
+  );
 }
 
 function reportQueueOutcome(
   report: typeof reportOperationalEvent,
-  queue: string,
-  message: Message<unknown>,
-  outcome: Exclude<QueueDeliveryOutcome, { status: "complete" }>,
-  cause: unknown,
-  maxAttempts: number,
+  metadata: QueueJobMetadata,
+  payload: unknown,
+  outcome: QueueDeliveryFailure,
+  cause?: unknown,
 ): void {
   const terminal = outcome.status === "terminal";
-  const exhausted = outcome.status === "retry" && message.attempts >= Math.max(1, maxAttempts);
+  const isExhausted = outcome.status === "retry" && exhausted(metadata);
   const expected = [
     "provider_rate_limited",
     "provider_timeout",
@@ -234,18 +250,18 @@ function reportQueueOutcome(
     "gateway_operation_busy",
   ].includes(outcome.reasonCode);
   const severity: OperationalSeverity =
-    (terminal && expected) || (!exhausted && expected) ? "warning" : "error";
-  const captureToSentry = !expected && (exhausted || terminal);
+    (terminal && expected) || (!isExhausted && expected) ? "warning" : "error";
+  const captureToSentry = !expected && (isExhausted || terminal);
   reportQueueEvent(
     report,
     severity,
-    queue,
-    message,
+    metadata,
+    payload,
     outcome.reasonCode,
     cause,
     {
       terminal,
-      exhausted,
+      exhausted: isExhausted,
     },
     captureToSentry,
   );
@@ -254,8 +270,8 @@ function reportQueueOutcome(
 function reportQueueEvent(
   report: typeof reportOperationalEvent,
   severity: OperationalSeverity,
-  queue: string,
-  message: Message<unknown>,
+  metadata: QueueJobMetadata,
+  payload: unknown,
   reasonCode: string,
   cause?: unknown,
   extraContext: Record<string, unknown> = {},
@@ -268,44 +284,39 @@ function reportQueueEvent(
       message: `Queue delivery ${reasonCode}`,
       cause,
       operation: "queue.delivery",
-      guildId: findGuildIdInValue(message.body) ?? undefined,
+      guildId: findGuildIdInValue(payload) ?? undefined,
       context: {
-        queue,
-        messageId: message.id,
-        attempts: message.attempts,
+        queue: metadata.queueName,
+        messageId: metadata.jobId,
+        attempts: metadata.attempts,
         reasonCode,
         ...extraContext,
       },
       captureToSentry,
     });
   } catch {
-    // Reporting is best effort and cannot alter acknowledgement/retry semantics.
+    // Reporting is best effort and cannot alter delivery semantics.
   }
-}
-
-function isD1Error(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return (
-    error.name === "D1Error" ||
-    /\bD1(?:_ERROR| unavailable| failure| failed)\b/i.test(error.message)
-  );
 }
 
 function buildEvent(
   event: QueueDeliveryEvent["event"],
-  queue: string,
-  message: Message<unknown>,
+  metadata: QueueJobMetadata,
   durationMs: number,
   reasonCode?: string,
 ): QueueDeliveryEvent {
   return {
     event,
-    queue,
-    messageId: safeMessageId(message.id),
-    attempts: message.attempts,
+    queue: metadata.queueName,
+    messageId: safeMessageId(metadata.jobId),
+    attempts: metadata.attempts,
     durationMs,
     ...(reasonCode ? { reasonCode: safeReasonCode(reasonCode) } : {}),
   };
+}
+
+function exhausted(metadata: QueueJobMetadata): boolean {
+  return metadata.attempts >= Math.max(1, Math.floor(metadata.maxAttempts));
 }
 
 function safeReasonCode(value: string): string {
@@ -316,8 +327,8 @@ function safeMessageId(value: string): string {
   return /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value) ? value : "invalid_message_id";
 }
 
-function normalizeDelaySeconds(value: number | undefined): number | undefined {
-  if (value === undefined || !Number.isFinite(value)) return undefined;
+function normalizeDelaySeconds(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
   return Math.max(0, Math.min(86_400, Math.floor(value)));
 }
 

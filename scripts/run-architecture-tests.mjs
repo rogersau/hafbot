@@ -6,10 +6,6 @@ const tests = listArchitectureTestPaths({
 });
 if (tests.length === 0) throw new Error("No architecture tests were discovered.");
 
-const result = spawnSync(
-  process.execPath,
-  ["--require", "./test/support/cloudflare-workers-shim.cjs", "--test", ...tests],
-  { stdio: "inherit" },
-);
+const result = spawnSync(process.execPath, ["--test", ...tests], { stdio: "inherit" });
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;

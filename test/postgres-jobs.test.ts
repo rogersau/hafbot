@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
 import {
@@ -9,10 +8,7 @@ import {
 import { createPostgresJobQueue } from "../src/runtime/postgres/postgres-job-queue";
 import { createPostgresJobWorker } from "../src/runtime/postgres/postgres-job-worker";
 import { createPostgresLeaseStore } from "../src/runtime/postgres/postgres-lease-store";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresScheduler } from "../src/runtime/postgres/postgres-scheduler";
 import { createPostgresQueueBinding } from "../src/runtime/postgres/postgres-queue-binding";
 
@@ -33,7 +29,7 @@ test("PostgreSQL background loops reject lease timing that cannot renew safely",
     () =>
       createPostgresJobWorker({
         queue: {} as never,
-        handlers: { "gateway-events": async () => undefined },
+        handlers: { "gateway-events": async () => ({ status: "complete" }) },
         leaseMs: 299,
       }),
     /at least 300 milliseconds/,
@@ -48,7 +44,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       let id = 0;
       const queue = createPostgresJobQueue(database, {
         randomId: () => `generated-${++id}`,
@@ -125,10 +121,12 @@ test(
         ),
         "terminal",
       );
-      assert.equal((await queue.inspect("retry-job"))?.terminalReasonCode, "provider_unavailable");
+      assert.equal((await queue.inspect("retry-job"))?.reasonCode, "provider_unavailable");
       assert.equal(await queue.retryOne("retry-job", now), true);
       assert.equal((await queue.inspect("retry-job"))?.attempts, 0);
+      assert.equal((await queue.inspect("retry-job"))?.reasonCode, null);
       assert.equal(await queue.discardOne("retry-job", "operator_discarded", now), true);
+      assert.equal((await queue.inspect("retry-job"))?.reasonCode, "operator_discarded");
 
       await queue.enqueue({
         id: "expired-job",
@@ -178,7 +176,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       let id = 0;
       const jobs = createPostgresJobQueue(database, {
         randomId: () => `binding-${++id}`,
@@ -248,7 +246,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       let token = 0;
       const leases = createPostgresLeaseStore(database, {
         randomId: () => `lease-${++token}`,
@@ -318,7 +316,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const queue = createPostgresJobQueue(database);
       const job = await queue.enqueue({
         queueName: "steam-ban-lookups",
@@ -334,7 +332,9 @@ test(
           "steam-ban-lookups": async (payload, context) => {
             assert.deepEqual(payload, { steamId: "steam-1" });
             assert.equal(context.attempts, 1);
+            assert.equal(context.maxAttempts, 4);
             handled += 1;
+            return { status: "complete" };
           },
         },
       });
@@ -358,12 +358,9 @@ function createTestDatabase(url: string): PostgresDatabaseCapability {
   });
 }
 
-async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
+async function initializeFreshTestSchema(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-  await applyPostgresMigrations(
-    database,
-    await readPostgresMigrations(resolve("migrations/postgres")),
-  );
+  await initializePostgresSchema(database);
 }
 
 async function waitFor(

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createFeatureResourceSetupAdminRoutes } from "../src/runtime/admin-routes/feature-resource-setup";
 import type { RuntimeStores } from "../src/runtime/app-types";
-import { createCloudflareFeatureSetupStore } from "../src/runtime/cloudflare-feature-setup-store";
+import { createSqliteFeatureSetupStore } from "./support/sqlite/runtime/sqlite-feature-setup-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("Feature Resource Setup route creates a private Forum with selected staff access", async () => {
@@ -32,7 +32,7 @@ test("Feature Resource Setup route creates a private Forum with selected staff a
   };
 
   try {
-    const featureSetup = createCloudflareFeatureSetupStore(
+    const featureSetup = createSqliteFeatureSetupStore(
       new SqliteD1Database() as unknown as D1Database,
     );
     const routes = createFeatureResourceSetupAdminRoutes({

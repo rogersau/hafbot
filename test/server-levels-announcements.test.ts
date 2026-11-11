@@ -3,13 +3,13 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { createCloudflareServerLevelStore } from "../src/runtime/cloudflare-server-level-store";
+import { createSqliteServerLevelStore } from "./support/sqlite/runtime/sqlite-server-level-store";
 import { deliverPendingLevelAnnouncements } from "../src/runtime/server-level-queue-consumer";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("Server Level announcement retries use a stable enforced Discord nonce", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   const bodies: Array<{ nonce?: string; enforce_nonce?: boolean }> = [];
   let attempts = 0;
   try {

@@ -1,7 +1,7 @@
 import type { PlayerCountServer } from "../../types/player-count";
 
 export interface PlayerCountStore {
-  setPlayerCountServerEnabled?(guildId: string, id: string, enabled: boolean): Promise<boolean>;
+  setPlayerCountServerEnabled(guildId: string, id: string, enabled: boolean): Promise<boolean>;
   listPlayerCountServers(guildId: string): Promise<PlayerCountServer[]>;
   listAllPlayerCountServers(): Promise<PlayerCountServer[]>;
   readPlayerCountServer(id: string): Promise<PlayerCountServer | null>;

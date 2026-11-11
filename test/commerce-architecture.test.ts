@@ -50,15 +50,16 @@ const COMMERCE_TABLES = [
 
 test("commerce persistence has its own complete table namespace", () => {
   const schema =
-    readFileSync("src/db/commerce-schema.ts", "utf8") +
-    readFileSync("src/db/commerce-game-access-schema.ts", "utf8");
-  const migration = readdirSync("migrations/unified")
-    .filter((name) => name.includes("commerce") && name.endsWith(".sql"))
-    .map((name) => readFileSync(`migrations/unified/${name}`, "utf8"))
-    .join("\n");
+    readFileSync("src/db/postgres/commerce-schema.ts", "utf8") +
+    readFileSync("src/db/postgres/commerce-game-access-schema.ts", "utf8");
+  const schemaSql = readFileSync("schema/postgres.sql", "utf8");
   for (const table of COMMERCE_TABLES) {
     assert.match(schema, new RegExp(`"${table}"`), `${table} must have a Drizzle schema`);
-    assert.match(migration, new RegExp(`CREATE TABLE ${table}\\b`), `${table} must be migrated`);
+    assert.match(
+      schemaSql,
+      new RegExp(`CREATE TABLE public\\.${table}\\b`),
+      `${table} must be in the public schema`,
+    );
   }
 });
 
@@ -66,11 +67,14 @@ test("commerce code cannot write through premium billing or timed-role authority
   const commerceSources = [
     "src/commerce/types.ts",
     "src/commerce/store.ts",
-    "src/runtime/cloudflare-commerce-store.ts",
-    "src/db/commerce-schema.ts",
+    "src/runtime/postgres/postgres-commerce-store.ts",
+    "src/db/postgres/commerce-schema.ts",
     ...readdirSync("src/runtime/commerce", { withFileTypes: true })
       .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
       .map((entry) => `src/runtime/commerce/${entry.name}`),
+    ...readdirSync("src/runtime/postgres")
+      .filter((name) => name.startsWith("postgres-commerce-") && name.endsWith(".ts"))
+      .map((name) => `src/runtime/postgres/${name}`),
   ].map((file) => ({ file, source: readFileSync(file, "utf8") }));
 
   for (const { file, source } of commerceSources) {
@@ -78,7 +82,7 @@ test("commerce code cannot write through premium billing or timed-role authority
     // `billing_portal`; that provider path is not HAF's Premium billing domain.
     const withoutStripePortalPath = source.replaceAll("/v1/billing_portal/", "");
     assert.doesNotMatch(withoutStripePortalPath, /\bbilling_/, file);
-    assert.doesNotMatch(source, /runtime\/billing|cloudflare-timed-role|guildEntitlements/, file);
+    assert.doesNotMatch(source, /runtime\/billing|postgres-timed-role|guildEntitlements/, file);
     assert.doesNotMatch(source, /\btimedRoles\b/, file);
   }
 });

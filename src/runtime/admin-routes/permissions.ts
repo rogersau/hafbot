@@ -1,3 +1,4 @@
+import type { Cache } from "../discord-json-cache";
 import type { WardogsService } from "../../wardogs/service";
 import { defineRoute, type Route } from "../admin-route-registry";
 import { guildScopedAccess } from "../admin-route-guards";
@@ -55,7 +56,6 @@ const ADMIN_PERMISSION_FEATURES = [
   "player-count",
   "wardogs",
   "server-levels",
-  "steam-link",
   "evidence-vault",
   "mention-protection",
   "managed-messages",
@@ -92,7 +92,7 @@ export interface PermissionsAdminRoutesOptions {
     request: Request,
     botGuilds?: Promise<BotGuild[]>,
   ) => Promise<string[] | Response | null>;
-  discordCacheKv?: KVNamespace;
+  discordCache?: Cache<string>;
   discordSupportInvite?: string;
   guildDiscoveryService?: GuildDiscoveryService;
 }
@@ -138,9 +138,6 @@ export function createPermissionsAdminRoutes(
           return Response.json({ error: "Not found" }, { status: 404 });
         }
         if (featureParam === "player-count" && !features.playerCount) {
-          return Response.json({ error: "Not found" }, { status: 404 });
-        }
-        if (featureParam === "steam-link" && !features.steamLink) {
           return Response.json({ error: "Not found" }, { status: 404 });
         }
         if (featureParam === "evidence-vault" && !features.evidenceVault) {
@@ -252,7 +249,7 @@ export function createPermissionsAdminRoutes(
           const allGuildsPromise = getCachedBotGuilds(
             options.discordBotToken,
             refreshDiscordCache,
-            options.discordCacheKv,
+            options.discordCache,
           );
           const authorizedGuildIds = options.listAuthorizedCustomerGuildIds
             ? await options.listAuthorizedCustomerGuildIds(request, allGuildsPromise)
@@ -393,17 +390,6 @@ async function buildAdminPermissionResponse(
       guildId,
       feature,
       checks: buildServerLevelsPermissionChecks(context, config?.announcementChannelId ?? null),
-    };
-  }
-
-  if (feature === "steam-link") {
-    return {
-      guildId,
-      feature,
-      checks: buildSteamLinkPermissionChecks(
-        context,
-        await stores.platformLink.readPlatformLinkConfig(guildId, "steam"),
-      ),
     };
   }
 
@@ -674,9 +660,6 @@ async function buildAdminPermissionDiagnosticsResponse(
             serverLevelConfig?.announcementChannelId ?? null,
           )
         : [],
-      "steam-link": features.steamLink
-        ? buildSteamLinkPermissionChecks(context, steamLinkConfig)
-        : [],
       "evidence-vault": features.evidenceVault
         ? buildEvidenceVaultPermissionChecks(context, evidenceVaultConfig)
         : [],
@@ -760,12 +743,12 @@ function mapDiscordRateLimitError(error: unknown): Response | null {
     return null;
   }
 
-  const body: { error: string; code: string; retryAfterMs?: number } = {
+  const body: { error: string; code: string; retryAfterSeconds?: number } = {
     error: "Discord is rate limiting server discovery. Try again shortly.",
     code: "discord_rate_limited",
   };
   if (error.retryAfterMs !== undefined) {
-    body.retryAfterMs = error.retryAfterMs;
+    body.retryAfterSeconds = Math.ceil(error.retryAfterMs / 1000);
   }
   return Response.json(body, { status: 429 });
 }

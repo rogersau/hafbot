@@ -121,23 +121,12 @@
                     "catalog": {
                       "items": {
                         "properties": {
-                          "cohort": {
-                            "enum": [
-                              "founder",
-                              "standard"
-                            ],
-                            "type": "string"
-                          },
                           "frequency": {
                             "enum": [
                               "monthly",
                               "yearly"
                             ],
                             "type": "string"
-                          },
-                          "legacy": {
-                            "const": true,
-                            "type": "boolean"
                           },
                           "plan": {
                             "enum": [
@@ -154,7 +143,6 @@
                           }
                         },
                         "required": [
-                          "cohort",
                           "frequency",
                           "plan",
                           "priceId",
@@ -163,39 +151,6 @@
                         "type": "object"
                       },
                       "type": "array"
-                    },
-                    "founderAdmission": {
-                      "anyOf": [
-                        {
-                          "properties": {
-                            "historicalCount": {
-                              "minimum": 0,
-                              "type": "integer"
-                            },
-                            "limit": {
-                              "exclusiveMinimum": 0,
-                              "type": "integer"
-                            },
-                            "open": {
-                              "type": "boolean"
-                            },
-                            "publicCount": {
-                              "minimum": 0,
-                              "type": "integer"
-                            }
-                          },
-                          "required": [
-                            "historicalCount",
-                            "limit",
-                            "open",
-                            "publicCount"
-                          ],
-                          "type": "object"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     },
                     "prices": {
                       "items": {
@@ -280,16 +235,6 @@
                             "customerId": {
                               "type": "string"
                             },
-                            "founderAwardedAtMs": {
-                              "anyOf": [
-                                {
-                                  "type": "integer"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
                             "frequency": {
                               "anyOf": [
                                 {
@@ -361,20 +306,6 @@
                             "priceId": {
                               "anyOf": [
                                 {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "pricingCohort": {
-                              "anyOf": [
-                                {
-                                  "enum": [
-                                    "founder",
-                                    "standard"
-                                  ],
                                   "type": "string"
                                 },
                                 {
@@ -463,7 +394,6 @@
                   },
                   "required": [
                     "catalog",
-                    "founderAdmission",
                     "prices",
                     "subscription"
                   ],
@@ -825,16 +755,6 @@
                             "customerId": {
                               "type": "string"
                             },
-                            "founderAwardedAtMs": {
-                              "anyOf": [
-                                {
-                                  "type": "integer"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
                             "frequency": {
                               "anyOf": [
                                 {
@@ -906,20 +826,6 @@
                             "priceId": {
                               "anyOf": [
                                 {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "pricingCohort": {
-                              "anyOf": [
-                                {
-                                  "enum": [
-                                    "founder",
-                                    "standard"
-                                  ],
                                   "type": "string"
                                 },
                                 {
@@ -1532,16 +1438,6 @@
                             "customerId": {
                               "type": "string"
                             },
-                            "founderAwardedAtMs": {
-                              "anyOf": [
-                                {
-                                  "type": "integer"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
                             "frequency": {
                               "anyOf": [
                                 {
@@ -1613,20 +1509,6 @@
                             "priceId": {
                               "anyOf": [
                                 {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "pricingCohort": {
-                              "anyOf": [
-                                {
-                                  "enum": [
-                                    "founder",
-                                    "standard"
-                                  ],
                                   "type": "string"
                                 },
                                 {
@@ -2521,16 +2403,6 @@
                         "customerId": {
                           "type": "string"
                         },
-                        "founderAwardedAtMs": {
-                          "anyOf": [
-                            {
-                              "type": "integer"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
                         "frequency": {
                           "anyOf": [
                             {
@@ -2602,20 +2474,6 @@
                         "priceId": {
                           "anyOf": [
                             {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "pricingCohort": {
-                          "anyOf": [
-                            {
-                              "enum": [
-                                "founder",
-                                "standard"
-                              ],
                               "type": "string"
                             },
                             {
@@ -3826,16 +3684,6 @@
                         "customerId": {
                           "type": "string"
                         },
-                        "founderAwardedAtMs": {
-                          "anyOf": [
-                            {
-                              "type": "integer"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
                         "frequency": {
                           "anyOf": [
                             {
@@ -3907,20 +3755,6 @@
                         "priceId": {
                           "anyOf": [
                             {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "pricingCohort": {
-                          "anyOf": [
-                            {
-                              "enum": [
-                                "founder",
-                                "standard"
-                              ],
                               "type": "string"
                             },
                             {
@@ -4354,7 +4188,7 @@
                               "dashboard-save",
                               "restore",
                               "clone",
-                              "system-migration"
+                              "system-snapshot"
                             ],
                             "type": "string"
                           }
@@ -4998,7 +4832,7 @@
                             "dashboard-save",
                             "restore",
                             "clone",
-                            "system-migration"
+                            "system-snapshot"
                           ],
                           "type": "string"
                         }
@@ -5387,7 +5221,7 @@
                               "dashboard-save",
                               "restore",
                               "clone",
-                              "system-migration"
+                              "system-snapshot"
                             ],
                             "type": "string"
                           }
@@ -13947,9 +13781,6 @@
                       "fillPartialTeams": {
                         "type": "boolean"
                       },
-                      "fingerprint": {
-                        "type": "string"
-                      },
                       "groupId": {
                         "type": "string"
                       },
@@ -14046,7 +13877,6 @@
                       "consideredSignupUserIds",
                       "eventId",
                       "fillPartialTeams",
-                      "fingerprint",
                       "groupId",
                       "guildId",
                       "includeIncomplete",
@@ -14385,9 +14215,6 @@
                         "fillPartialTeams": {
                           "type": "boolean"
                         },
-                        "fingerprint": {
-                          "type": "string"
-                        },
                         "groupId": {
                           "type": "string"
                         },
@@ -14484,7 +14311,6 @@
                         "consideredSignupUserIds",
                         "eventId",
                         "fillPartialTeams",
-                        "fingerprint",
                         "groupId",
                         "guildId",
                         "includeIncomplete",
@@ -27115,1235 +26941,6 @@
         "x-haf-feature": null
       }
     },
-    "/admin/api/steam-link": {
-      "get": {
-        "operationId": "steamLink.get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "guildId",
-            "required": false,
-            "schema": {
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "workspaceId",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "config": {
-                      "anyOf": [
-                        {
-                          "properties": {
-                            "allowMultipleLinks": {
-                              "type": "boolean"
-                            },
-                            "allowRelink": {
-                              "type": "boolean"
-                            },
-                            "customLinks": {
-                              "items": {
-                                "properties": {
-                                  "label": {
-                                    "type": "string"
-                                  },
-                                  "url": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "label",
-                                  "url"
-                                ],
-                                "type": "object"
-                              },
-                              "type": "array"
-                            },
-                            "enabled": {
-                              "type": "boolean"
-                            },
-                            "gameAppIds": {
-                              "items": {
-                                "type": "integer"
-                              },
-                              "type": "array"
-                            },
-                            "guildId": {
-                              "type": "string"
-                            },
-                            "linkedRoleId": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "logChannelId": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "panelButtonLabel": {
-                              "type": "string"
-                            },
-                            "panelButtonStyle": {
-                              "type": "string"
-                            },
-                            "panelChannelId": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "panelColor": {
-                              "type": "integer"
-                            },
-                            "panelDescription": {
-                              "type": "string"
-                            },
-                            "panelMessageId": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "panelTitle": {
-                              "type": "string"
-                            },
-                            "platform": {
-                              "enum": [
-                                "steam",
-                                "xbox",
-                                "playstation"
-                              ],
-                              "type": "string"
-                            },
-                            "requireRelinkOnRejoin": {
-                              "type": "boolean"
-                            },
-                            "updatedAtMs": {
-                              "type": "integer"
-                            },
-                            "whoisFields": {
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            }
-                          },
-                          "required": [
-                            "allowMultipleLinks",
-                            "allowRelink",
-                            "customLinks",
-                            "gameAppIds",
-                            "guildId",
-                            "linkedRoleId",
-                            "logChannelId",
-                            "panelButtonLabel",
-                            "panelButtonStyle",
-                            "panelChannelId",
-                            "panelDescription",
-                            "panelMessageId",
-                            "panelTitle",
-                            "platform",
-                            "requireRelinkOnRejoin",
-                            "updatedAtMs",
-                            "whoisFields"
-                          ],
-                          "type": "object"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "guildId": {
-                      "type": "string"
-                    },
-                    "links": {
-                      "items": {
-                        "properties": {
-                          "actionedByUserId": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "active": {
-                            "type": "boolean"
-                          },
-                          "guildId": {
-                            "type": "string"
-                          },
-                          "linkedAtMs": {
-                            "type": "integer"
-                          },
-                          "manual": {
-                            "type": "boolean"
-                          },
-                          "metadataJson": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "platform": {
-                            "enum": [
-                              "steam",
-                              "xbox",
-                              "playstation"
-                            ],
-                            "type": "string"
-                          },
-                          "platformId": {
-                            "type": "string"
-                          },
-                          "userId": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "actionedByUserId",
-                          "active",
-                          "guildId",
-                          "linkedAtMs",
-                          "manual",
-                          "metadataJson",
-                          "platform",
-                          "platformId",
-                          "userId"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "required": [
-                    "config",
-                    "guildId",
-                    "links"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Steam Link configuration and linked accounts",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The request is invalid",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "invalid_json",
-              "invalid_request"
-            ]
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "Authentication is required",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "authentication_required"
-            ]
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The actor lacks permission",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "permission_denied"
-            ]
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "An unexpected internal error occurred",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "internal_error"
-            ]
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "A required service is unavailable",
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds before the request should be retried, when known",
-                "schema": {
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "database_unavailable",
-              "discord_unavailable",
-              "provider_unavailable",
-              "request_timeout",
-              "service_unavailable"
-            ]
-          }
-        },
-        "security": [
-          {
-            "AdminSessionCookie": []
-          }
-        ],
-        "summary": "Read Steam Link compatibility configuration",
-        "tags": [
-          "Player Link"
-        ],
-        "x-haf-access": {
-          "mode": "read",
-          "scope": "guild"
-        },
-        "x-haf-entitlement": null,
-        "x-haf-feature": "steamLink"
-      }
-    },
-    "/admin/api/steam-link/config": {
-      "post": {
-        "operationId": "steamLinkConfig.post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "allowMultipleLinks": {
-                    "type": "boolean"
-                  },
-                  "allowRelink": {
-                    "type": "boolean"
-                  },
-                  "customLinks": {
-                    "items": {
-                      "properties": {
-                        "label": {
-                          "type": "string"
-                        },
-                        "url": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "label",
-                        "url"
-                      ],
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "gameAppIds": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array"
-                  },
-                  "guildId": {
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "logChannelId": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "panelButtonLabel": {
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "panelButtonStyle": {
-                    "enum": [
-                      "Primary",
-                      "Secondary",
-                      "Success",
-                      "Danger"
-                    ],
-                    "type": "string"
-                  },
-                  "panelColor": {
-                    "maximum": 16777215,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "panelDescription": {
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "panelTitle": {
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "requireRelinkOnRejoin": {
-                    "type": "boolean"
-                  },
-                  "steamLinkedRoleId": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "whoisFields": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array"
-                  },
-                  "workspaceId": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "allowRelink",
-                  "gameAppIds",
-                  "guildId",
-                  "panelButtonLabel",
-                  "panelButtonStyle",
-                  "panelDescription",
-                  "panelTitle"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "ok": {
-                      "const": true,
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "ok"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Steam Link configuration was saved",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The request is invalid",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "invalid_json",
-              "invalid_request"
-            ]
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "Authentication is required",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "authentication_required"
-            ]
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The actor lacks permission",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "permission_denied"
-            ]
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The requested resource was not found",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "resource_not_found"
-            ]
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The request conflicts with current state",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "conflict"
-            ]
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "An unexpected internal error occurred",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "internal_error"
-            ]
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "A required service is unavailable",
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds before the request should be retried, when known",
-                "schema": {
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "database_unavailable",
-              "discord_unavailable",
-              "provider_unavailable",
-              "request_timeout",
-              "service_unavailable"
-            ]
-          }
-        },
-        "security": [
-          {
-            "AdminSessionCookie": []
-          }
-        ],
-        "summary": "Save Steam Link compatibility configuration",
-        "tags": [
-          "Player Link"
-        ],
-        "x-haf-access": {
-          "mode": "write",
-          "scope": "guild"
-        },
-        "x-haf-entitlement": null,
-        "x-haf-feature": "steamLink"
-      }
-    },
-    "/admin/api/steam-link/publish": {
-      "post": {
-        "operationId": "steamLinkPublish.post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "guildId": {
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "panelChannelId": {
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "workspaceId": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "guildId",
-                  "panelChannelId"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "ok": {
-                      "const": true,
-                      "type": "boolean"
-                    },
-                    "panelMessageId": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "ok",
-                    "panelMessageId"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "The Steam Link panel message",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The request is invalid",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "invalid_json",
-              "invalid_request"
-            ]
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "Authentication is required",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "authentication_required"
-            ]
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The actor lacks permission",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "permission_denied"
-            ]
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The requested resource was not found",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "resource_not_found"
-            ]
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The request conflicts with current state",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "conflict"
-            ]
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "An unexpected internal error occurred",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "internal_error"
-            ]
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "A required service is unavailable",
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds before the request should be retried, when known",
-                "schema": {
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "database_unavailable",
-              "discord_unavailable",
-              "provider_unavailable",
-              "request_timeout",
-              "service_unavailable"
-            ]
-          }
-        },
-        "security": [
-          {
-            "AdminSessionCookie": []
-          }
-        ],
-        "summary": "Publish a Steam Link compatibility panel",
-        "tags": [
-          "Player Link"
-        ],
-        "x-haf-access": {
-          "mode": "write",
-          "scope": "guild"
-        },
-        "x-haf-entitlement": null,
-        "x-haf-feature": "steamLink"
-      }
-    },
-    "/admin/api/steam-link/sync-roles": {
-      "post": {
-        "operationId": "steamLinkSyncRoles.post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "guildId": {
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "workspaceId": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "guildId"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "failed": {
-                      "type": "integer"
-                    },
-                    "fixed": {
-                      "type": "integer"
-                    },
-                    "ok": {
-                      "const": true,
-                      "type": "boolean"
-                    },
-                    "skipped": {
-                      "type": "integer"
-                    },
-                    "total": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "failed",
-                    "fixed",
-                    "ok",
-                    "skipped",
-                    "total"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Steam Link role synchronization counts",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The request is invalid",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "invalid_json",
-              "invalid_request"
-            ]
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "Authentication is required",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "authentication_required"
-            ]
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The actor lacks permission",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "permission_denied"
-            ]
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The requested resource was not found",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "resource_not_found"
-            ]
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "The request conflicts with current state",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "conflict"
-            ]
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "An unexpected internal error occurred",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "internal_error"
-            ]
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminErrorEnvelopeV1"
-                }
-              }
-            },
-            "description": "A required service is unavailable",
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds before the request should be retried, when known",
-                "schema": {
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "X-Correlation-ID": {
-                "description": "Correlation identifier for support and diagnostics",
-                "required": true,
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "x-haf-error-codes": [
-              "database_unavailable",
-              "discord_unavailable",
-              "provider_unavailable",
-              "request_timeout",
-              "service_unavailable"
-            ]
-          }
-        },
-        "security": [
-          {
-            "AdminSessionCookie": []
-          }
-        ],
-        "summary": "Synchronize Steam Link roles",
-        "tags": [
-          "Player Link"
-        ],
-        "x-haf-access": {
-          "mode": "write",
-          "scope": "guild"
-        },
-        "x-haf-entitlement": null,
-        "x-haf-feature": "steamLink"
-      }
-    },
     "/admin/api/tickets/closed": {
       "get": {
         "operationId": "ticketsClosed.get",
@@ -28865,24 +27462,8 @@
                                     },
                                     "type": "array"
                                   },
-                                  "anonymousEnabled": {
-                                    "type": "boolean"
-                                  },
                                   "anonymousSupportEnabled": {
                                     "type": "boolean"
-                                  },
-                                  "autoReplyEnabled": {
-                                    "type": "boolean"
-                                  },
-                                  "autoReplyMessage": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
                                   },
                                   "buttonStyle": {
                                     "enum": [
@@ -28930,6 +27511,7 @@
                                     "type": "string"
                                   },
                                   "label": {
+                                    "maxLength": 45,
                                     "minLength": 1,
                                     "type": "string"
                                   },
@@ -28946,16 +27528,19 @@
                                     "items": {
                                       "properties": {
                                         "id": {
+                                          "maxLength": 100,
                                           "minLength": 1,
                                           "type": "string"
                                         },
                                         "label": {
+                                          "maxLength": 45,
                                           "minLength": 1,
                                           "type": "string"
                                         },
                                         "placeholder": {
                                           "anyOf": [
                                             {
+                                              "maxLength": 100,
                                               "type": "string"
                                             },
                                             {
@@ -29074,7 +27659,6 @@
                                       ],
                                       "type": "object"
                                     },
-                                    "maxItems": 10,
                                     "type": "array"
                                   },
                                   "staffDiscussionThreadEnabled": {
@@ -29092,8 +27676,6 @@
                                   }
                                 },
                                 "required": [
-                                  "autoReplyEnabled",
-                                  "autoReplyMessage",
                                   "buttonStyle",
                                   "channelNamePrefix",
                                   "emoji",
@@ -29102,6 +27684,7 @@
                                   "limitExclusion",
                                   "participantManagementEnabled",
                                   "questions",
+                                  "responseRules",
                                   "supportRoleId"
                                 ],
                                 "type": "object"
@@ -29248,24 +27831,8 @@
                                   },
                                   "type": "array"
                                 },
-                                "anonymousEnabled": {
-                                  "type": "boolean"
-                                },
                                 "anonymousSupportEnabled": {
                                   "type": "boolean"
-                                },
-                                "autoReplyEnabled": {
-                                  "type": "boolean"
-                                },
-                                "autoReplyMessage": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
                                 },
                                 "buttonStyle": {
                                   "enum": [
@@ -29313,6 +27880,7 @@
                                   "type": "string"
                                 },
                                 "label": {
+                                  "maxLength": 45,
                                   "minLength": 1,
                                   "type": "string"
                                 },
@@ -29329,16 +27897,19 @@
                                   "items": {
                                     "properties": {
                                       "id": {
+                                        "maxLength": 100,
                                         "minLength": 1,
                                         "type": "string"
                                       },
                                       "label": {
+                                        "maxLength": 45,
                                         "minLength": 1,
                                         "type": "string"
                                       },
                                       "placeholder": {
                                         "anyOf": [
                                           {
+                                            "maxLength": 100,
                                             "type": "string"
                                           },
                                           {
@@ -29457,7 +28028,6 @@
                                     ],
                                     "type": "object"
                                   },
-                                  "maxItems": 10,
                                   "type": "array"
                                 },
                                 "staffDiscussionThreadEnabled": {
@@ -29475,8 +28045,6 @@
                                 }
                               },
                               "required": [
-                                "autoReplyEnabled",
-                                "autoReplyMessage",
                                 "buttonStyle",
                                 "channelNamePrefix",
                                 "emoji",
@@ -29485,6 +28053,7 @@
                                 "limitExclusion",
                                 "participantManagementEnabled",
                                 "questions",
+                                "responseRules",
                                 "supportRoleId"
                               ],
                               "type": "object"
@@ -29791,24 +28360,8 @@
                           },
                           "type": "array"
                         },
-                        "anonymousEnabled": {
-                          "type": "boolean"
-                        },
                         "anonymousSupportEnabled": {
                           "type": "boolean"
-                        },
-                        "autoReplyEnabled": {
-                          "type": "boolean"
-                        },
-                        "autoReplyMessage": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
                         },
                         "buttonStyle": {
                           "enum": [
@@ -30179,24 +28732,8 @@
                                 },
                                 "type": "array"
                               },
-                              "anonymousEnabled": {
-                                "type": "boolean"
-                              },
                               "anonymousSupportEnabled": {
                                 "type": "boolean"
-                              },
-                              "autoReplyEnabled": {
-                                "type": "boolean"
-                              },
-                              "autoReplyMessage": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
-                                ]
                               },
                               "buttonStyle": {
                                 "enum": [
@@ -30244,6 +28781,7 @@
                                 "type": "string"
                               },
                               "label": {
+                                "maxLength": 45,
                                 "minLength": 1,
                                 "type": "string"
                               },
@@ -30260,16 +28798,19 @@
                                 "items": {
                                   "properties": {
                                     "id": {
+                                      "maxLength": 100,
                                       "minLength": 1,
                                       "type": "string"
                                     },
                                     "label": {
+                                      "maxLength": 45,
                                       "minLength": 1,
                                       "type": "string"
                                     },
                                     "placeholder": {
                                       "anyOf": [
                                         {
+                                          "maxLength": 100,
                                           "type": "string"
                                         },
                                         {
@@ -30388,7 +28929,6 @@
                                   ],
                                   "type": "object"
                                 },
-                                "maxItems": 10,
                                 "type": "array"
                               },
                               "staffDiscussionThreadEnabled": {
@@ -30406,8 +28946,6 @@
                               }
                             },
                             "required": [
-                              "autoReplyEnabled",
-                              "autoReplyMessage",
                               "buttonStyle",
                               "channelNamePrefix",
                               "emoji",
@@ -30416,6 +28954,7 @@
                               "limitExclusion",
                               "participantManagementEnabled",
                               "questions",
+                              "responseRules",
                               "supportRoleId"
                             ],
                             "type": "object"
@@ -30830,24 +29369,8 @@
                                 },
                                 "type": "array"
                               },
-                              "anonymousEnabled": {
-                                "type": "boolean"
-                              },
                               "anonymousSupportEnabled": {
                                 "type": "boolean"
-                              },
-                              "autoReplyEnabled": {
-                                "type": "boolean"
-                              },
-                              "autoReplyMessage": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
-                                ]
                               },
                               "buttonStyle": {
                                 "enum": [
@@ -30895,6 +29418,7 @@
                                 "type": "string"
                               },
                               "label": {
+                                "maxLength": 45,
                                 "minLength": 1,
                                 "type": "string"
                               },
@@ -30911,16 +29435,19 @@
                                 "items": {
                                   "properties": {
                                     "id": {
+                                      "maxLength": 100,
                                       "minLength": 1,
                                       "type": "string"
                                     },
                                     "label": {
+                                      "maxLength": 45,
                                       "minLength": 1,
                                       "type": "string"
                                     },
                                     "placeholder": {
                                       "anyOf": [
                                         {
+                                          "maxLength": 100,
                                           "type": "string"
                                         },
                                         {
@@ -31039,7 +29566,6 @@
                                   ],
                                   "type": "object"
                                 },
-                                "maxItems": 10,
                                 "type": "array"
                               },
                               "staffDiscussionThreadEnabled": {
@@ -31057,8 +29583,6 @@
                               }
                             },
                             "required": [
-                              "autoReplyEnabled",
-                              "autoReplyMessage",
                               "buttonStyle",
                               "channelNamePrefix",
                               "emoji",
@@ -31067,6 +29591,7 @@
                               "limitExclusion",
                               "participantManagementEnabled",
                               "questions",
+                              "responseRules",
                               "supportRoleId"
                             ],
                             "type": "object"
@@ -31705,24 +30230,8 @@
                           },
                           "type": "array"
                         },
-                        "anonymousEnabled": {
-                          "type": "boolean"
-                        },
                         "anonymousSupportEnabled": {
                           "type": "boolean"
-                        },
-                        "autoReplyEnabled": {
-                          "type": "boolean"
-                        },
-                        "autoReplyMessage": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
                         },
                         "buttonStyle": {
                           "enum": [
@@ -32389,7 +30898,7 @@
                             "dashboard-save",
                             "restore",
                             "clone",
-                            "system-migration"
+                            "system-snapshot"
                           ],
                           "type": "string"
                         }
@@ -32762,24 +31271,8 @@
                                     },
                                     "type": "array"
                                   },
-                                  "anonymousEnabled": {
-                                    "type": "boolean"
-                                  },
                                   "anonymousSupportEnabled": {
                                     "type": "boolean"
-                                  },
-                                  "autoReplyEnabled": {
-                                    "type": "boolean"
-                                  },
-                                  "autoReplyMessage": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
                                   },
                                   "buttonStyle": {
                                     "enum": [
@@ -32827,6 +31320,7 @@
                                     "type": "string"
                                   },
                                   "label": {
+                                    "maxLength": 45,
                                     "minLength": 1,
                                     "type": "string"
                                   },
@@ -32843,16 +31337,19 @@
                                     "items": {
                                       "properties": {
                                         "id": {
+                                          "maxLength": 100,
                                           "minLength": 1,
                                           "type": "string"
                                         },
                                         "label": {
+                                          "maxLength": 45,
                                           "minLength": 1,
                                           "type": "string"
                                         },
                                         "placeholder": {
                                           "anyOf": [
                                             {
+                                              "maxLength": 100,
                                               "type": "string"
                                             },
                                             {
@@ -32971,7 +31468,6 @@
                                       ],
                                       "type": "object"
                                     },
-                                    "maxItems": 10,
                                     "type": "array"
                                   },
                                   "staffDiscussionThreadEnabled": {
@@ -32989,8 +31485,6 @@
                                   }
                                 },
                                 "required": [
-                                  "autoReplyEnabled",
-                                  "autoReplyMessage",
                                   "buttonStyle",
                                   "channelNamePrefix",
                                   "emoji",
@@ -32999,6 +31493,7 @@
                                   "limitExclusion",
                                   "participantManagementEnabled",
                                   "questions",
+                                  "responseRules",
                                   "supportRoleId"
                                 ],
                                 "type": "object"
@@ -33743,7 +32238,7 @@
                               "dashboard-save",
                               "restore",
                               "clone",
-                              "system-migration"
+                              "system-snapshot"
                             ],
                             "type": "string"
                           }
@@ -34078,24 +32573,8 @@
                                 },
                                 "type": "array"
                               },
-                              "anonymousEnabled": {
-                                "type": "boolean"
-                              },
                               "anonymousSupportEnabled": {
                                 "type": "boolean"
-                              },
-                              "autoReplyEnabled": {
-                                "type": "boolean"
-                              },
-                              "autoReplyMessage": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
-                                ]
                               },
                               "buttonStyle": {
                                 "enum": [
@@ -34143,6 +32622,7 @@
                                 "type": "string"
                               },
                               "label": {
+                                "maxLength": 45,
                                 "minLength": 1,
                                 "type": "string"
                               },
@@ -34159,16 +32639,19 @@
                                 "items": {
                                   "properties": {
                                     "id": {
+                                      "maxLength": 100,
                                       "minLength": 1,
                                       "type": "string"
                                     },
                                     "label": {
+                                      "maxLength": 45,
                                       "minLength": 1,
                                       "type": "string"
                                     },
                                     "placeholder": {
                                       "anyOf": [
                                         {
+                                          "maxLength": 100,
                                           "type": "string"
                                         },
                                         {
@@ -34287,7 +32770,6 @@
                                   ],
                                   "type": "object"
                                 },
-                                "maxItems": 10,
                                 "type": "array"
                               },
                               "staffDiscussionThreadEnabled": {
@@ -34305,8 +32787,6 @@
                               }
                             },
                             "required": [
-                              "autoReplyEnabled",
-                              "autoReplyMessage",
                               "buttonStyle",
                               "channelNamePrefix",
                               "emoji",
@@ -34315,6 +32795,7 @@
                               "limitExclusion",
                               "participantManagementEnabled",
                               "questions",
+                              "responseRules",
                               "supportRoleId"
                             ],
                             "type": "object"
@@ -36845,7 +35326,8 @@
                                 "type": "string"
                               },
                               "credentialId": {
-                                "minLength": 1,
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                                 "type": "string"
                               }
                             },
@@ -36862,7 +35344,6 @@
                                 "type": "string"
                               },
                               "url": {
-                                "minLength": 1,
                                 "type": "string"
                               }
                             },
@@ -36895,10 +35376,12 @@
                     "items": {
                       "properties": {
                         "flags": {
+                          "pattern": "^[gimsuy]*$",
                           "type": "string"
                         },
                         "id": {
                           "minLength": 1,
+                          "pattern": "^[A-Za-z0-9_-]{1,64}$",
                           "type": "string"
                         },
                         "label": {
@@ -36906,9 +35389,11 @@
                           "type": "string"
                         },
                         "pattern": {
+                          "maxLength": 256,
                           "type": "string"
                         },
                         "replacement": {
+                          "maxLength": 1024,
                           "minLength": 1,
                           "type": "string"
                         }
@@ -36927,6 +35412,7 @@
                   "defaultDestinationIds": {
                     "items": {
                       "minLength": 1,
+                      "pattern": "^[A-Za-z0-9_-]{1,64}$",
                       "type": "string"
                     },
                     "minItems": 1,
@@ -36944,7 +35430,8 @@
                                   "type": "string"
                                 },
                                 "credentialId": {
-                                  "minLength": 1,
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                                   "type": "string"
                                 }
                               },
@@ -36961,7 +35448,6 @@
                                   "type": "string"
                                 },
                                 "url": {
-                                  "minLength": 1,
                                   "type": "string"
                                 }
                               },
@@ -36975,6 +35461,7 @@
                         },
                         "id": {
                           "minLength": 1,
+                          "pattern": "^[A-Za-z0-9_-]{1,64}$",
                           "type": "string"
                         },
                         "label": {
@@ -37011,7 +35498,7 @@
                         "type": "string"
                       },
                       {
-                        "minLength": 1,
+                        "pattern": "^[A-Za-z0-9_-]{16,64}$",
                         "type": "string"
                       }
                     ]
@@ -37022,16 +35509,19 @@
                         "destinationIds": {
                           "items": {
                             "minLength": 1,
+                            "pattern": "^[A-Za-z0-9_-]{1,64}$",
                             "type": "string"
                           },
                           "minItems": 1,
                           "type": "array"
                         },
                         "flags": {
+                          "pattern": "^[imsuy]*$",
                           "type": "string"
                         },
                         "id": {
                           "minLength": 1,
+                          "pattern": "^[A-Za-z0-9_-]{1,64}$",
                           "type": "string"
                         },
                         "label": {
@@ -37039,6 +35529,7 @@
                           "type": "string"
                         },
                         "pattern": {
+                          "maxLength": 256,
                           "type": "string"
                         }
                       },
@@ -38393,9 +36884,6 @@
                             ]
                           },
                           "destinationId": {
-                            "type": "string"
-                          },
-                          "destinationUrl": {
                             "type": "string"
                           },
                           "error": {

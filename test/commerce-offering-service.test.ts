@@ -7,7 +7,7 @@ import {
   type CommerceOfferingProvider,
   type CommerceOfferingStore,
 } from "../src/commerce/offering-service";
-import { CloudflareCommerceOfferingStore } from "../src/runtime/commerce/cloudflare-offering-store";
+import { SqliteCommerceOfferingStore } from "./support/sqlite/runtime/commerce/sqlite-offering-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 const NOW = 1_900_000_000_000;
@@ -16,7 +16,7 @@ test("approved seller can create and publish a subscription offering", async () 
   const database = await createTestDatabase();
   try {
     database.execRaw(`
-      INSERT INTO guild_entitlements(guild_id,tier,plan,updated_at_ms) VALUES ('guild-1','premium','premium',${NOW});
+      INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES ('guild-1','premium',${NOW});
       INSERT INTO commerce_connected_accounts(id,guild_id,stripe_account_id,status,country,default_currency,charges_enabled,payouts_enabled,details_submitted,created_at_ms,updated_at_ms)
         VALUES ('acct_1','guild-1','acct_1','active','AU','AUD',1,1,1,${NOW},${NOW});
       INSERT INTO commerce_seller_profiles(connected_account_id,guild_id,lifecycle_state,approval_state,support_contact,adult_attested_at_ms,two_factor_evidence,guild_created_at_ms,guild_good_standing,seller_good_standing,reviewed_by_user_id,reviewed_at_ms,created_at_ms,updated_at_ms)
@@ -24,7 +24,7 @@ test("approved seller can create and publish a subscription offering", async () 
       INSERT INTO commerce_seller_acceptances(id,connected_account_id,terms_version,accepted_by_user_id,accepted_at_ms,created_at_ms)
         VALUES ('accept-1','acct_1','v1','seller',${NOW},${NOW});
     `);
-    const store = new CloudflareCommerceOfferingStore(database.d1, {
+    const store = new SqliteCommerceOfferingStore(database.d1, {
       async isPremium() {
         return true;
       },
@@ -44,9 +44,9 @@ test("approved seller can create and publish a subscription offering", async () 
       roleManageable: true,
       termsVersion: "v1",
     });
-    assert.equal(created.lifecycle.state, "draft");
+    assert.equal(created.offering.state, "draft");
     assert.equal((await service.publish(created.offering.id)).state, "published");
-    assert.equal((await store.readLifecycle(created.offering.id))?.state, "published");
+    assert.equal((await store.readOffering(created.offering.id))?.state, "published");
     assert.equal((await store.listPrices(created.offering.id)).length, 1);
   } finally {
     database.close();
@@ -102,14 +102,16 @@ test("publishing enforces five offerings, role and minimum price; price changes 
   };
   await service.publish(created.offering.id);
   assert.deepEqual(refreshes, ["guild-1"]);
-  await store.saveLifecycle({
-    ...(await store.readLifecycle(created.offering.id)),
+  await store.createOffering({
+    ...(await store.readOffering(created.offering.id))!,
     state: "repair_required",
+    repairPreviousState: "published",
   });
   await assert.rejects(() => service.publish(created.offering.id), /publish_invalid_state/);
-  await store.saveLifecycle({
-    ...(await store.readLifecycle(created.offering.id)),
+  await store.createOffering({
+    ...(await store.readOffering(created.offering.id))!,
     state: "published",
+    repairPreviousState: null,
   });
   const changed = await service.replacePrice({
     offeringId: created.offering.id,
@@ -238,7 +240,6 @@ class FakeProvider implements CommerceOfferingProvider {
 
 class FakeStore implements CommerceOfferingStore {
   offerings = new Map<string, any>();
-  lifecycles = new Map<string, any>();
   prices = new Map<string, any[]>();
   context = {
     premiumActive: false,
@@ -256,15 +257,6 @@ class FakeStore implements CommerceOfferingStore {
   }
   async listOfferings(id: string) {
     return [...this.offerings.values()].filter((x) => x.connectedAccountId === id);
-  }
-  async saveLifecycle(value: any) {
-    this.lifecycles.set(value.offeringId, value);
-  }
-  async readLifecycle(id: string) {
-    return this.lifecycles.get(id) ?? null;
-  }
-  async listLifecycles(id: string) {
-    return [...this.lifecycles.values()].filter((x) => x.connectedAccountId === id);
   }
   async createPrice(value: any) {
     const list = this.prices.get(value.offeringId) ?? [];
@@ -287,30 +279,23 @@ class FakeStore implements CommerceOfferingStore {
         offering.guildId === guildId &&
         offering.discordRoleId === roleId &&
         offering.id !== excludingId &&
-        this.lifecycles.get(offering.id)?.state === "published",
+        offering.state === "published",
     );
   }
-  async beginRoleReplacement(input: {
-    offering: any;
-    lifecycle: any;
-    replacementRoleId: string;
-    nowMs: number;
-  }) {
+  async beginRoleReplacement(input: { offering: any; replacementRoleId: string; nowMs: number }) {
     this.offerings.set(input.offering.id, {
       ...input.offering,
       discordRoleId: input.replacementRoleId,
-      updatedAtMs: input.nowMs,
-    });
-    this.lifecycles.set(input.offering.id, {
-      ...input.lifecycle,
       roleManageable: true,
+      repairDeadlineAtMs: null,
+      repairPreviousState:
+        input.offering.state === "repair_required" ? input.offering.repairPreviousState : null,
       updatedAtMs: input.nowMs,
     });
     return "updated" as const;
   }
   async beginRetirement(input: {
     offering: any;
-    lifecycle: any;
     actorUserId: string;
     reasonCode: string;
     actionId: string;
@@ -320,11 +305,6 @@ class FakeStore implements CommerceOfferingStore {
     this.retirementStarts += 1;
     this.offerings.set(input.offering.id, {
       ...input.offering,
-      status: "draft",
-      updatedAtMs: input.nowMs,
-    });
-    this.lifecycles.set(input.offering.id, {
-      ...input.lifecycle,
       state: "retiring",
       retireAtMs: input.retireAtMs,
       updatedAtMs: input.nowMs,
@@ -348,22 +328,11 @@ class FakeStore implements CommerceOfferingStore {
       return false;
     }
     const offering = this.offerings.get(id);
-    const lifecycle = this.lifecycles.get(id);
-    if (
-      !offering ||
-      !lifecycle ||
-      (lifecycle.state !== "retiring" && lifecycle.state !== "draft")
-    ) {
+    if (!offering || (offering.state !== "retiring" && offering.state !== "draft")) {
       return false;
     }
     this.offerings.set(id, {
       ...offering,
-      status: "archived",
-      archivedAtMs: nowMs,
-      updatedAtMs: nowMs,
-    });
-    this.lifecycles.set(id, {
-      ...lifecycle,
       state: "archived",
       archivedAtMs: nowMs,
       updatedAtMs: nowMs,

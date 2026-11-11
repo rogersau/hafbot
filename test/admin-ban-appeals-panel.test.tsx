@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { act } from "react";
@@ -69,9 +70,9 @@ test("Ban appeals panel confirms explicit unban actions and shows an uncertain r
       const body = JSON.parse(String(init.body));
       mutations.push({ path, body });
       current = { ...current, status: "unban_pending", revision: 3 };
-      return Response.json(
-        { error: "The unban result could not be confirmed. Refresh and check its status." },
-        { status: 409 },
+      return adminErrorResponse(
+        "The unban result could not be confirmed. Refresh and check its status.",
+        409,
       );
     };
     await render(<AdminBanAppealsPanel selectedGuildId="100" selectedWorkspaceId="workspace-a" />);

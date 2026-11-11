@@ -156,7 +156,7 @@ export function createTicketLifecycle(options: {
   return {
     async deferRecovery(recovery: TicketRecoveryEnvelope): Promise<boolean> {
       if (!options.recoveryQueue) return false;
-      await options.recoveryQueue.send(recovery, { contentType: "json" });
+      await options.recoveryQueue.send(recovery);
       return true;
     },
     async prepareOpen(command: {
@@ -166,9 +166,10 @@ export function createTicketLifecycle(options: {
       memberRoleIds: string[];
       answers?: TicketAnswer[];
     }): Promise<PrepareTicketOpenResult> {
-      const savedPanel = options.tickets.readTicketPanelConfigById
-        ? await options.tickets.readTicketPanelConfigById(command.guildId, command.panelId)
-        : await options.tickets.readTicketPanelConfig(command.guildId);
+      const savedPanel = await options.tickets.readTicketPanelConfigById(
+        command.guildId,
+        command.panelId,
+      );
       const savedType = savedPanel?.ticketTypes.find((entry) => entry.id === command.ticketTypeId);
       if (!savedPanel?.panelMessageId || !savedType || savedType.enabled === false) {
         return {
@@ -236,13 +237,7 @@ export function createTicketLifecycle(options: {
             deleteTicketInstance: (body) => options.tickets.deleteTicketInstance(body),
             updateTicketOpeningMessageId: (body) =>
               options.tickets.updateTicketOpeningMessageId(body),
-            ...(options.tickets.listMemberTicketHistory
-              ? {
-                  listMemberTicketHistory: options.tickets.listMemberTicketHistory.bind(
-                    options.tickets,
-                  ),
-                }
-              : {}),
+            listMemberTicketHistory: (body) => options.tickets.listMemberTicketHistory(body),
           },
           createAdapters(prepared),
           {
@@ -364,9 +359,10 @@ export function createTicketLifecycle(options: {
           message: "This ticket is already closed or missing.",
         };
       }
-      const panel = options.tickets.readTicketPanelConfigById
-        ? await options.tickets.readTicketPanelConfigById(command.guildId, ticket.panelId ?? "main")
-        : await options.tickets.readTicketPanelConfig(command.guildId);
+      const panel = await options.tickets.readTicketPanelConfigById(
+        command.guildId,
+        ticket.panelId ?? "main",
+      );
       if (!panel?.enableTicketClaiming) {
         return {
           ok: false,
@@ -416,9 +412,10 @@ export function createTicketLifecycle(options: {
       if (!ticket) {
         return { ok: false, code: "missing", message: "This Ticket is closed or missing." };
       }
-      const panel = options.tickets.readTicketPanelConfigById
-        ? await options.tickets.readTicketPanelConfigById(command.guildId, ticket.panelId ?? "main")
-        : await options.tickets.readTicketPanelConfig(command.guildId);
+      const panel = await options.tickets.readTicketPanelConfigById(
+        command.guildId,
+        ticket.panelId ?? "main",
+      );
       const ticketType = panel?.ticketTypes.find((entry) => entry.id === ticket.ticketTypeId);
       if (!ticketType?.participantManagementEnabled) {
         return {
@@ -567,9 +564,10 @@ export function createTicketLifecycle(options: {
       );
       if (!ticket)
         return { ok: false, code: "missing", message: "This Ticket is closed or missing." };
-      const panel = options.tickets.readTicketPanelConfigById
-        ? await options.tickets.readTicketPanelConfigById(command.guildId, ticket.panelId ?? "main")
-        : await options.tickets.readTicketPanelConfig(command.guildId);
+      const panel = await options.tickets.readTicketPanelConfigById(
+        command.guildId,
+        ticket.panelId ?? "main",
+      );
       const ticketType = panel?.ticketTypes.find((entry) => entry.id === ticket.ticketTypeId);
       if (!ticketType?.participantManagementEnabled) {
         return {
@@ -787,18 +785,24 @@ export function createTicketLifecycle(options: {
         status: "pending" as const,
         createdAtMs: command.nowMs,
       };
-      if (
-        options.tickets.claimTicketTemplateReply &&
-        !(await options.tickets.claimTicketTemplateReply(claim))
-      ) {
-        return { ok: true, ticket, template, duplicate: true };
+      let claimed: boolean;
+      try {
+        claimed = await options.tickets.claimTicketTemplateReply(claim);
+      } catch (error) {
+        console.error("Failed to claim Ticket Template Reply", error);
+        return {
+          ok: false,
+          code: "provider-failure",
+          message: "Failed to send this Ticket Template Reply.",
+        };
       }
+      if (!claimed) return { ok: true, ticket, template, duplicate: true };
       let delivered = false;
       try {
         const botMessageId = await adapters.deliver(ticket.channelId, template);
         delivered = true;
         try {
-          await options.tickets.completeTicketTemplateReply?.({
+          await options.tickets.completeTicketTemplateReply({
             interactionId: command.interactionId,
             botMessageId,
           });
@@ -813,7 +817,7 @@ export function createTicketLifecycle(options: {
         }
         return { ok: true, ticket, template };
       } catch (error) {
-        if (!delivered) await options.tickets.releaseTicketTemplateReply?.(command.interactionId);
+        if (!delivered) await options.tickets.releaseTicketTemplateReply(command.interactionId);
         console.error("Failed to send Ticket Template Reply", error);
         return {
           ok: false,
@@ -827,7 +831,7 @@ export function createTicketLifecycle(options: {
       recovery: TicketTemplateReplyRecovery,
     ): Promise<TicketTemplateReplyResult> {
       try {
-        await options.tickets.completeTicketTemplateReply?.({
+        await options.tickets.completeTicketTemplateReply({
           interactionId: recovery.interactionId,
           botMessageId: recovery.botMessageId,
         });
@@ -908,12 +912,10 @@ export function createTicketLifecycle(options: {
       adapters: Parameters<typeof closeTicket>[1],
       command: Omit<Parameters<typeof closeTicket>[2], "panel" | "isPremiumGuild">,
     ): Promise<CloseTicketResult> {
-      const panel = options.tickets.readTicketPanelConfigById
-        ? await options.tickets.readTicketPanelConfigById(
-            command.ticket.guildId,
-            command.ticket.panelId ?? "main",
-          )
-        : await options.tickets.readTicketPanelConfig(command.ticket.guildId);
+      const panel = await options.tickets.readTicketPanelConfigById(
+        command.ticket.guildId,
+        command.ticket.panelId ?? "main",
+      );
       if (!panel) {
         return {
           ok: false,
@@ -1063,11 +1065,8 @@ async function resolveEffectiveTicketConfiguration(
     ticketType: {
       ...ticketType,
       allowedCreatorRoleIds: [],
-      autoReplyEnabled: false,
-      autoReplyMessage: null,
       responseRules: [],
       defaultTicketLinkPlatform: null,
-      anonymousEnabled: false,
       anonymousSupportEnabled: false,
       staffDiscussionThreadEnabled: false,
       ticketHistoryPromptVisibility: "off",

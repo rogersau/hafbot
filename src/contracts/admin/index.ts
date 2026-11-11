@@ -66,14 +66,10 @@ import {
 } from "./player-count";
 import {
   getPlayerLink,
-  getSteamLink,
   publishPlayerLink,
-  publishSteamLink,
   savePlayerLink,
   setPlayerLinkEnabled,
-  saveSteamLink,
   syncPlayerLinkRoles,
-  syncSteamLinkRoles,
 } from "./player-link";
 import { billingContracts } from "./billing";
 import { crossCuttingContracts } from "./cross-cutting";
@@ -173,10 +169,6 @@ export const adminOperationContracts = [
   crossCuttingContracts.productAnalyticsPreferencePost,
   crossCuttingContracts.profileGet,
   crossCuttingContracts.profilePatch,
-  getSteamLink,
-  saveSteamLink,
-  publishSteamLink,
-  syncSteamLinkRoles,
   listClosedTickets,
   getTicketPanel,
   saveTicketPanel,

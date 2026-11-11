@@ -1,3 +1,4 @@
+import type { Cache } from "../src/runtime/discord-json-cache";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -80,12 +81,12 @@ test("admin guild directory reads bot guilds from KV on a fresh handler cache mi
     const handler = createAdminApiHandler({
       stores: createStores(),
       discordBotToken: "token-kv-read",
-      discordCacheKv: {
+      discordCache: {
         async get(key: string) {
           kvGets.push(key);
           return JSON.stringify([{ guildId: "guild-kv", name: "KV Guild" }]);
         },
-      } as unknown as KVNamespace,
+      } as unknown as Cache<string>,
     });
 
     const response = await handler(
@@ -109,7 +110,7 @@ test("admin guild directory refresh bypasses KV and updates cached bot guilds", 
   const originalConsoleInfo = console.info;
   const discordRequests: string[] = [];
   const kvGets: string[] = [];
-  const kvPuts: Array<{ key: string; value: string; options?: { expirationTtl?: number } }> = [];
+  const kvPuts: Array<{ key: string; value: string; options?: { ttlSeconds?: number } }> = [];
   const logs: unknown[][] = [];
   globalThis.fetch = async (input) => {
     discordRequests.push(String(input));
@@ -123,15 +124,15 @@ test("admin guild directory refresh bypasses KV and updates cached bot guilds", 
     const handler = createAdminApiHandler({
       stores: createStores(),
       discordBotToken: "token-kv-refresh",
-      discordCacheKv: {
+      discordCache: {
         async get(key: string) {
           kvGets.push(key);
           return JSON.stringify([{ guildId: "guild-kv", name: "KV Guild" }]);
         },
-        async put(key: string, value: string, options?: { expirationTtl?: number }) {
+        async put(key: string, value: string, options?: { ttlSeconds?: number }) {
           kvPuts.push({ key, value, options });
         },
-      } as unknown as KVNamespace,
+      } as unknown as Cache<string>,
     });
 
     const response = await handler(
@@ -158,7 +159,7 @@ test("admin guild directory refresh bypasses KV and updates cached bot guilds", 
         value: JSON.stringify([
           { guildId: "guild-refreshed", name: "Refreshed Guild", icon: null },
         ]),
-        options: { expirationTtl: 900 },
+        options: { ttlSeconds: 900 },
       },
     ]);
     assert.deepEqual(logs, [
@@ -189,7 +190,7 @@ test("admin guild directory returns cached KV guilds when Discord rate limits re
     const handler = createAdminApiHandler({
       stores: createStores(),
       discordBotToken: "token-kv-stale",
-      discordCacheKv: {
+      discordCache: {
         async get(key: string) {
           kvGets.push(key);
           return JSON.stringify([{ guildId: "guild-stale", name: "Stale Guild" }]);
@@ -197,7 +198,7 @@ test("admin guild directory returns cached KV guilds when Discord rate limits re
         async put() {
           throw new Error("should not update KV after rate limit");
         },
-      } as unknown as KVNamespace,
+      } as unknown as Cache<string>,
     });
 
     const response = await handler(
@@ -232,11 +233,11 @@ test("admin guild directory maps repeated Discord rate limits to a controlled er
     const handler = createAdminApiHandler({
       stores: createStores(),
       discordBotToken: "token-kv-rate-limited",
-      discordCacheKv: {
+      discordCache: {
         async get() {
           return null;
         },
-      } as unknown as KVNamespace,
+      } as unknown as Cache<string>,
     });
 
     const response = await handler(
@@ -253,7 +254,7 @@ test("admin guild directory maps repeated Discord rate limits to a controlled er
   }
 });
 
-test("admin Steam Link compatibility API stores custom links in Platform Link", async () => {
+test("admin Player Link API stores Steam custom links", async () => {
   let savedCustomLinks: PlatformLinkConfig["customLinks"] | null = null;
   const handler = createAdminApiHandler({
     stores: createStores({
@@ -265,11 +266,12 @@ test("admin Steam Link compatibility API stores custom links in Platform Link", 
   });
 
   const response = await handler(
-    new Request("https://example.com/admin/api/steam-link/config", {
+    new Request("https://example.com/admin/api/player-link/config", {
       method: "POST",
       body: JSON.stringify({
+        platform: "steam",
         guildId: "guild-1",
-        steamLinkedRoleId: null,
+        linkedRoleId: null,
         logChannelId: null,
         gameAppIds: ["221100"],
         whoisFields: ["CFTools"],
@@ -286,7 +288,7 @@ test("admin Steam Link compatibility API stores custom links in Platform Link", 
         allowRelink: true,
       }),
     }),
-    new URL("https://example.com/admin/api/steam-link/config"),
+    new URL("https://example.com/admin/api/player-link/config"),
   );
 
   assert.equal(response?.status, 200);
@@ -298,7 +300,7 @@ test("admin Steam Link compatibility API stores custom links in Platform Link", 
   ]);
 });
 
-test("admin Steam Link sync roles API returns sync counters", async () => {
+test("admin Player Link sync roles API returns sync counters", async () => {
   let syncedGuildId: string | null = null;
   const handler = createAdminApiHandler({
     stores: createStores(),
@@ -314,11 +316,11 @@ test("admin Steam Link sync roles API returns sync counters", async () => {
   });
 
   const response = await handler(
-    new Request("https://example.com/admin/api/steam-link/sync-roles", {
+    new Request("https://example.com/admin/api/player-link/sync-roles", {
       method: "POST",
-      body: JSON.stringify({ guildId: "guild-1" }),
+      body: JSON.stringify({ platform: "steam", guildId: "guild-1" }),
     }),
-    new URL("https://example.com/admin/api/steam-link/sync-roles"),
+    new URL("https://example.com/admin/api/player-link/sync-roles"),
   );
 
   assert.equal(response?.status, 200);
@@ -556,15 +558,16 @@ test("admin API authorization blocks delegated routes before downstream work", a
         expectedAuthorization: { mode: "write", guildId: "guild-1" },
       },
       {
-        request: new Request("https://example.com/admin/api/steam-link?guildId=guild-1"),
+        request: new Request("https://example.com/admin/api/player-link?guildId=guild-1"),
         expectedAuthorization: { mode: "read", guildId: "guild-1" },
       },
       {
-        request: new Request("https://example.com/admin/api/steam-link/config", {
+        request: new Request("https://example.com/admin/api/player-link/config", {
           method: "POST",
           body: JSON.stringify({
+            platform: "steam",
             guildId: "guild-1",
-            steamLinkedRoleId: null,
+            linkedRoleId: null,
             logChannelId: null,
             gameAppIds: ["221100"],
             panelTitle: "Link your Steam account",
@@ -763,11 +766,11 @@ test("guild admin role API validates input before authorization and storage", as
   assert.equal(invalidPostResponse?.status, 400);
   const invalidPostBody = (await invalidPostResponse?.json()) as {
     error: string;
-    issues: Array<{ path: string; message: string }>;
+    fieldIssues: Array<{ path: string; message: string }>;
   };
   assert.equal(invalidPostBody.error, "Invalid request body");
-  assert.equal(invalidPostBody.issues[0]?.path, "adminRoleId");
-  assert.equal(invalidPostBody.issues[0]?.message, "adminRoleId must be a Discord role ID");
+  assert.equal(invalidPostBody.fieldIssues[0]?.path, "adminRoleId");
+  assert.equal(invalidPostBody.fieldIssues[0]?.message, "adminRoleId must be a Discord role ID");
   assert.deepEqual(authorizationCalls, []);
   assert.deepEqual(storeCalls, []);
 });
@@ -792,9 +795,12 @@ test("ticket panel POST routes require guildId before delegated handling", async
     const response = await handler(request, new URL(request.url));
 
     assert.equal(response?.status, 400);
-    const body = (await response?.json()) as { error: string; issues?: Array<{ path: string }> };
+    const body = (await response?.json()) as {
+      error: string;
+      fieldIssues?: Array<{ path: string }>;
+    };
     assert.equal(body.error, "Invalid request body");
-    assert.ok(body.issues?.some((issue) => issue.path === "guildId"));
+    assert.ok(body.fieldIssues?.some((issue) => issue.path === "guildId"));
   }
 });
 
@@ -825,9 +831,9 @@ test("ticket panel POST routes reject invalid JSON before authorization or deleg
   );
 
   assert.equal(response?.status, 400);
-  const body = (await response?.json()) as { error: string; issues?: Array<{ code: string }> };
+  const body = (await response?.json()) as { error: string; fieldIssues?: Array<{ code: string }> };
   assert.ok(body.error.length > 0);
-  assert.ok(body.issues?.some((issue) => issue.code === "invalid_json"));
+  assert.ok(body.fieldIssues?.some((issue) => issue.code === "invalid_json"));
   assert.deepEqual(authorizationCalls, []);
   assert.deepEqual(storeCalls, []);
 });
@@ -956,10 +962,9 @@ function createTicketPanelConfig(overrides: Partial<TicketPanelConfig> = {}): Ti
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "ticket",
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
         responseRules: [],
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         questions: [],
       },

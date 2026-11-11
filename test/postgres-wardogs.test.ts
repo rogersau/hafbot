@@ -1,18 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolve } from "node:path";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresWardogsStore } from "../src/runtime/postgres/postgres-wardogs-store";
 import { WardogsService } from "../src/wardogs/service";
 import { createWebhookCredentialKeyRing } from "../src/security/webhook-credentials";
 import type { NetworkPolicy } from "../src/wardogs/model";
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 test(
-  "PostgreSQL WARDOGS migrations, encrypted targets, concurrent Guild limits and shared leases",
+  "PostgreSQL WARDOGS schema, encrypted targets, concurrent Guild limits and shared leases",
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     assert.ok(postgresUrl);
@@ -22,15 +18,11 @@ test(
       NODE_ENV: "test",
     });
     try {
-      await applyPostgresMigrations(
-        database,
-        await readPostgresMigrations(resolve("migrations/postgres")),
-      );
+      await initializePostgresSchema(database);
       const store = createPostgresWardogsStore(database);
       const guildId = crypto.randomUUID();
       const service = new WardogsService({
         store,
-        runtime: "portable",
         keyRing: () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) }),
         transport: async () => {
           assert.fail("network defaults off");
@@ -99,17 +91,13 @@ test(
     const serverId = crypto.randomUUID();
     const origin = `https://${crypto.randomUUID()}.example.com`;
     try {
-      await applyPostgresMigrations(
-        database,
-        await readPostgresMigrations(resolve("migrations/postgres")),
-      );
+      await initializePostgresSchema(database);
       const policy: NetworkPolicy = {
         enabled: true,
         origins: [
           {
             id: "synthetic",
             origin,
-            runtime: "portable",
             securePathEvidence: "Synthetic recording transport",
           },
         ],
@@ -121,7 +109,6 @@ test(
         new WardogsService({
           store: createPostgresWardogsStore(database),
           policy,
-          runtime: "portable",
           keyRing: () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) }),
           now: () => now,
           transport: async (url) => {

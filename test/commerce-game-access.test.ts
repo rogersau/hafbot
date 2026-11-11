@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
-import { createCloudflareGameAccessStore } from "../src/runtime/commerce/game-access-runtime";
+import { createSqliteGameAccessStore } from "./support/sqlite/runtime/commerce/game-access-runtime";
 import {
   CommerceGameAccessService,
   type GameAccessTruth,
@@ -35,7 +35,7 @@ function paid(overrides: Partial<PaidRoleEntitlementState> = {}): PaidRoleEntitl
 }
 async function setup() {
   const fixture = createProductionRuntimeStores();
-  const store = createCloudflareGameAccessStore(fixture.database.d1);
+  const store = createSqliteGameAccessStore(fixture.database.d1);
   let now = 1e9;
   const control = {
     ready: true,
@@ -413,7 +413,6 @@ test("the narrow WDRCON adapter maps only reserved-list/add/remove and rejects w
     origin: {
       id: "fixture",
       origin: "https://fixture.example",
-      runtime: "cloudflare" as const,
       securePathEvidence: "Synthetic transport only",
     },
     secret: "synthetic-password",
@@ -459,130 +458,126 @@ test("the narrow WDRCON adapter maps only reserved-list/add/remove and rejects w
   ]);
 });
 
-for (const runtime of ["cloudflare", "portable"] as const)
-  test(`${runtime}: WARDOGS reserved grants stay disabled independently of approved cleanup`, async (t) => {
-    const { WardogsService } = await import("../src/wardogs/service");
-    const { createCloudflareWardogsStore } =
-      await import("../src/runtime/cloudflare-wardogs-store");
-    const { createWebhookCredentialKeyRing } = await import("../src/security/webhook-credentials");
-    const fixture = createProductionRuntimeStores();
-    t.after(() => fixture.close());
-    const store = createCloudflareWardogsStore(fixture.database.d1);
-    let now = 1e6;
-    const policy: import("../src/wardogs/model").NetworkPolicy = {
-      enabled: true,
-      origins: [
-        {
-          id: "fixture",
-          origin: "https://fixture.example",
-          runtime,
-          securePathEvidence: "Synthetic only",
-        },
-      ],
-      approvals: [],
-    };
-    const calls: string[] = [];
-    const service = new WardogsService({
-      store,
-      policy,
-      runtime,
-      mutationsEnabled: true,
-      reservedAccessEnabled: true,
-      keyRing: () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) }),
-      now: () => now,
-      wait: async (ms) => {
-        now += ms;
-      },
-      transport: async (url, init) => {
-        calls.push(init.method!);
-        return Response.json(
-          url.endsWith("capabilities")
-            ? { routes: ["GET /v1/status"] }
-            : { players: { current: 0, max: 64 } },
-        );
-      },
-    });
-    let target = await service.create("guild", "Fixture", "fixture");
-    target = await service.change({
-      guildId: "guild",
-      targetId: target.id,
-      generation: target.generation,
-      enabled: true,
-      commerceEnabled: true,
-      secret: "synthetic-password",
-    });
-    policy.approvals = [
+test("WARDOGS reserved grants stay disabled independently of approved cleanup", async (t) => {
+  const { WardogsService } = await import("../src/wardogs/service");
+  const { createSqliteWardogsStore } =
+    await import("./support/sqlite/runtime/sqlite-wardogs-store");
+  const { createWebhookCredentialKeyRing } = await import("../src/security/webhook-credentials");
+  const fixture = createProductionRuntimeStores();
+  t.after(() => fixture.close());
+  const store = createSqliteWardogsStore(fixture.database.d1);
+  let now = 1e6;
+  const policy: import("../src/wardogs/model").NetworkPolicy = {
+    enabled: true,
+    origins: [
       {
-        targetId: target.id,
-        generation: target.generation,
-        originRef: "fixture",
-        origin: policy.origins[0].origin,
-        reservedContract: {
-          physicalTargetId: "physical",
-          evidence: "Synthetic finite-entry fixture only",
-          completeList: true,
-          capacityMeaning: "saleable-entries",
-          entryCapacity: 2,
-        },
+        id: "fixture",
+        origin: "https://fixture.example",
+        securePathEvidence: "Synthetic only",
       },
-    ];
-    await service.verify({
-      guildId: "guild",
-      targetId: target.id,
-      generation: target.generation,
-      roster: false,
-    });
-    now += 5000;
-    calls.length = 0;
-    await assert.rejects(
-      service.accessRequest(
-        { guildId: "guild", targetId: target.id, generation: target.generation },
-        { kind: "reserved-mutation", action: "grant", steamId: SUBJECT },
-      ),
-    );
-    assert.equal(calls.length, 0);
-    await service.accessRequest(
-      { guildId: "guild", targetId: target.id, generation: target.generation },
-      { kind: "reserved-mutation", action: "remove", steamId: SUBJECT },
-    );
-    assert.deepEqual(calls, ["DELETE"]);
-    const disabled = new WardogsService({
-      store,
-      policy,
-      runtime,
-      keyRing: () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) }),
-      transport: async () => {
-        assert.fail("Reserved network defaults off at the side-effect boundary");
-      },
-    });
-    for (const request of [
-      { kind: "reserved-list" } as const,
-      { kind: "reserved-mutation", action: "remove", steamId: SUBJECT } as const,
-    ]) {
-      await assert.rejects(
-        disabled.accessRequest(
-          { guildId: "guild", targetId: target.id, generation: target.generation },
-          request,
-        ),
-        { code: "disabled" },
+    ],
+    approvals: [],
+  };
+  const calls: string[] = [];
+  const service = new WardogsService({
+    store,
+    policy,
+    mutationsEnabled: true,
+    reservedAccessEnabled: true,
+    keyRing: () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) }),
+    now: () => now,
+    wait: async (ms) => {
+      now += ms;
+    },
+    transport: async (url, init) => {
+      calls.push(init.method!);
+      return Response.json(
+        url.endsWith("capabilities")
+          ? { routes: ["GET /v1/status"] }
+          : { players: { current: 0, max: 64 } },
       );
-    }
-    await service.change({
-      guildId: "guild",
+    },
+  });
+  let target = await service.create("guild", "Fixture", "fixture");
+  target = await service.change({
+    guildId: "guild",
+    targetId: target.id,
+    generation: target.generation,
+    enabled: true,
+    commerceEnabled: true,
+    secret: "synthetic-password",
+  });
+  policy.approvals = [
+    {
       targetId: target.id,
       generation: target.generation,
-      disconnect: true,
-    });
-    now += 6000;
+      originRef: "fixture",
+      origin: policy.origins[0].origin,
+      reservedContract: {
+        physicalTargetId: "physical",
+        evidence: "Synthetic finite-entry fixture only",
+        completeList: true,
+        capacityMeaning: "saleable-entries",
+        entryCapacity: 2,
+      },
+    },
+  ];
+  await service.verify({
+    guildId: "guild",
+    targetId: target.id,
+    generation: target.generation,
+    roster: false,
+  });
+  now += 5000;
+  calls.length = 0;
+  await assert.rejects(
+    service.accessRequest(
+      { guildId: "guild", targetId: target.id, generation: target.generation },
+      { kind: "reserved-mutation", action: "grant", steamId: SUBJECT },
+    ),
+  );
+  assert.equal(calls.length, 0);
+  await service.accessRequest(
+    { guildId: "guild", targetId: target.id, generation: target.generation },
+    { kind: "reserved-mutation", action: "remove", steamId: SUBJECT },
+  );
+  assert.deepEqual(calls, ["DELETE"]);
+  const disabled = new WardogsService({
+    store,
+    policy,
+    keyRing: () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) }),
+    transport: async () => {
+      assert.fail("Reserved network defaults off at the side-effect boundary");
+    },
+  });
+  for (const request of [
+    { kind: "reserved-list" } as const,
+    { kind: "reserved-mutation", action: "remove", steamId: SUBJECT } as const,
+  ]) {
     await assert.rejects(
-      service.accessRequest(
+      disabled.accessRequest(
         { guildId: "guild", targetId: target.id, generation: target.generation },
-        { kind: "reserved-list" },
+        request,
       ),
       { code: "disabled" },
     );
-    assert.deepEqual(calls, ["DELETE"]);
+  }
+  await service.change({
+    guildId: "guild",
+    targetId: target.id,
+    generation: target.generation,
+    disconnect: true,
   });
+  now += 6000;
+  await assert.rejects(
+    service.accessRequest(
+      { guildId: "guild", targetId: target.id, generation: target.generation },
+      { kind: "reserved-list" },
+    ),
+    { code: "disabled" },
+  );
+  assert.deepEqual(calls, ["DELETE"]);
+});
 
 test("purchased destinations cannot be redirected, even by a racing configuration write", async (t) => {
   const h = await setup();

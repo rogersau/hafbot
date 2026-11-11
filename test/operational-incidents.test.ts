@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCloudflareOperationalIncidentStore } from "../src/runtime/cloudflare-operational-incident-store";
+import { createSqliteOperationalIncidentStore } from "./support/sqlite/runtime/sqlite-operational-incident-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
-import {
-  createMemoryOperationalIncidentStore,
-  OperationalIncidentService,
-} from "../src/operations/incidents";
+import { OperationalIncidentService } from "../src/operations/incidents";
 
 const key = {
   feature: "player-count" as const,
@@ -31,8 +28,10 @@ function failure(service: OperationalIncidentService, observationId: string, now
   });
 }
 
-test("operational incidents deduplicate observations and preserve history across recovery", async () => {
-  const service = new OperationalIncidentService(createMemoryOperationalIncidentStore());
+test("operational incidents deduplicate observations and preserve history across recovery", async (t) => {
+  const database = new SqliteD1Database();
+  t.after(() => database.close());
+  const service = new OperationalIncidentService(createSqliteOperationalIncidentStore(database.d1));
   const first = await failure(service, "attempt-1", 100);
   const duplicate = await failure(service, "attempt-1", 200);
   assert.equal(duplicate.occurrenceCount, 1);
@@ -53,8 +52,10 @@ test("operational incidents deduplicate observations and preserve history across
   assert.equal(reopened.firstSeenAtMs, 100);
 });
 
-test("incident definitions reject arbitrary or secret-bearing safe arguments", async () => {
-  const service = new OperationalIncidentService(createMemoryOperationalIncidentStore());
+test("incident definitions reject arbitrary or secret-bearing safe arguments", async (t) => {
+  const database = new SqliteD1Database();
+  t.after(() => database.close());
+  const service = new OperationalIncidentService(createSqliteOperationalIncidentStore(database.d1));
   await assert.rejects(
     service.observeFailure({
       guildId: "guild_1",
@@ -81,7 +82,7 @@ test("incident definitions reject arbitrary or secret-bearing safe arguments", a
 test("durable incident history survives service reconstruction and duplicate failure after resolution", async (t) => {
   const database = new SqliteD1Database();
   t.after(() => database.close());
-  const store = createCloudflareOperationalIncidentStore(database.d1);
+  const store = createSqliteOperationalIncidentStore(database.d1);
   const first = await failure(new OperationalIncidentService(store), "failure-1", 100);
   const recovered = new OperationalIncidentService(store);
   await recovered.observeHealthy({
@@ -112,7 +113,7 @@ test("failed incident history checkpoint leaves committed failure and replay cou
   t.after(() => database.close());
   database.execRaw(`CREATE TRIGGER fail_incident_history BEFORE INSERT ON operational_incident_events
     BEGIN SELECT RAISE(ABORT, 'history unavailable'); END;`);
-  const store = createCloudflareOperationalIncidentStore(database.d1);
+  const store = createSqliteOperationalIncidentStore(database.d1);
   const service = new OperationalIncidentService(store);
   await assert.rejects(failure(service, "failure-1", 100));
   const [committed] = await service.list({ guildId: "guild_1" });
@@ -135,7 +136,7 @@ test("failed incident history checkpoint leaves committed failure and replay cou
 test("failed resolution history checkpoint leaves resolved state and healthy retry does not repair history", async (t) => {
   const database = new SqliteD1Database();
   t.after(() => database.close());
-  const store = createCloudflareOperationalIncidentStore(database.d1);
+  const store = createSqliteOperationalIncidentStore(database.d1);
   const service = new OperationalIncidentService(store);
   const first = await failure(service, "failure-1", 100);
   database.execRaw(`CREATE TRIGGER fail_incident_history BEFORE INSERT ON operational_incident_events

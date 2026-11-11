@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { act } from "react";
@@ -158,7 +159,7 @@ test("Reaction Roles retains a saved draft and displays a publish failure so it 
           forumChannels: [],
         });
       return String(input).endsWith("/publish")
-        ? Response.json({ error: "Check the bot's Add Reactions permission." }, { status: 409 })
+        ? adminErrorResponse("Check the bot's Add Reactions permission.", 409)
         : Response.json({ panel });
     };
     await render(

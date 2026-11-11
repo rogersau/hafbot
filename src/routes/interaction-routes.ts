@@ -11,11 +11,12 @@ import type {
   RuntimeAppOptions,
 } from "../runtime/app-types";
 import type { FeatureFlags } from "../runtime/features";
+import type { InteractionServices } from "../runtime/handler-services";
 import type { WorkspaceStore } from "../runtime/workspace-store";
-import type { ServiceFactory } from "../runtime/service-factory";
+import type { InteractionHandlerOptions } from "../runtime/interaction-handler";
 import type { ComponentIdSigner } from "../security/component-id-signer";
 
-export type InteractionRouteServices = Partial<ServiceFactory>;
+export type InteractionRouteServices = InteractionServices;
 
 export interface InteractionRouteOptions {
   communityTools?: import("../community-tools/service").CommunityToolsService;
@@ -39,32 +40,9 @@ export interface InteractionRouteOptions {
   workspaceStore?: WorkspaceStore;
   waitUntil?: (promise: Promise<unknown>) => void;
   componentIdSigner?: ComponentIdSigner;
-  componentIdLegacyUntilMs?: number;
-  memberVerificationPanelLegacyUntilMs?: number;
   handleInteractionRequest: (
     request: Request,
-    options: Pick<
-      InteractionRouteOptions,
-      | "discordPublicKey"
-      | "discordBotToken"
-      | "selfHostedSite"
-      | "hafAdminGuildId"
-      | "hafAdminRoleId"
-      | "verifyDiscordRequest"
-      | "stores"
-      | "gateway"
-      | "ticketTranscriptBlobs"
-      | "ticketTranscriptCapabilities"
-      | "evidenceVaultBlobs"
-      | "attendanceObservations"
-      | "services"
-      | "features"
-      | "workspaceStore"
-      | "waitUntil"
-      | "componentIdSigner"
-      | "componentIdLegacyUntilMs"
-      | "memberVerificationPanelLegacyUntilMs"
-    >,
+    options: InteractionHandlerOptions,
   ) => Promise<Response>;
 }
 

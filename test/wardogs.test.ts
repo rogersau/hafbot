@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { createTestDatabase } from "./support/sqlite-d1-database";
-import { createCloudflareWardogsStore } from "../src/runtime/cloudflare-wardogs-store";
+import { createSqliteWardogsStore } from "./support/sqlite/runtime/sqlite-wardogs-store";
 import {
   createWebhookCredentialKeyRing,
   encryptWebhookCredential,
@@ -22,13 +22,12 @@ const fixture = JSON.parse(readFileSync("test/fixtures/wardogs/reads.json", "utf
 const origin: ApprovedOrigin = {
   id: "synthetic",
   origin: "https://wardogs.example.com",
-  runtime: "cloudflare",
   securePathEvidence: "Synthetic recording transport only",
 };
 const keyRing = () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) });
 async function setup() {
   const database = await createTestDatabase();
-  const store = createCloudflareWardogsStore(database.d1);
+  const store = createSqliteWardogsStore(database.d1);
   const calls: { url: string; init: RequestInit }[] = [];
   const clock = { now: 1_000_000 };
   let responder = (operation: ReadOperation) => Response.json(fixture[operation]);
@@ -37,7 +36,6 @@ async function setup() {
     store,
     keyRing,
     policy,
-    runtime: "cloudflare",
     now: () => clock.now,
     wait: async (ms) => {
       clock.now += ms;
@@ -160,7 +158,6 @@ test("Ban Cases and reserved access retain independent opt-ins and share one ori
       store: f.store,
       keyRing,
       policy,
-      runtime: "cloudflare",
       mutationsEnabled: true,
       reservedAccessEnabled: true,
       commerceGrantsEnabled: true,
@@ -327,7 +324,7 @@ test("WARDOGS rejects every disabled, unapproved, ambiguous and forbidden origin
     await assert.rejects(f.service.read({ ...f.input, operation: "status" }), {
       code: "unapproved_target",
     });
-    const disabled = new WardogsService({ store: f.store, keyRing, runtime: "portable" });
+    const disabled = new WardogsService({ store: f.store, keyRing });
     await assert.rejects(disabled.read({ ...f.input, operation: "status" }), { code: "disabled" });
     assert.equal(f.calls.length, 0);
     assert.equal(wardogsNetworkPolicy({ WARDOGS_NETWORK_ENABLED: "true" }).enabled, false);
@@ -478,7 +475,7 @@ test("WARDOGS authentication suppression and origin-wide Retry-After survive ser
     });
     f.clock.now += 60_000;
     assert.equal(
-      await createCloudflareWardogsStore(f.database.d1).claim(
+      await createSqliteWardogsStore(f.database.d1).claim(
         origin.origin,
         "another",
         f.clock.now,
@@ -602,7 +599,6 @@ test("WARDOGS discards in-flight results after disconnect", async () => {
       store: f.store,
       keyRing,
       policy: f.policy,
-      runtime: "cloudflare",
       now: () => f.clock.now,
       transport: () => {
         started();

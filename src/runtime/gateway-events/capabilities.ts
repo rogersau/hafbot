@@ -1,35 +1,19 @@
+import { type GatewayCommerceLifecycle } from "../gateway-commerce-lifecycle";
+
+import type { WhiteLabelBotStore, GuildServiceSuspensionStore } from "../contracts";
+
 import type { GuildResourceValidator } from "../../discord/guild-resource-validator";
 import type { CreateChannelMessageInput } from "../../discord/messages";
 import type { Env } from "../../env";
 import { withDiscordE2eActors } from "../discord-e2e-actors";
 import { isRecord } from "../../unknown-parse";
-import { createCloudflareWhiteLabelBotStore } from "../cloudflare-white-label-bot-store";
-import { createCloudflareBlocklistStore } from "../cloudflare-blocklist-store";
-import { createCloudflareGuildAuditLogStore } from "../cloudflare-guild-audit-log-store";
-import { createCloudflareGuildEntitlementStore } from "../cloudflare-guild-entitlement-store";
-import { createCloudflareGuildRbacStore } from "../cloudflare-guild-rbac-store";
-import { createCloudflareGuildServiceSuspensionStore } from "../cloudflare-guild-service-suspension-store";
-import { createCloudflareKnownGuildStore } from "../cloudflare-known-guild-store";
-import { createCloudflareProductAnalyticsPreferenceStore } from "../cloudflare-product-analytics-preference-store";
-import { createCloudflareLfgStore } from "../cloudflare-lfg-store";
-import { createCloudflareClanStore } from "../cloudflare-clan-store";
-import { createCloudflareManagedMessageStore } from "../cloudflare-managed-message-store";
-import { createCloudflareMemberVerificationStore } from "../cloudflare-member-verification-store";
-import { createCloudflareMentionProtectionStore } from "../cloudflare-mention-protection-store";
-import { createCloudflarePlatformLinkStore } from "../cloudflare-platform-link-store";
-import { createCloudflareReactionLimitStore } from "../cloudflare-reaction-limit-store";
-import { createCloudflareReactionRoleStore } from "../cloudflare-reaction-role-store";
-import { createCloudflareTicketStore } from "../cloudflare-ticket-store";
-import { createCloudflareTimedRoleStore } from "../cloudflare-timed-role-store";
-import { createCloudflareSuggestionStore } from "../cloudflare-suggestion-store";
-import { createCloudflareServerLevelStore } from "../cloudflare-server-level-store";
-import { createCloudflareWebhookCredentialStore } from "../../security/webhook-credentials/cloudflare-store";
+
 import { createGuildBrandingResolver } from "../guild-branding";
 import {
   createGatewayEventOperationRunner,
-  createGatewayEventOperationStore,
   deriveGatewayOperationNonce,
   type GatewayEventOperationRunner,
+  type GatewayEventOperationStore,
 } from "../gateway-event-idempotency";
 import { parseFeatureFlags } from "../features";
 import { createMentionProtectionMessageDependencies } from "../mention-protection-runtime";
@@ -54,7 +38,7 @@ import {
 import { addGuildMemberRole, removeGuildMemberRole } from "../../discord/members";
 import { deleteChannel } from "../../discord/messages";
 import { postClanAuditEvent, postMemberAuditEvent } from "../../services/guild-audit-log-service";
-import { createHafDatabaseCapability } from "../haf-database-capability";
+
 import {
   createEnvironmentProductAnalytics,
   withGuildAnalyticsPreference,
@@ -67,25 +51,22 @@ import {
   type MemberVerificationService,
 } from "../../services/member-verification-service";
 
-export interface GatewayEventCapabilityOverrides {
+export interface GatewayEventDependencies {
   guildResources?: GuildResourceValidator;
   waitUntil?: (promise: Promise<unknown>) => void;
-  stores?: GatewayEventStores;
+  stores: GatewayEventStores;
+  operationStore: GatewayEventOperationStore;
+  commerceLifecycle?: GatewayCommerceLifecycle;
 }
 
 export async function createGatewayEventCapabilities(
   envelope: GatewayEventEnvelope,
   env: Env,
   logger: GatewayEventQueueLogger,
-  overrides: GatewayEventCapabilityOverrides = {},
+  dependencies: GatewayEventDependencies,
 ): Promise<GatewayEventCapabilities | null> {
-  const database = env.HAF_DB ? createHafDatabaseCapability(env.HAF_DB) : undefined;
-  const hafDb = database?.binding;
-  const whiteLabelStore =
-    overrides.stores?.whiteLabel ?? (hafDb ? createCloudflareWhiteLabelBotStore(hafDb) : undefined);
-  const guildServiceSuspensionStore = hafDb
-    ? createCloudflareGuildServiceSuspensionStore(hafDb)
-    : undefined;
+  const { whiteLabel: whiteLabelStore, guildServiceSuspensions: guildServiceSuspensionStore } =
+    dependencies.stores;
   if (
     await shouldSuppressStandardBotEnvelope(envelope, whiteLabelStore, guildServiceSuspensionStore)
   )
@@ -104,70 +85,39 @@ export async function createGatewayEventCapabilities(
       envelope.botUserId ?? env.BOT_USER_ID,
     );
   const discord = actorView(
-    createGatewayDiscordCapabilities(discordBotToken, overrides.guildResources),
+    createGatewayDiscordCapabilities(discordBotToken, dependencies.guildResources),
   );
-  const stores =
-    overrides.stores ??
-    (hafDb
-      ? {
-          audit: createCloudflareGuildAuditLogStore(hafDb),
-          blocklist: createCloudflareBlocklistStore(hafDb, env.BOT_USER_ID),
-          entitlement: createCloudflareGuildEntitlementStore(hafDb, env.HAF_DEPLOYMENT_MODE),
-          guildRbac: createCloudflareGuildRbacStore(hafDb),
-          knownGuild: createCloudflareKnownGuildStore(hafDb),
-          productAnalyticsPreferences: createCloudflareProductAnalyticsPreferenceStore(hafDb),
-          lfg: createCloudflareLfgStore(hafDb),
-          clan: createCloudflareClanStore(hafDb),
-          managedMessage: createCloudflareManagedMessageStore(hafDb),
-          memberVerification: createCloudflareMemberVerificationStore(hafDb),
-          mentionProtection: createCloudflareMentionProtectionStore(hafDb),
-          platformLink: createCloudflarePlatformLinkStore(hafDb),
-          reactionLimit: createCloudflareReactionLimitStore(hafDb),
-          reactionRole: createCloudflareReactionRoleStore(hafDb, {
-            guildId: env.HAF_ADMIN_GUILD_ID?.trim(),
-            roleIds: [env.HAF_ADMIN_ROLE_ID, env.BILLING_SUPPORT_ROLE_ID],
-          }),
-          ticket: createCloudflareTicketStore(hafDb),
-          timedRole: createCloudflareTimedRoleStore(hafDb),
-          whiteLabel: whiteLabelStore!,
-          suggestion: createCloudflareSuggestionStore(hafDb),
-          serverLevel: createCloudflareServerLevelStore(hafDb),
-          webhookCredential: createCloudflareWebhookCredentialStore(hafDb),
-        }
-      : null);
-  const clanService = stores
-    ? new ClanService(
-        stores.clan,
-        {
-          createCategory: ({ guildId, name }) => createClanCategory(guildId, name, discordBotToken),
-          createRole: ({ guildId, name }) => createClanRole(guildId, name, discordBotToken),
-          createTextChannel: (input) => createClanTextChannel(input, discordBotToken),
-          createVoiceChannel: (input) => createClanVoiceChannel(input, discordBotToken),
-          addMemberRole: (guildId, userId, roleId) =>
-            addGuildMemberRole(guildId, userId, roleId, discordBotToken),
-          removeMemberRole: (guildId, userId, roleId) =>
-            removeGuildMemberRole(guildId, userId, roleId, discordBotToken),
-          deleteChannel: (channelId) => deleteChannel(channelId, discordBotToken),
-          deleteRole: (guildId, roleId) => deleteClanRole(guildId, roleId, discordBotToken),
-          setClanArchivedPermissions: (input) => setClanArchivedPermissions(input, discordBotToken),
-          inspectClanResources: (input) => inspectClanResources(input, discordBotToken),
-        },
-        {
-          getTier: async (guildId) => (await stores.entitlement.readGuildEntitlement(guildId)).tier,
-        },
-        envelope.botUserId ?? env.BOT_USER_ID ?? "",
-        Date.now,
-        () => crypto.randomUUID(),
-        (event) => postClanAuditEvent(event, stores.audit, discordBotToken),
-      )
-    : null;
-  const preferenceAwareProductAnalytics = stores
-    ? withGuildAnalyticsPreference(createEnvironmentProductAnalytics(env), (guildId) =>
-        stores.productAnalyticsPreferences.readEnabled(guildId),
-      )
-    : createEnvironmentProductAnalytics(env);
+  const stores = dependencies.stores;
+  const clanService = new ClanService(
+    stores.clan,
+    {
+      createCategory: ({ guildId, name }) => createClanCategory(guildId, name, discordBotToken),
+      createRole: ({ guildId, name }) => createClanRole(guildId, name, discordBotToken),
+      createTextChannel: (input) => createClanTextChannel(input, discordBotToken),
+      createVoiceChannel: (input) => createClanVoiceChannel(input, discordBotToken),
+      addMemberRole: (guildId, userId, roleId) =>
+        addGuildMemberRole(guildId, userId, roleId, discordBotToken),
+      removeMemberRole: (guildId, userId, roleId) =>
+        removeGuildMemberRole(guildId, userId, roleId, discordBotToken),
+      deleteChannel: (channelId) => deleteChannel(channelId, discordBotToken),
+      deleteRole: (guildId, roleId) => deleteClanRole(guildId, roleId, discordBotToken),
+      setClanArchivedPermissions: (input) => setClanArchivedPermissions(input, discordBotToken),
+      inspectClanResources: (input) => inspectClanResources(input, discordBotToken),
+    },
+    {
+      getTier: async (guildId) => (await stores.entitlement.readGuildEntitlement(guildId)).tier,
+    },
+    envelope.botUserId ?? env.BOT_USER_ID ?? "",
+    Date.now,
+    () => crypto.randomUUID(),
+    (event) => postClanAuditEvent(event, stores.audit, discordBotToken),
+  );
+  const preferenceAwareProductAnalytics = withGuildAnalyticsPreference(
+    createEnvironmentProductAnalytics(env),
+    (guildId) => stores.productAnalyticsPreferences.readEnabled(guildId),
+  );
   const features = parseFeatureFlags(env);
-  const operations = createEnvelopeOperationRunner(envelope, env, logger);
+  const operations = createEnvelopeOperationRunner(envelope, logger, dependencies.operationStore);
   const memberVerificationService = createGatewayMemberVerificationService({
     envelope,
     botEnv,
@@ -181,21 +131,20 @@ export async function createGatewayEventCapabilities(
     botEnv,
     features,
     operations,
+    commerceLifecycle: dependencies.commerceLifecycle ?? null,
     discord,
     standardDiscord:
       discordBotToken === env.DISCORD_BOT_TOKEN
         ? discord
         : actorView(
-            createGatewayDiscordCapabilities(env.DISCORD_BOT_TOKEN, overrides.guildResources),
+            createGatewayDiscordCapabilities(env.DISCORD_BOT_TOKEN, dependencies.guildResources),
           ),
-    mentionProtection: stores
-      ? createMentionProtectionMessageDependencies(botEnv, stores, discord)
-      : null,
+    mentionProtection: createMentionProtectionMessageDependencies(botEnv, stores, discord),
     stores,
     clanService,
     memberVerificationService,
-    productAnalytics: overrides.waitUntil
-      ? withProductAnalyticsWaitUntil(preferenceAwareProductAnalytics, overrides.waitUntil)
+    productAnalytics: dependencies.waitUntil
+      ? withProductAnalyticsWaitUntil(preferenceAwareProductAnalytics, dependencies.waitUntil)
       : preferenceAwareProductAnalytics,
     resolveBotDisplayName: (guildId) => branding.resolveBotDisplayName(guildId),
     resolveFooterText: (guildId) => branding.resolveFooterText(guildId),
@@ -206,13 +155,13 @@ function createGatewayMemberVerificationService(input: {
   envelope: GatewayEventEnvelope;
   botEnv: Env;
   features: ReturnType<typeof parseFeatureFlags>;
-  stores: GatewayEventStores | null;
+  stores: GatewayEventStores;
   discord: ReturnType<typeof createGatewayDiscordCapabilities>;
   branding: ReturnType<typeof createGuildBrandingResolver>;
 }): MemberVerificationService | null {
   const { envelope, botEnv, features, stores, discord, branding } = input;
   const guildId = extractGatewayGuildId(envelope);
-  if (envelope.type !== "GUILD_MEMBER_ADD" || !features.memberVerification || !stores || !guildId) {
+  if (envelope.type !== "GUILD_MEMBER_ADD" || !features.memberVerification || !guildId) {
     return null;
   }
 
@@ -299,26 +248,12 @@ export function withGatewayMessageNonce(
 
 export function createEnvelopeOperationRunner(
   envelope: GatewayEventEnvelope,
-  env: Env,
   logger: GatewayEventQueueLogger,
+  operationStore: GatewayEventOperationStore,
 ): GatewayEventOperationRunner {
-  if (!env.HAF_DB) {
-    return {
-      async run(_handlerKey, operation) {
-        await operation();
-        return true;
-      },
-      async runResult(_handlerKey, operation) {
-        return operation();
-      },
-      async hasStarted() {
-        return false;
-      },
-    };
-  }
   return createGatewayEventOperationRunner({
     eventKey: envelope.eventKey,
-    store: createGatewayEventOperationStore(env.HAF_DB),
+    store: operationStore,
     emit(event) {
       logger.info?.("gateway_event_idempotency", event);
     },
@@ -327,17 +262,15 @@ export function createEnvelopeOperationRunner(
 
 async function shouldSuppressStandardBotEnvelope(
   envelope: GatewayEventEnvelope,
-  whiteLabelStore: ReturnType<typeof createCloudflareWhiteLabelBotStore> | undefined,
-  guildServiceSuspensionStore:
-    | ReturnType<typeof createCloudflareGuildServiceSuspensionStore>
-    | undefined,
+  whiteLabelStore: WhiteLabelBotStore,
+  guildServiceSuspensionStore: GuildServiceSuspensionStore,
 ): Promise<boolean> {
-  if (!whiteLabelStore || envelope.botIdentityId !== "standard") return false;
+  if (envelope.botIdentityId !== "standard") return false;
   const guildId = extractGatewayGuildId(envelope);
   if (!guildId) return false;
   if (
     envelope.type === "GUILD_CREATE" &&
-    (await guildServiceSuspensionStore?.readActiveSuspension(guildId))
+    (await guildServiceSuspensionStore.readActiveSuspension(guildId))
   ) {
     return false;
   }
@@ -348,7 +281,7 @@ async function shouldSuppressStandardBotEnvelope(
 async function resolveGatewayDiscordBotToken(
   envelope: GatewayEventEnvelope,
   env: Env,
-  whiteLabelStore: ReturnType<typeof createCloudflareWhiteLabelBotStore> | undefined,
+  whiteLabelStore: WhiteLabelBotStore,
 ): Promise<string> {
   const botIdentityId = envelope.botIdentityId?.trim();
   if (!botIdentityId || botIdentityId === "standard") return env.DISCORD_BOT_TOKEN;
@@ -372,9 +305,7 @@ async function resolveGatewayDiscordBotToken(
       "White-Label Bot gateway identity does not match the event Guild.",
     );
   }
-  if (!whiteLabelStore) {
-    throw new QueueTerminalError("missing_haf_db", "White-Label Bot routing requires HAF_DB.");
-  }
+
   const bot = await whiteLabelStore.readWhiteLabelBot(guildId);
   if (!bot || bot.status !== "active") {
     throw new QueueTerminalError(

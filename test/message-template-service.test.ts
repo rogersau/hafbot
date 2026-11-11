@@ -13,7 +13,7 @@ async function createHarness(tier: "free" | "premium" = "free") {
   const fixture = await createProductionRuntimeStores();
   if (tier !== "free") {
     fixture.database.execRaw(
-      `INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', '${tier}', '${tier}', 1)`,
+      `INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', '${tier}', 1)`,
     );
   }
   const service = new MessageTemplateService({

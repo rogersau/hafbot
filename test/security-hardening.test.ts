@@ -1,3 +1,4 @@
+import type { WebhookIngressGuardNamespace } from "../src/runtime/contracts/webhook-ingress-guard";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -18,7 +19,6 @@ import {
   PUBLIC_INGRESS_POLICIES,
 } from "../src/runtime/public-ingress-policy";
 import { handlePublicWebhookIngress } from "../src/runtime/public-webhook-ingress";
-import type { WebhookIngressGuardDO } from "../src/durable-objects/webhook-ingress-guard";
 import { WebhookProxyNotFoundError } from "../src/services/webhook-proxy-service";
 
 test("evidence media capabilities are scoped, expiring, and tamper resistant", async () => {
@@ -184,7 +184,7 @@ test("public ingress propagates handler errors after releasing guard leases", as
     getByName(name: string) {
       return name === "global:v2:webhook-proxy" ? global : source;
     },
-  } as unknown as DurableObjectNamespace<WebhookIngressGuardDO>;
+  } as unknown as WebhookIngressGuardNamespace;
   const expected = new WebhookProxyNotFoundError("Webhook not found");
 
   await assert.rejects(
@@ -377,7 +377,7 @@ test("malformed public IDs are rejected before source lookup or Durable Object a
       guardLookups += 1;
       throw new Error("must not be called");
     },
-  } as unknown as DurableObjectNamespace<WebhookIngressGuardDO>;
+  } as unknown as WebhookIngressGuardNamespace;
 
   const result = await handlePublicWebhookIngress({
     request: webhookRequest("short"),
@@ -421,7 +421,7 @@ function createIngressGuardMock(options: {
     | { ok: true; leaseId: string; expiresAtMs: number }
     | { ok: false; reason: "rate_limited" | "concurrency_limited"; retryAfterSeconds: number };
   onComplete?: (name: string, outcome: string) => void;
-}): DurableObjectNamespace<WebhookIngressGuardDO> {
+}): WebhookIngressGuardNamespace {
   return {
     getByName(name: string) {
       options.onGet?.(name);
@@ -443,5 +443,5 @@ function createIngressGuardMock(options: {
         },
       };
     },
-  } as unknown as DurableObjectNamespace<WebhookIngressGuardDO>;
+  } as unknown as WebhookIngressGuardNamespace;
 }

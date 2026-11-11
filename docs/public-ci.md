@@ -13,10 +13,10 @@ workflow. PostgreSQL credentials are public, disposable test fixtures. Container
 that job's temporary Docker daemon. No persistent runner, private network or shared Docker socket
 is attached. Cross-run dependency/build caches are deliberately not enabled in this initial design.
 
-The validation jobs cover build/format/lint/types, the portable unit/integration and build tests,
+The validation jobs cover build/format/lint/types, the Node unit/integration and build tests,
 public docs, PostgreSQL contracts and a production Docker image smoke test. Browser test dependencies
 are installed from their public distribution. Tests for excluded private operations are recorded in
-the preparation's external assembly report; portable authorization/recovery tests remain included.
+the preparation's external assembly report; authorization/recovery tests remain included.
 
 References: [GitHub's secure use reference](https://docs.github.com/en/actions/reference/security/secure-use)
 and [fork workflow/token rules](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
@@ -27,3 +27,6 @@ This workflow is validation-only. Publishing source/images, signing/provenance, 
 approval and the private overlay's admission of pinned upstream versions remain separately reviewed
 release work. CI success does not clear artwork/notice rights, operator-specific terms/privacy or
 live Discord/Tunnel/storage/backup-restore gates.
+
+Fresh-install validation uses `schema/postgres.sql`. Production code is checked for native
+persistence boundaries and cannot depend on the SQLite test fixtures or Worker bindings.

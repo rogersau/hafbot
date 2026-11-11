@@ -299,11 +299,10 @@ function storefront(guildId: string): any {
       discordRoleId: "222222222222222222",
       name: "VIP",
       purchaseType: "subscription",
-    },
-    lifecycle: {
       state: "published",
       roleManageable: true,
       includedBenefits: ["VIP channels"],
+      supportContact: "seller@example.com",
     },
     price: {
       currency: "AUD",

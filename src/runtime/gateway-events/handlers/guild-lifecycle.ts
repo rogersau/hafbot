@@ -1,4 +1,3 @@
-import { createCloudflareObservationStore } from "../../attendance-observation-runtime";
 import {
   buildAuditEmbed,
   type DiscordEmbed,
@@ -8,17 +7,15 @@ import type { DiscordGatewayGuildLifecycle } from "../../../services/gateway/eve
 import { deriveGatewayOperationNonce } from "../../gateway-event-idempotency";
 import type { GatewayEventCapabilities } from "../contracts";
 import { defineGatewayEventHandler } from "../define-handler";
-import { createCloudflareGuildServiceSuspensionStore } from "../../cloudflare-guild-service-suspension-store";
-import { createCloudflareServerLevelStore } from "../../cloudflare-server-level-store";
 
 export const guildLifecycleGatewayHandler = defineGatewayEventHandler(
   ["env", "operations", "discord", "standardDiscord", "productAnalytics"],
-  ["knownGuild"],
+  ["knownGuild", "guildServiceSuspensions", "serverLevel", "observations"],
   {
     key: "guild-lifecycle",
     eventTypes: ["GUILD_CREATE", "GUILD_DELETE"],
     order: 10,
-    isEnabled: ({ env }) => Boolean(env.HAF_DB),
+
     async handle(
       { env, operations, stores, discord, standardDiscord, productAnalytics },
       envelope,
@@ -29,10 +26,7 @@ export const guildLifecycleGatewayHandler = defineGatewayEventHandler(
         envelope.type === "GUILD_CREATE" &&
         guildId &&
         guildId !== env.HAF_ADMIN_GUILD_ID?.trim() &&
-        env.HAF_DB &&
-        (await createCloudflareGuildServiceSuspensionStore(env.HAF_DB).readActiveSuspension(
-          guildId,
-        ))
+        (await stores.guildServiceSuspensions.readActiveSuspension(guildId))
       ) {
         await operations.run("guild-lifecycle:suspended-auto-leave", () =>
           discord.leaveGuild(guildId),
@@ -44,7 +38,7 @@ export const guildLifecycleGatewayHandler = defineGatewayEventHandler(
           envelope.type as "GUILD_CREATE" | "GUILD_DELETE",
           guild,
           env,
-          stores!.knownGuild,
+          stores.knownGuild,
           standardDiscord,
           productAnalytics,
           deriveGatewayOperationNonce(envelope.eventKey, `guild-lifecycle:${envelope.type}`),
@@ -54,7 +48,7 @@ export const guildLifecycleGatewayHandler = defineGatewayEventHandler(
         updateServerLevelGuildLifecycle(
           envelope.type as "GUILD_CREATE" | "GUILD_DELETE",
           guild,
-          env,
+          stores,
         ),
       );
     },
@@ -64,19 +58,18 @@ export const guildLifecycleGatewayHandler = defineGatewayEventHandler(
 async function updateServerLevelGuildLifecycle(
   eventType: "GUILD_CREATE" | "GUILD_DELETE",
   guild: DiscordGatewayGuildLifecycle | null,
-  env: GatewayEventCapabilities["env"],
+  stores: Pick<GatewayEventCapabilities["stores"], "serverLevel" | "observations">,
 ): Promise<void> {
   const guildId = guild?.id?.trim();
-  if (!guildId || !env.HAF_DB) return;
+  if (!guildId) return;
   if (
     eventType === "GUILD_DELETE" &&
     (guild as (DiscordGatewayGuildLifecycle & { unavailable?: boolean }) | null)?.unavailable ===
       true
   )
     return;
-  if (eventType === "GUILD_DELETE")
-    await createCloudflareObservationStore(env.HAF_DB).eraseGuild(guildId);
-  const store = createCloudflareServerLevelStore(env.HAF_DB);
+  if (eventType === "GUILD_DELETE") await stores.observations.eraseGuild(guildId);
+  const store = stores.serverLevel;
   const config = await store.readConfig(guildId);
   if (!config) return;
   const now = Date.now();
@@ -97,14 +90,14 @@ async function logGlobalAdminGuildLifecycle(
   eventType: "GUILD_CREATE" | "GUILD_DELETE",
   guild: DiscordGatewayGuildLifecycle | null,
   env: GatewayEventCapabilities["env"],
-  store: NonNullable<GatewayEventCapabilities["stores"]>["knownGuild"],
+  store: GatewayEventCapabilities["stores"]["knownGuild"],
   discord: GatewayEventCapabilities["discord"],
   productAnalytics: GatewayEventCapabilities["productAnalytics"],
   dedupeNonce: string,
 ): Promise<void> {
   const channelId = env.GLOBAL_ADMIN_LOG_CHANNEL_ID?.trim();
   const guildId = guild?.id?.trim();
-  if (!guildId || !env.HAF_DB) return;
+  if (!guildId) return;
   const now = Date.now();
   const existing = await store.readKnownGuild(guildId);
   const name = guild?.name?.trim() || existing?.name || "Unknown guild";

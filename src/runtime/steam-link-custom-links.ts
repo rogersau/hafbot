@@ -1,15 +1,15 @@
-import type { SteamLinkCustomLink } from "./contracts/steam-link-store";
+import type { PlatformLinkCustomLink } from "./contracts/platform-link-store";
 
-export const DEFAULT_STEAM_LINK_CUSTOM_LINKS: SteamLinkCustomLink[] = [
+export const DEFAULT_STEAM_LINK_CUSTOM_LINKS: PlatformLinkCustomLink[] = [
   { label: "CFTools", url: "https://app.cftools.cloud/profile/{steamId64}" },
 ];
 
-export interface ResolvedSteamLinkCustomLink extends SteamLinkCustomLink {
+export interface ResolvedSteamLinkCustomLink extends PlatformLinkCustomLink {
   issue: string | null;
 }
 
 export function resolveSteamLinkCustomLinks(
-  customLinks: readonly SteamLinkCustomLink[],
+  customLinks: readonly PlatformLinkCustomLink[],
   steamId64: string,
 ): ResolvedSteamLinkCustomLink[] {
   return customLinks.map((customLink) => {

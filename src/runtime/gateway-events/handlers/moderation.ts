@@ -8,6 +8,11 @@ import type { DiscordMessageCreate, DiscordMessageUpdate, DiscordReaction } from
 import { deriveGatewayOperationNonce } from "../../gateway-event-idempotency";
 import { withGatewayMessageNonce } from "../capabilities";
 import { defineGatewayEventHandler } from "../define-handler";
+import { deleteChannelMessage, deleteReaction } from "../../../discord";
+import {
+  createBotDefenseMessageFilterDependencies,
+  createImageRulesMessageFilterDependencies,
+} from "../../moderation-dependencies";
 
 export const moderationGatewayHandlers = [
   defineGatewayEventHandler(
@@ -21,17 +26,10 @@ export const moderationGatewayHandlers = [
       async handle({ botEnv, operations, productAnalytics, stores }, envelope) {
         await operations.run("reaction-add:blocklist", async () => {
           const reaction = envelope.data as DiscordReaction | null;
-          const blocklistStore = stores?.blocklist;
-          const outcome = await moderateReactionAdd(
-            reaction,
-            botEnv,
-            blocklistStore
-              ? {
-                  readBlocklist: () => blocklistStore.readConfig(),
-                  readBlocklistForGuild: (guildId) => blocklistStore.readGuildConfig(guildId),
-                }
-              : {},
-          );
+          const outcome = await moderateReactionAdd(reaction, botEnv, {
+            readBlocklistForGuild: (guildId) => stores.blocklist.readGuildConfig(guildId),
+            deleteReaction,
+          });
           if (outcome === "removed" && reaction?.guild_id) {
             void productAnalytics.report({
               name: "feature_outcome",
@@ -50,7 +48,7 @@ export const moderationGatewayHandlers = [
     key: "mention-protection",
     eventTypes: ["MESSAGE_CREATE", "MESSAGE_UPDATE"],
     order: 10,
-    isEnabled: ({ env, features }) => Boolean(features.mentionProtection && env.HAF_DB),
+    isEnabled: ({ features }) => Boolean(features.mentionProtection),
     async handle({ mentionProtection, operations }, envelope) {
       const key = envelope.type === "MESSAGE_CREATE" ? "message-create" : "message-update";
       await operations.run(`${key}:mention-protection`, () =>
@@ -71,48 +69,40 @@ export const moderationGatewayHandlers = [
       isEnabled: ({ features }) => features.blocklist,
       async handle({ botEnv, operations, resolveBotDisplayName, discord, stores }, envelope) {
         await operations.run("message-create:blocklist", () =>
-          moderateMessageCreate(
-            envelope.data as DiscordMessageCreate | null,
-            botEnv,
-            {
-              ...(stores
-                ? {
-                    readBlocklist: () => stores.blocklist.readConfig(),
-                    readBlocklistForGuild: (guildId: string) =>
-                      stores.blocklist.readGuildConfig(guildId),
-                  }
-                : {}),
-              createUserDmMessage: (userId, body, _token) =>
-                discord.createUserDmMessage(
-                  userId,
-                  withGatewayMessageNonce(
-                    body,
-                    envelope.eventKey,
-                    "message-create:blocklist:dm",
-                    userId,
-                  ),
-                ),
-            },
+          moderateMessageCreate(envelope.data as DiscordMessageCreate | null, botEnv, {
+            readBlocklistForGuild: (guildId) => stores.blocklist.readGuildConfig(guildId),
+            deleteChannelMessage,
             resolveBotDisplayName,
-          ),
+            createUserDmMessage: (userId, body, _token) =>
+              discord.createUserDmMessage(
+                userId,
+                withGatewayMessageNonce(
+                  body,
+                  envelope.eventKey,
+                  "message-create:blocklist:dm",
+                  userId,
+                ),
+              ),
+          }),
         );
       },
     },
   ),
   defineGatewayEventHandler(
     ["env", "botEnv", "features", "operations", "discord", "resolveBotDisplayName"],
-    ["audit"],
+    ["audit", "imageRules"],
     {
       key: "image-rules",
       eventTypes: ["MESSAGE_CREATE"],
       order: 30,
-      isEnabled: ({ env, features }) => Boolean(features.imageRules && env.HAF_DB),
+      isEnabled: ({ features }) => Boolean(features.imageRules),
       async handle({ env, botEnv, operations, resolveBotDisplayName, stores, discord }, envelope) {
         await operations.run("message-create:image-rules", () =>
           moderateImageRulesMessageCreate(
             envelope.data as DiscordMessageCreate | null,
             botEnv,
-            {
+            createImageRulesMessageFilterDependencies(botEnv, stores.imageRules, {
+              resolveBotDisplayName,
               createUserDmMessage: (userId, body, _token) =>
                 discord.createUserDmMessage(
                   userId,
@@ -127,7 +117,7 @@ export const moderationGatewayHandlers = [
                 postMessageAuditEvent(
                   eventId,
                   data,
-                  stores!.audit,
+                  stores.audit,
                   botEnv.DISCORD_BOT_TOKEN,
                   env.BOT_USER_ID,
                   true,
@@ -136,8 +126,7 @@ export const moderationGatewayHandlers = [
                     `message-create:image-rules:${eventId}`,
                   ),
                 ),
-            },
-            resolveBotDisplayName,
+            }),
           ),
         );
       },
@@ -145,33 +134,38 @@ export const moderationGatewayHandlers = [
   ),
   defineGatewayEventHandler(
     ["env", "botEnv", "features", "operations", "resolveBotDisplayName"],
-    ["audit"],
+    ["audit", "botDefense", "entitlement"],
     {
       key: "bot-defense",
       eventTypes: ["MESSAGE_CREATE"],
       order: 35,
-      isEnabled: ({ env, features }) => Boolean(features.botDefense && env.HAF_DB),
+      isEnabled: ({ features }) => Boolean(features.botDefense),
       async handle({ env, botEnv, operations, resolveBotDisplayName, stores }, envelope) {
         await operations.run("message-create:bot-defense", () =>
           moderateBotDefenseMessageCreate(
             envelope.data as DiscordMessageCreate | null,
             botEnv,
-            {
-              postAuditEvent: (eventId, data) =>
-                postMessageAuditEvent(
-                  eventId,
-                  data,
-                  stores!.audit,
-                  botEnv.DISCORD_BOT_TOKEN,
-                  env.BOT_USER_ID,
-                  true,
-                  deriveGatewayOperationNonce(
-                    envelope.eventKey,
-                    `message-create:bot-defense:${eventId}`,
+            createBotDefenseMessageFilterDependencies(
+              botEnv,
+              stores.botDefense,
+              stores.entitlement,
+              {
+                resolveBotDisplayName,
+                postAuditEvent: (eventId, data) =>
+                  postMessageAuditEvent(
+                    eventId,
+                    data,
+                    stores.audit,
+                    botEnv.DISCORD_BOT_TOKEN,
+                    env.BOT_USER_ID,
+                    true,
+                    deriveGatewayOperationNonce(
+                      envelope.eventKey,
+                      `message-create:bot-defense:${eventId}`,
+                    ),
                   ),
-                ),
-            },
-            resolveBotDisplayName,
+              },
+            ),
           ),
         );
       },

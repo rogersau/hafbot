@@ -158,7 +158,7 @@ function dashboardPage(path: string) {
   if (path === "blocklist") return "reaction_rules" as const;
   if (path === "guild-settings") return "guild_settings" as const;
   if (path === "member-verification") return "member_verification" as const;
-  if (path === "player-link" || path === "steam-link") return "player_link" as const;
+  if (path === "player-link") return "player_link" as const;
   if (path === "server-levels") return "server_levels" as const;
   if (path === "tickets" || path === "lfg") return path;
   return path === "overview" ? ("overview" as const) : ("other" as const);
@@ -167,7 +167,7 @@ function dashboardPage(path: string) {
 function dashboardFeature(path: string) {
   if (path === "blocklist") return "reaction_rules" as const;
   if (path === "member-verification") return "member_verification" as const;
-  if (path === "player-link" || path === "steam-link") return "player_link" as const;
+  if (path === "player-link") return "player_link" as const;
   if (path === "server-levels") return "server_levels" as const;
   if (path === "tickets" || path === "lfg") return path;
   return undefined;

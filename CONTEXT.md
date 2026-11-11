@@ -4,6 +4,20 @@ HAF Bot, short for Helpful as F\*\*K, is a Discord community management system. 
 
 `CONTEXT.md` defines the product vocabulary and stable cross-feature rules. Feature behavior belongs in the owning feature documentation; architecture and release decisions belong in ADRs and runbooks.
 
+## Runtime vocabulary
+
+**Public baseline:**
+The current public application and installation schema, starting with no deployed data or private
+service history to preserve. It has no migration history or backwards-compatibility contract.
+
+**Fresh installation:**
+An empty PostgreSQL database initialized from `schema/postgres.sql`. Startup can also reopen the
+current schema. It does not convert another installation's schema or data.
+
+**Runtime store:**
+A persistence capability selected by the Node composition root and supplied to feature services.
+Production uses native PostgreSQL stores. SQLite implementations are isolated test fixtures.
+
 ## Onboarding vocabulary
 
 **Onboarding Orchestrator:**
@@ -108,7 +122,7 @@ _Avoid:_ "mod log", "review channel", "audit channel" (audit channels are write-
 The configured Discord channel that hosts one feature's **Mod Queue**. It is a review surface, not a generic audit destination; each feature owns its channel payload and action permissions.
 
 **Clan Management:**
-A Guild-scoped community-management feature for persistent member teams. D1 is authoritative for identity, membership, leadership, lifecycle, and ownership of the Discord resources HAF creates.
+A Guild-scoped community-management feature for persistent member teams. HAF's saved records are authoritative for identity, membership, leadership, lifecycle, and ownership of the Discord resources HAF creates.
 _Avoid:_ "clan bot", "team management" (loses the product boundary)
 
 **Clan:**
@@ -161,7 +175,7 @@ A reversible, reviewed inactive lifecycle in which recruitment closes, the Board
 The lifecycle applied to Clans beyond a Guild's effective quantity limit. A dormant Clan cannot be used by members, while its authoritative data and managed resources remain retained; reactivation is explicit and cannot silently exceed the current limit.
 
 **Clan Reconciliation:**
-Bounded, resumable comparison of D1 authority with Discord projections, triggered by relevant Gateway events and periodically as a safety net. Ambiguous differences create repair choices.
+Bounded, resumable comparison of authoritative HAF records with Discord projections, triggered by relevant Gateway events and periodically as a safety net. Ambiguous differences create repair choices.
 
 **Clan-only LFG:**
 An LFG post created by an authorised Clan Member in the Clan's private text channel that uses its persistent voice channel and the normal LFG lifecycle without creating temporary voice resources.
@@ -492,15 +506,6 @@ _Avoid:_ "server" when referring to the managed community (it is ambiguous with 
 A user authorized to configure one managed Guild in HAF: Discord Administrator or Manage Guild, a configured HAF admin role, or workspace owner/admin access for the dashboard surface. Guild Admin access does not imply workspace billing authority, feature-mod access, or private-channel visibility.
 _Avoid:_ "administrator" without saying whether it means Discord permission, HAF Guild Admin access, or HAF global staff.
 
-**Unified D1 Database:**
-The single Cloudflare D1 database used by HAF for authentication, workspace, billing, and Guild-feature state. Runtime code receives it through the required `HAF_DB` binding; deployment-only compatibility aliases are release-managed and are not runtime inputs. See the D1 data-layer ADR for the migration boundary.
-
-**Unified Migration History:**
-The ordered, append-only SQL history under `migrations/unified`. It is the only active migration input for fresh databases and upgrades; former tracks remain archive provenance.
-
-**HAF Database Capability:**
-A request-invariant pair of the `HAF_DB` binding and its cached Drizzle adapter, created once by root runtime assembly and shared by Better Auth and feature stores.
-
 **Timed Role:**
 A role assignment with an expiration time. The bot removes the role automatically when the duration elapses.
 _Avoid:_ "temporary role", "expiring role"
@@ -652,22 +657,6 @@ _Avoid:_ "claimer", "subscriber role holder", "seat owner"
 A Stripe-backed purchase owned by one **Plan Owner** on either the **Premium** or **Premium Plus** plan. It remains separate from the Guilds receiving its benefits.
 _Avoid:_ "Donor Claim", "license" (when referring to the billing relationship)
 
-**Founder Place:**
-A historical award from the former Subscription launch cohort. Existing awards remain part of billing history; they do not limit admission to current subscription prices.
-_Avoid:_ "founder slot", "available founder place", treating historical awards as current purchase eligibility
-
-**Founder Pricing:**
-The historical name for the launch rates that are now the standard subscription offer. Current prices have no launch-cohort restriction or cancellation-forfeiture condition.
-_Avoid:_ "founder discount" for the current offer, presenting historical cohort membership as a current benefit
-
-**Founder Counter:**
-A historical count of awarded **Founder Place**s. It is no longer a public availability counter or a purchase limit.
-_Avoid:_ "places remaining", "fully claimed" for the current subscription offer
-
-**Legacy Subscription Price:**
-An earlier price retained for an existing **Subscription** and its billing history, rather than offered for new purchases or plan changes. Existing subscriptions keep their Stripe price until the Plan Owner chooses a change.
-_Avoid:_ treating a legacy price as an unknown subscription or automatically repricing existing customers
-
 **GST Registration Posture:**
 HAF's current launch posture while it is not registered for Australian GST: customer prices contain no GST collection, Stripe Tax stays disabled, and current and projected GST turnover are monitored for a separate registration and tax-enablement decision.
 _Avoid:_ "GST exempt" (non-registration is not an exemption), "tax-inclusive price" while no GST is collected
@@ -697,7 +686,7 @@ A paid plan with three assignable Guild slots and one **White-Label Bot** identi
 _Avoid:_ "Donor+", "family plan", "shared plan"
 
 **White-Label Bot:**
-A manually-created Discord bot application provisioned by HAF staff for exactly one **Premium Plus** Subscription and installable into any or all of its assigned Guilds under one shared Discord identity and brand. App data stores only bot metadata and the Cloudflare Secrets Store reference for the bot token; the raw Discord bot token is never stored in D1. Replacement is staged: the current bot stays active while one distinct replacement is installed and health-checked, only one identity may become active, failed activation rolls back to the prior bot, and the old identity is decommissioned only after successful cutover. Irreversible removal passes through a retryable `decommissioning` state and becomes `decommissioned` only after its Gateway is stopped and its token secret is revoked/deleted; partial cleanup never masquerades as terminal completion.
+A manually-created Discord bot application provisioned by HAF staff for exactly one **Premium Plus** Subscription and installable into any or all of its assigned Guilds under one shared Discord identity and brand. App data stores only bot metadata and a reference to the bot token; the raw Discord bot token is never stored with feature records. Replacement is staged: the current bot stays active while one distinct replacement is installed and health-checked, only one identity may become active, failed activation rolls back to the prior bot, and the old identity is decommissioned only after successful cutover. Irreversible removal passes through a retryable `decommissioning` state and becomes `decommissioned` only after its Gateway is stopped and its token secret is revoked/deleted; partial cleanup never masquerades as terminal completion.
 _Avoid:_ "custom bot" (too vague), "customer token" (implies user-owned secret handling), "branded workspace bot"
 
 **White-Label Bot Installation:**
@@ -737,7 +726,7 @@ A dedicated private Discord channel in the **Admin Guild** where HAF staff can i
 _Avoid:_ "Guild billing log", "customer audit channel"
 
 **Billing Operations Ledger:**
-The indefinitely retained, append-only D1 record of billing observations, lifecycle transitions, support operations, and delivery outcomes. It is the authoritative internal history behind the Billing dashboard and **Billing Audit Channel**; Discord messages and telemetry logs are projections or diagnostics only.
+The indefinitely retained, append-only HAF record of billing observations, lifecycle transitions, support operations, and delivery outcomes. It is the authoritative internal history behind the Billing dashboard and **Billing Audit Channel**; Discord messages and telemetry logs are projections or diagnostics only.
 _Avoid:_ "billing Discord log", "Stripe webhook history" when referring to the HAF record
 
 **Billing Support Case:**

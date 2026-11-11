@@ -1,3 +1,4 @@
+import type { Cache } from "./runtime/discord-json-cache";
 import type { QueueProducer } from "./runtime/queue-types";
 import type { DiscordE2eActors } from "./runtime/discord-e2e-actors";
 export interface Env {
@@ -15,25 +16,21 @@ export interface Env {
   CONFIGURATION_REVISION_SIGNING_SECRET?: string;
   COMPONENT_ID_SIGNING_SECRET?: string;
   COMPONENT_ID_PREVIOUS_SIGNING_SECRET?: string;
-  COMPONENT_ID_LEGACY_UNTIL?: string;
-  MEMBER_VERIFICATION_PANEL_LEGACY_UNTIL?: string;
   BETTER_AUTH_URL?: string;
   STAGING_MODE?: string;
   // In-process capability supplied only by the separate Node E2E entrypoint.
   // This is not an environment-variable binding.
   readonly discordE2eActors?: DiscordE2eActors;
-  GATEWAY_ENABLED?: string;
   HAF_MAINTENANCE_MODE?: string;
   HAF_DEPLOYMENT_MODE?: string;
   SELF_HOSTED_OPERATOR_NAME?: string;
   SELF_HOSTED_SUPPORT_URL?: string;
   SELF_HOSTED_TERMS_URL?: string;
   SELF_HOSTED_PRIVACY_URL?: string;
-  RELEASE_SMOKE_SECRET?: string;
+  releaseVersion?: string;
   EVIDENCE_MEDIA_SIGNING_SECRET?: string;
   WEBHOOK_CREDENTIAL_KEY_V1?: string;
   WEBHOOK_CREDENTIAL_KEY_V2?: string;
-  WORKER_VERSION?: { id: string; tag?: string; timestamp?: string };
 
   // Private Discord guild/role allowed to run global HAF admin slash commands.
   HAF_ADMIN_GUILD_ID?: string;
@@ -62,7 +59,6 @@ export interface Env {
   DISABLE_MENTION_PROTECTION?: string;
   DISABLE_SERVER_LEVELS?: string;
 
-  HAF_DB: D1Database;
   BILLING_SYNC_QUEUE?: QueueProducer<unknown>;
   BILLING_DELIVERY_QUEUE?: QueueProducer<unknown>;
   COMMERCE_SYNC_QUEUE?: QueueProducer<unknown>;
@@ -80,15 +76,9 @@ export interface Env {
   STRIPE_API_VERSION?: string;
   STRIPE_PORTAL_CONFIGURATION_ID?: string;
   STRIPE_PREMIUM_PRODUCT_ID?: string;
-  STRIPE_FOUNDER_PREMIUM_MONTHLY_PRICE_ID?: string;
-  STRIPE_FOUNDER_PREMIUM_YEARLY_PRICE_ID?: string;
-  STRIPE_LEGACY_FOUNDER_PREMIUM_YEARLY_PRICE_ID?: string;
   STRIPE_PREMIUM_MONTHLY_PRICE_ID?: string;
   STRIPE_PREMIUM_YEARLY_PRICE_ID?: string;
   STRIPE_PREMIUM_PLUS_PRODUCT_ID?: string;
-  STRIPE_FOUNDER_PREMIUM_PLUS_MONTHLY_PRICE_ID?: string;
-  STRIPE_FOUNDER_PREMIUM_PLUS_YEARLY_PRICE_ID?: string;
-  STRIPE_LEGACY_FOUNDER_PREMIUM_PLUS_YEARLY_PRICE_ID?: string;
   STRIPE_PREMIUM_PLUS_MONTHLY_PRICE_ID?: string;
   STRIPE_PREMIUM_PLUS_YEARLY_PRICE_ID?: string;
 
@@ -98,11 +88,6 @@ export interface Env {
   STEAM_BAN_LOOKUP_RECHECK_INTERVAL_MS?: string;
   XBOX_OAUTH_CLIENT_ID?: string;
   XBOX_OAUTH_CLIENT_SECRET?: string;
-  GATEWAY_SESSION_DO: DurableObjectNamespace;
-  WEBHOOK_INGRESS_GUARD_DO?: DurableObjectNamespace<
-    import("./durable-objects/webhook-ingress-guard").WebhookIngressGuardDO
-  >;
-  TICKET_TRANSCRIPTS_BUCKET?: R2Bucket;
   R2_QUOTA_QUEUE?: QueueProducer<unknown>;
   GATEWAY_EVENT_QUEUE: QueueProducer<unknown>;
   WEBHOOK_PROXY_DELIVERY_QUEUE?: QueueProducer<unknown>;
@@ -115,16 +100,13 @@ export interface Env {
   WARDOGS_NETWORK_ENABLED?: string;
   WARDOGS_NETWORK_POLICY?: string;
   SERVER_LEVELS_QUEUE?: QueueProducer<import("./server-levels/ingress").ServerLevelIngressMessage>;
-  DISCORD_CACHE_KV?: KVNamespace;
-  STEAM_BAN_LOOKUP_KV?: KVNamespace;
-  PLAYER_COUNT_STREAK_REPORTED_KV?: KVNamespace;
+  discordCache?: Cache<string>;
 
   // Sentry DSN for error tracking (optional)
-  // Set via: wrangler secret put SENTRY_DSN
   SENTRY_DSN?: string;
 
   // Production-only, cookieless product analytics. POSTHOG_HOST is the explicit
-  // regional origin; the token and pseudonym key are Worker secrets.
+  // regional origin; the token and pseudonym key are environment secrets.
   POSTHOG_HOST?: string;
   POSTHOG_PROJECT_TOKEN?: string;
   PRODUCT_ANALYTICS_PSEUDONYM_KEY?: string;

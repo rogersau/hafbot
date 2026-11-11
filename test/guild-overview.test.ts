@@ -1,3 +1,5 @@
+import { composeTestServices } from "./support/compose-services";
+import { testWebhookCredential } from "./support/webhook-credentials";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -307,9 +309,15 @@ function configuredWebhooks(): WebhookProxyConfig[] {
       name: "Main proxy",
       enabled: true,
       banLookupEnabled: false,
-      banLookupNotificationUrl: null,
+      banLookupCredentialId: null,
       banLookupAppIds: [],
-      destinations: [{ id: "dest-1", label: "Discord", url: "https://example.com/webhook" }],
+      destinations: [
+        {
+          id: "dest-1",
+          label: "Discord",
+          credentialId: testWebhookCredential("https://example.com/webhook"),
+        },
+      ],
       defaultDestinationIds: ["dest-1"],
       routingRules: [],
       createdAtMs: Date.now(),
@@ -704,8 +712,7 @@ function createStubStores(tier: "free" | "premium" = "free"): RuntimeStores {
     },
     timedRoles: {
       listTimedRolesByGuild: async () => [],
-      readNewMemberTimedRoleConfig: async () => ({ guildId, roles: [] }),
-      readManualAssignmentTimedRoleConfig: async () => ({ guildId, roles: [] }),
+      readTimedRoleConfigRules: async () => [],
     },
     tickets: {
       listTicketPanelConfigs: async () => [],
@@ -773,8 +780,10 @@ const enabledFeatures = {
 };
 
 test("GET /admin/api/guild-overview returns a card summary for the requested guild", async () => {
+  const stores = createStubStores("premium");
   const routes = createAdminRoutes({
-    stores: createStubStores("premium"),
+    stores,
+    services: composeTestServices(stores),
     adminAccess: allowAllAdminAccess,
     discordBotToken: "test",
     features: enabledFeatures,
@@ -794,9 +803,47 @@ test("GET /admin/api/guild-overview returns a card summary for the requested gui
   assert.ok(body.cards.length >= 10);
 });
 
-test("GET /admin/api/guild-overview requires guildId", async () => {
+test("GET /admin/api/guild-overview reads current timed-role rules from the canonical store", async () => {
+  const stores = createStubStores("premium");
+  const configReads: string[] = [];
+  stores.timedRoles = {
+    ...stores.timedRoles,
+    async readTimedRoleConfigRules(_guildId, configType) {
+      configReads.push(configType);
+      return configType === "new-member"
+        ? [{ roleId: "role-1", durationInput: "1d" }]
+        : [{ roleId: "role-2", durationInput: "1h" }];
+    },
+  };
   const routes = createAdminRoutes({
-    stores: createStubStores(),
+    stores,
+    services: composeTestServices(stores),
+    adminAccess: allowAllAdminAccess,
+    discordBotToken: "test",
+    features: enabledFeatures,
+  });
+  const request = new Request("https://example.com/admin/api/guild-overview?guildId=guild-1");
+  const response = await dispatchAdminRoute(routes, request, {
+    adminAccess: allowAllAdminAccess,
+    features: enabledFeatures,
+    stores,
+  });
+
+  assert.equal(response?.status, 200);
+  assert.deepEqual(configReads.sort(), ["manual-assignment", "new-member"]);
+  const body = (await response?.json()) as {
+    cards: Array<{ id: string; status: string; detail: string }>;
+  };
+  const card = body.cards.find((entry) => entry.id === "timed-roles");
+  assert.equal(card?.status, "configured");
+  assert.equal(card?.detail, "2 automation rules");
+});
+
+test("GET /admin/api/guild-overview requires guildId", async () => {
+  const stores = createStubStores();
+  const routes = createAdminRoutes({
+    stores,
+    services: composeTestServices(stores),
     adminAccess: allowAllAdminAccess,
     discordBotToken: "test",
     features: enabledFeatures,

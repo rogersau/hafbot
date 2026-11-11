@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { createCloudflareServerLevelCredentialStore } from "../src/runtime/cloudflare-server-level-credential-store";
+import { createSqliteServerLevelCredentialStore } from "./support/sqlite/runtime/sqlite-server-level-credential-store";
 import { createWebhookCredentialKeyRing } from "../src/security/webhook-credentials";
 import { ServerLevelCredentialService } from "../src/server-levels/credentials";
 import { CftoolsDataApiClient } from "../src/server-levels/data-api";
@@ -13,7 +13,7 @@ import { SqliteD1Database } from "./support/sqlite-d1-database";
 test("CFTools Data API reconciliation uses only allowlisted reads and reuses encrypted auth", async () => {
   const database = new SqliteD1Database();
   const credentials = new ServerLevelCredentialService(
-    createCloudflareServerLevelCredentialStore(database.d1),
+    createSqliteServerLevelCredentialStore(database.d1),
     createWebhookCredentialKeyRing({ keyV1: Buffer.alloc(32, 5).toString("base64") }),
   );
   const requests: Array<{ url: string; method: string; headers: Headers; body: string | null }> =
@@ -108,7 +108,7 @@ test("CFTools Data API reconciliation uses only allowlisted reads and reuses enc
 test("CFTools Data API rejects a roster that disagrees with public population", async () => {
   const database = new SqliteD1Database();
   const credentials = new ServerLevelCredentialService(
-    createCloudflareServerLevelCredentialStore(database.d1),
+    createSqliteServerLevelCredentialStore(database.d1),
     createWebhookCredentialKeyRing({ keyV1: Buffer.alloc(32, 6).toString("base64") }),
   );
   try {

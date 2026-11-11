@@ -16,6 +16,7 @@ import {
 import { LfgService, type LfgDiscordApi } from "../src/services/lfg-service";
 import type { LfgPost } from "../src/types";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
+import { interactionServices } from "./support/handler-services";
 
 async function configuredFixture() {
   const fixture = createProductionRuntimeStores();
@@ -96,7 +97,7 @@ for (const scope of ["public", "clan"] as const) {
         interaction(scope === "clan" ? "lfg:create-clan" : "lfg:create"),
         fixture.stores,
         "token",
-        { lfgService: new LfgService(fixture.stores.lfg, createDiscord()) },
+        new LfgService(fixture.stores.lfg, createDiscord()),
       );
       assert.deepEqual(await response.json(), {
         type: 4,
@@ -142,8 +143,7 @@ for (const scope of ["public", "clan"] as const) {
       const response = await handleLfgModalSubmitInteraction(
         interaction(scope === "clan" ? "lfg:modal-clan:dayz" : "lfg:modal:dayz", 5),
         fixture.stores,
-        "token",
-        { lfgService: service },
+        service,
       );
       const post = await fixture.stores.lfg.readActiveLfgPostByOwner("guild-1", "owner-1");
       assert.equal(post?.channelId, scope === "clan" ? "private-clan-text" : "noticeboard");
@@ -175,7 +175,7 @@ for (const missing of [{ messageId: null }, { channelId: "" }]) {
         interaction("lfg:create"),
         fixture.stores,
         "token",
-        { lfgService: new LfgService(fixture.stores.lfg, createDiscord()) },
+        new LfgService(fixture.stores.lfg, createDiscord()),
       );
       assert.deepEqual(await response.json(), {
         type: 4,
@@ -203,7 +203,7 @@ for (const status of [404, 403, 500]) {
         interaction("lfg:create"),
         fixture.stores,
         "token",
-        { lfgService: new LfgService(fixture.stores.lfg, createDiscord()) },
+        new LfgService(fixture.stores.lfg, createDiscord()),
       );
       assert.deepEqual(await response.json(), {
         type: 4,
@@ -227,7 +227,7 @@ test("LFG creation does not link to a closed or deleted post", async () => {
       interaction("lfg:create"),
       fixture.stores,
       "token",
-      { lfgService: service },
+      service,
     );
     const body = (await response.json()) as { data: { content: string } };
     assert.doesNotMatch(body.data.content, /View post|already have an active/);
@@ -244,9 +244,12 @@ test("LFG active-post lookup preserves Discord rate-limit handling", async (t) =
       Response.json({ retry_after: 60 }, { status: 429 }),
     );
     await assert.rejects(
-      handleLfgComponentInteraction(interaction("lfg:create"), fixture.stores, "token", {
-        lfgService: new LfgService(fixture.stores.lfg, createDiscord()),
-      }),
+      handleLfgComponentInteraction(
+        interaction("lfg:create"),
+        fixture.stores,
+        "token",
+        new LfgService(fixture.stores.lfg, createDiscord()),
+      ),
       (error: unknown) => error instanceof DiscordApiError && error.status === 429,
     );
   } finally {
@@ -308,7 +311,7 @@ async function closeFixture(postOverrides: Partial<LfgPost> = {}, signer?: Compo
         stores: fixture.stores,
         gateway: { async start() {}, async status() {} },
         verifyDiscordRequest: async () => true,
-        services: { lfgService: service },
+        services: interactionServices({ lfgService: service }),
         componentIdSigner,
       },
     );
@@ -535,7 +538,7 @@ test("disabled LFG rejects stale creation buttons and modal submissions", async 
         interaction(id),
         fixture.stores,
         "token",
-        { lfgService: service },
+        service,
       );
       assert.equal(
         ((await response.json()) as CloseResponse).data.content,
@@ -546,8 +549,7 @@ test("disabled LFG rejects stale creation buttons and modal submissions", async 
       const response = await handleLfgModalSubmitInteraction(
         interaction(id, 5),
         fixture.stores,
-        "token",
-        { lfgService: service },
+        service,
       );
       assert.equal(
         ((await response.json()) as CloseResponse).data.content,

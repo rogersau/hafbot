@@ -16,7 +16,6 @@ services:
       BETTER_AUTH_URL: http://localhost:8080
       HAF_ROLE: all
       HAF_DEPLOYMENT_MODE: self-hosted
-      HAF_RUN_MIGRATIONS: "true"
       HAF_GATEWAY_ENABLED: "false"
       HAF_JOBS_ENABLED: "false"
       HAF_SCHEDULER_ENABLED: "false"

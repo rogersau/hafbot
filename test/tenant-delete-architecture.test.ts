@@ -17,10 +17,6 @@ const opaqueOrPendingDeleteExceptions = new Map([
     "Pending platform links are keyed by opaque OAuth state.",
   ],
   [
-    "steam-link-store.ts:deletePendingSteamLink",
-    "Pending Steam links are keyed by opaque OAuth state.",
-  ],
-  [
     "suggestion-store.ts:deletePendingSubmission",
     "Pending suggestion submissions are keyed by opaque confirmation IDs.",
   ],

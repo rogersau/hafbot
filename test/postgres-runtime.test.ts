@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readdir } from "node:fs/promises";
 
 import { createNodeHost } from "../src/node/host";
 import { createPostgresNodeRuntime } from "../src/node/postgres-runtime";
@@ -11,15 +10,11 @@ import { InMemoryObjectStore } from "./support/in-memory-object-store";
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 
 test(
-  "PostgreSQL Node runtime fails closed on pending migrations and serves the full application",
+  "PostgreSQL Node runtime initializes an empty database and serves the full application",
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     assert.ok(postgresUrl);
     assertSafeTestDatabase(postgresUrl);
-    const migrationNames = (await readdir("migrations/postgres"))
-      .filter((name) => name.endsWith(".sql"))
-      .sort();
-    assert.ok(migrationNames.length > 0);
     await resetDatabase(postgresUrl);
     const baseEnvironment = {
       DATABASE_URL: postgresUrl,
@@ -32,15 +27,6 @@ test(
       HAF_JOBS_ENABLED: "false",
       HAF_MAINTENANCE_MODE: "true",
     };
-    await assert.rejects(
-      createPostgresNodeRuntime({
-        environment: { ...baseEnvironment, HAF_RUN_MIGRATIONS: "false" },
-        lifecycle: { waitUntil() {} },
-        objects: new InMemoryObjectStore(),
-      }),
-      /pending migration/,
-    );
-
     const host = createNodeHost({
       role: "all",
       hostname: "127.0.0.1",
@@ -52,7 +38,6 @@ test(
         createPostgresNodeRuntime({
           environment: {
             ...baseEnvironment,
-            HAF_RUN_MIGRATIONS: "true",
             HAF_JOBS_ENABLED: "true",
             HAF_JOB_POLL_MS: "10",
           },
@@ -87,9 +72,7 @@ test(
           jobs: { configuredQueues: string[] };
         };
         runtime: {
-          migrationRuntime: string;
-          migrations: number;
-          migrationNames: string[];
+          persistence: string;
           revision: string;
           objectStore: string;
           httpPersistence: string;
@@ -103,9 +86,7 @@ test(
       };
       assert.deepEqual(statusBody.components.jobs.configuredQueues, [...PORTABLE_QUEUE_NAMES]);
       assert.deepEqual(statusBody.runtime, {
-        migrationRuntime: "postgres",
-        migrations: migrationNames.length,
-        migrationNames,
+        persistence: "postgres",
         revision: "portable-node",
         objectStore: "injected",
         httpPersistence: "read-only",

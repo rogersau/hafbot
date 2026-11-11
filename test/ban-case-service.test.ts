@@ -46,7 +46,7 @@ function createBanCaseFixture(options: { premium?: boolean } = {}) {
   const rawStore = fixture.stores.banCases;
   if (options.premium !== false) {
     fixture.database.execRaw(
-      "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', 'premium', 'premium', 0)",
+      "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', 'premium', 0)",
     );
   }
   const store = afterStoreSeed(

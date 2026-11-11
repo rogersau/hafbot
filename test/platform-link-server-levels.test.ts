@@ -6,7 +6,6 @@ import test, { type TestContext } from "node:test";
 import { DiscordApiError, isDiscordRateLimitError } from "../src/discord/client";
 import { createPlatformLinkRoutes } from "../src/routes/platform-link-routes";
 import { createServiceFactory } from "../src/runtime/service-factory";
-import { createCloudflareSteamLinkStore } from "../src/runtime/cloudflare-steam-link-store";
 import { handleSteamManualLinkCommand } from "../src/runtime/steam-link-interaction-handler";
 import { ServerLevelProcessor } from "../src/server-levels/processor";
 import { PlatformLinkFinalizationError } from "../src/services/platform-link-service";
@@ -36,23 +35,11 @@ async function setup(t: TestContext) {
   });
   const links = fixture.stores.platformLink;
   const store = fixture.stores.serverLevels!;
-  const legacy = createCloudflareSteamLinkStore(fixture.database.d1);
   await fixture.database.d1
-    .prepare(
-      "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES (?, ?, ?, ?)",
-    )
-    .bind("guild-1", "premium", "premium", 1)
+    .prepare("INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES (?, ?, ?)")
+    .bind("guild-1", "premium", 1)
     .run();
   await links.upsertPlatformLink(original);
-  await legacy.upsertSteamLink({
-    guildId: original.guildId,
-    userId: original.userId,
-    steamId64: original.platformId,
-    linkedAtMs: original.linkedAtMs,
-    manual: original.manual,
-    actionedByUserId: original.actionedByUserId,
-    gameOwnership: [],
-  });
   await store.upsertConfig({
     guildId: "guild-1",
     enabled: true,
@@ -102,7 +89,7 @@ async function setup(t: TestContext) {
     isCurrentGuildMember: async () => true,
     now: () => 61_000,
   });
-  return { ...fixture, links, store, legacy, services, worker, servers };
+  return { ...fixture, links, store, services, worker, servers };
 }
 
 test("Steam replacement holds every processing lease through commit and finalization", async (t) => {
@@ -137,10 +124,9 @@ test("Steam replacement holds every processing lease through commit and finaliza
   }
   assert.equal((await f.store.readProfile("guild-1", "user-1"))?.totalXpUnits, 240);
   assert.deepEqual(await f.links.listPlatformLinksByUser("guild-1", "user-1"), [replacement]);
-  assert.deepEqual(await f.legacy.listSteamLinks("guild-1"), []);
 });
 
-test("failed Steam replacement transaction retains current and legacy identity and earning", async (t) => {
+test("failed Steam replacement transaction retains identity and earning", async (t) => {
   const f = await setup(t);
   f.database.execRaw(`CREATE TRIGGER fail_replacement BEFORE INSERT ON platform_links
     WHEN NEW.platform_id = '${replacement.platformId}'
@@ -150,7 +136,6 @@ test("failed Steam replacement transaction retains current and legacy identity a
     /injected replacement failure/,
   );
   assert.deepEqual(await f.links.listPlatformLinksByUser("guild-1", "user-1"), [original]);
-  assert.equal((await f.legacy.listSteamLinks("guild-1")).length, 1);
   assert.equal((await f.store.readProfile("guild-1", "user-1"))?.totalXpUnits, 240);
   for (const id of f.servers) {
     assert.equal(
@@ -229,7 +214,6 @@ for (const failure of ["award", "checkpoint"] as const) {
         .sort(),
       [original.platformId, additional.platformId],
     );
-    assert.equal((await f.legacy.listSteamLinks("guild-1")).length, 1);
     assert.equal(
       (await f.store.readProfile("guild-1", "user-1"))?.totalXpUnits,
       failure === "award" ? 180 : 240,
@@ -292,7 +276,6 @@ for (const failure of ["close", "presence"] as const) {
       },
     );
     assert.deepEqual(await f.links.listPlatformLinksByUser("guild-1", "user-1"), [replacement]);
-    assert.deepEqual(await f.legacy.listSteamLinks("guild-1"), []);
     assert.equal((await f.store.readProfile("guild-1", "user-1"))?.totalXpUnits, 240);
     f.database.execRaw("DROP TRIGGER fail_cleanup");
     for (const id of f.servers) {
@@ -407,7 +390,6 @@ for (const entry of ["manual", "callback"] as const) {
       assert.equal(isDiscordRateLimitError(saveError), status === 429);
       assert.deepEqual(effects, []);
       assert.deepEqual(await service.listLinks("guild-1"), [original]);
-      assert.equal((await f.legacy.listSteamLinks("guild-1")).length, 1);
       assert.equal((await f.store.readProfile("guild-1", "user-1"))?.totalXpUnits, 0);
       for (const id of f.servers) {
         assert.equal(
@@ -425,7 +407,6 @@ for (const entry of ["manual", "callback"] as const) {
       assert.equal(saved.length, 1);
       assert.equal(saved[0]?.platformId, replacement.platformId);
       assert.equal(saved[0]?.active, true);
-      assert.deepEqual(await f.legacy.listSteamLinks("guild-1"), []);
       await service.saveLink(saved[0]!, true);
       for (const id of f.servers) {
         assert.equal(await f.store.readOpenEarningSession(id, original.platformId), null);

@@ -44,7 +44,7 @@ test("bulk preview isolates one group, fills partial teams, and prioritizes conf
     incomplete: false,
   });
   assert.deepEqual(preview.unassignedUserIds, ["waitlisted-1"]);
-  assert.ok(preview.fingerprint.length > 0);
+  assert.ok(preview.revision.length > 0);
   assert.equal(preview.groupId, "open");
 });
 

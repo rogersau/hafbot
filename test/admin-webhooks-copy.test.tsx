@@ -93,7 +93,7 @@ function createInboundData(): WebhooksLoaderData {
         name: "Primary webhook",
         enabled: true,
         banLookupEnabled: false,
-        banLookupNotificationUrl: null,
+        banLookupCredentialId: null,
         banLookupAppIds: [],
         destinations: [
           {
@@ -122,7 +122,7 @@ function createCredentialData(): WebhooksLoaderData {
         name: "Primary webhook",
         enabled: true,
         banLookupEnabled: false,
-        banLookupNotificationUrl: null,
+        banLookupCredentialId: null,
         banLookupAppIds: [],
         destinations: [
           {

@@ -16,8 +16,7 @@ import {
   bodyGuildScopedAccess,
   requireGuildQueryId,
 } from "../admin-route-guards";
-import { createServiceFactory, type ServiceFactory } from "../service-factory";
-import { validateWebhookRegex } from "../../security/safe-webhook-regex";
+import type { ServiceFactory } from "../service-factory";
 import type { WebhookCredentialService } from "../../security/webhook-credentials/store";
 import type { WebhookIngressGuardNamespace } from "../contracts/webhook-ingress-guard";
 import type { CustomerSession } from "../auth/customer-session";
@@ -44,227 +43,11 @@ import {
   setPlayerLinkEnabled,
   testPlayerCount,
   getPlayerLink,
-  getSteamLink,
   publishPlayerLink as publishPlayerLinkOperation,
-  publishSteamLink as publishSteamLinkOperation,
   savePlayerLink as savePlayerLinkOperation,
-  saveSteamLink as saveSteamLinkOperation,
   syncPlayerLinkRoles as syncPlayerLinkRolesOperation,
-  syncSteamLinkRoles as syncSteamLinkRolesOperation,
+  webhookProxyConfigBodySchema,
 } from "../../contracts/admin";
-
-const publicIdFieldSchema = z
-  .union([z.literal(""), z.string().regex(/^[A-Za-z0-9_-]{16,64}$/, "Invalid publicId")])
-  .nullish()
-  .transform((value) => (value ? value : undefined));
-
-const webhookProxyIdSchema = z
-  .string()
-  .min(1, "Invalid id")
-  .regex(/^[A-Za-z0-9_-]{1,64}$/, "Invalid id");
-
-const httpsUrlFieldSchema = z.string().refine(
-  (value) => {
-    try {
-      if (
-        value !== value.trim() ||
-        Array.from(value).some((character) => {
-          const code = character.charCodeAt(0);
-          return code <= 31 || code === 127;
-        }) ||
-        /%2f/i.test(value)
-      )
-        return false;
-      const url = new URL(value);
-      const hosts = new Set([
-        "discord.com",
-        "canary.discord.com",
-        "ptb.discord.com",
-        "discordapp.com",
-      ]);
-      const parts = url.pathname.split("/");
-      return (
-        url.protocol === "https:" &&
-        hosts.has(url.hostname.toLowerCase()) &&
-        !url.username &&
-        !url.password &&
-        !url.port &&
-        !url.search &&
-        !url.hash &&
-        !url.pathname.includes("//") &&
-        !url.pathname.endsWith("/") &&
-        parts.length === 5 &&
-        parts[1] === "api" &&
-        parts[2] === "webhooks" &&
-        /^\d{6,32}$/.test(parts[3] ?? "") &&
-        /^[A-Za-z0-9_-]{1,256}$/.test(parts[4] ?? "")
-      );
-    } catch {
-      return false;
-    }
-  },
-  { message: "Invalid Discord webhook URL" },
-);
-
-const routingRegexFlagsSchema = z
-  .string()
-  .regex(/^[imsuy]*$/, "Invalid flags")
-  .refine((value) => new Set(value).size === value.length, "Invalid flags");
-
-const replacementRegexFlagsSchema = z
-  .string()
-  .regex(/^[gimsuy]*$/, "Invalid flags")
-  .refine((value) => new Set(value).size === value.length, "Invalid flags");
-
-const compilableRegexSchema = z
-  .string()
-  .max(256, "Regex patterns cannot exceed 256 characters")
-  .refine((pattern) => validateWebhookRegex(pattern) === null, "Invalid or unsafe regex");
-
-const webhookCredentialActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("preserve"), credentialId: z.string().uuid() }),
-  z.object({ action: z.literal("replace"), url: httpsUrlFieldSchema }),
-]);
-
-const webhookProxyDestinationSchema = z.object({
-  id: webhookProxyIdSchema,
-  label: z
-    .string()
-    .min(1, "Missing label")
-    .transform((value) => value.trim()),
-  credential: webhookCredentialActionSchema,
-});
-
-const webhookProxyRoutingRuleSchema = z.object({
-  id: webhookProxyIdSchema,
-  label: z
-    .string()
-    .min(1, "Missing label")
-    .transform((value) => value.trim()),
-  pattern: compilableRegexSchema,
-  flags: routingRegexFlagsSchema.optional(),
-  destinationIds: z.array(webhookProxyIdSchema).min(1, "Missing destinationIds"),
-});
-
-const webhookProxyContentReplacementSchema = z.object({
-  id: webhookProxyIdSchema,
-  label: z
-    .string()
-    .min(1, "Missing label")
-    .transform((value) => value.trim()),
-  pattern: compilableRegexSchema,
-  flags: replacementRegexFlagsSchema.optional(),
-  replacement: z
-    .string()
-    .min(1, "Missing replacement")
-    .max(1_024, "Replacement cannot exceed 1,024 characters"),
-});
-
-const webhookProxyConfigBodySchema = z
-  .object({
-    guildId: z.string().min(1, "Missing guildId"),
-    publicId: publicIdFieldSchema,
-    name: z
-      .string()
-      .min(1, "Missing name")
-      .transform((value) => value.trim()),
-    enabled: z.boolean({ error: () => "Missing enabled" }),
-    banLookupEnabled: z.boolean().optional().default(false),
-    banLookupCredential: z
-      .union([webhookCredentialActionSchema, z.object({ action: z.literal("clear") })])
-      .optional()
-      .default({ action: "clear" }),
-    banLookupAppIds: z.array(z.number().int().positive()).optional().default([]),
-    destinations: z
-      .array(webhookProxyDestinationSchema)
-      .min(1, "Add between 1 and 25 webhook destinations.")
-      .max(25, "Add between 1 and 25 webhook destinations."),
-    defaultDestinationIds: z.array(webhookProxyIdSchema).min(1, "Missing defaultDestinationIds"),
-    routingRules: z
-      .array(webhookProxyRoutingRuleSchema)
-      .max(25, "Webhook routing rules cannot exceed 25 entries."),
-    contentReplacements: z
-      .array(webhookProxyContentReplacementSchema)
-      .max(25, "Webhook content replacements cannot exceed 25 entries.")
-      .optional(),
-  })
-  .superRefine((data, ctx) => {
-    const destinationIds = new Set(data.destinations.map((destination) => destination.id));
-    const seenDestinationIds = new Set<string>();
-
-    data.destinations.forEach((destination, index) => {
-      if (seenDestinationIds.has(destination.id)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["destinations", index, "id"],
-          message: "Duplicate destinations entry",
-        });
-      }
-      seenDestinationIds.add(destination.id);
-    });
-
-    const seenDefaultIds = new Set<string>();
-    data.defaultDestinationIds.forEach((id, index) => {
-      if (!destinationIds.has(id)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["defaultDestinationIds", index],
-          message: "Unknown destinations entry",
-        });
-      }
-      if (seenDefaultIds.has(id)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["defaultDestinationIds", index],
-          message: "Duplicate destinations entry",
-        });
-      }
-      seenDefaultIds.add(id);
-    });
-
-    const seenRoutingIds = new Set<string>();
-    data.routingRules.forEach((rule, index) => {
-      if (seenRoutingIds.has(rule.id)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["routingRules", index, "id"],
-          message: "Duplicate routingRules entry",
-        });
-      }
-      seenRoutingIds.add(rule.id);
-
-      const seenRuleDestIds = new Set<string>();
-      rule.destinationIds.forEach((destId, destIndex) => {
-        if (!destinationIds.has(destId)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["routingRules", index, "destinationIds", destIndex],
-            message: "Unknown destinations entry",
-          });
-        }
-        if (seenRuleDestIds.has(destId)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["routingRules", index, "destinationIds", destIndex],
-            message: "Duplicate destinations entry",
-          });
-        }
-        seenRuleDestIds.add(destId);
-      });
-    });
-
-    const seenReplacementIds = new Set<string>();
-    (data.contentReplacements ?? []).forEach((replacement, index) => {
-      if (seenReplacementIds.has(replacement.id)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["contentReplacements", index, "id"],
-          message: "Duplicate contentReplacements entry",
-        });
-      }
-      seenReplacementIds.add(replacement.id);
-    });
-  });
 
 const playerLinkConfigBodySchema = z.object({
   guildId: z.string().min(1, "Missing guildId"),
@@ -320,7 +103,10 @@ export interface IntegrationsAdminRoutesOptions {
   adminAccess: AdminAccess;
   discordBotToken: string;
   invalidateWebhookProxyConfig?: (publicId: string) => void;
-  services?: Partial<ServiceFactory>;
+  services: Pick<
+    ServiceFactory,
+    "platformLinkService" | "playerCountService" | "operationalIncidentService"
+  >;
   webhookCredentialService?: WebhookCredentialService;
   webhookIngressGuard?: WebhookIngressGuardNamespace;
   readCustomerAdminSession?: (request: Request) => Promise<CustomerSession | null>;
@@ -495,7 +281,7 @@ async function reportPlayerLinkPanelPublishPermissionDenied(
         options.stores.guildAuditLog,
         options.discordBotToken,
       ),
-      options.services?.operationalIncidentService?.observeFailure({
+      options.services.operationalIncidentService.observeFailure({
         guildId: body.guildId,
         key: {
           feature: "platform-link",
@@ -518,7 +304,7 @@ async function observePlayerLinkPanelPublishHealthy(
   body: PlayerLinkPublishBody,
 ): Promise<void> {
   try {
-    await options.services?.operationalIncidentService?.observeHealthy({
+    await options.services.operationalIncidentService.observeHealthy({
       guildId: body.guildId,
       key: {
         feature: "platform-link",
@@ -536,12 +322,7 @@ async function syncPlayerLinkRoles(
   options: IntegrationsAdminRoutesOptions,
   body: PlayerLinkSyncRolesBody,
 ): Promise<Response> {
-  const platformLinkService =
-    options.services?.platformLinkService ??
-    createServiceFactory({
-      stores: options.stores,
-      discordBotToken: options.discordBotToken,
-    }).platformLinkService;
+  const platformLinkService = options.services.platformLinkService;
   const result = await platformLinkService.syncLinkedRoles(body.guildId, body.platform);
   return Response.json({ ok: true, ...result });
 }
@@ -558,34 +339,18 @@ async function adminWebhookProxyConfig(
   service: WebhookCredentialService,
   config: WebhookProxyConfig,
 ) {
-  const destinations = config.destinationsV2
-    ? await Promise.all(
-        config.destinationsV2.map(async (destination) => ({
-          id: destination.id,
-          label: destination.label,
-          credential: await service.masked(destination.credentialId, {
-            kind: "proxy_destination",
-            guildId: config.guildId,
-            publicId: config.publicId,
-            destinationId: destination.id,
-          }),
-        })),
-      )
-    : await Promise.all(
-        config.destinations.map(async (destination) => ({
-          id: destination.id,
-          label: destination.label,
-          credential: await service.replace(
-            {
-              kind: "proxy_destination",
-              guildId: config.guildId,
-              publicId: config.publicId,
-              destinationId: destination.id,
-            },
-            destination.url,
-          ),
-        })),
-      );
+  const destinations = await Promise.all(
+    config.destinations.map(async (destination) => ({
+      id: destination.id,
+      label: destination.label,
+      credential: await service.masked(destination.credentialId, {
+        kind: "proxy_destination",
+        guildId: config.guildId,
+        publicId: config.publicId,
+        destinationId: destination.id,
+      }),
+    })),
+  );
   const banLookupCredential = config.banLookupCredentialId
     ? await service.masked(config.banLookupCredentialId, {
         kind: "ban_lookup_notification",
@@ -629,7 +394,6 @@ async function saveWebhookProxyConfig(
   }
 
   const destinations = [];
-  const destinationsV2 = [];
   for (const destination of body.destinations) {
     const owner = {
       kind: "proxy_destination" as const,
@@ -641,9 +405,7 @@ async function saveWebhookProxyConfig(
       destination.credential.action === "replace"
         ? await credentials.replace(owner, destination.credential.url)
         : await credentials.preserve(destination.credential.credentialId, owner);
-    const revealed = await credentials.reveal(masked.credentialId, owner);
-    destinations.push({ id: destination.id, label: destination.label, url: revealed.url });
-    destinationsV2.push({
+    destinations.push({
       id: destination.id,
       label: destination.label,
       credentialId: masked.credentialId,
@@ -656,15 +418,12 @@ async function saveWebhookProxyConfig(
     publicId,
   };
   let banLookupCredentialId: string | null = null;
-  let banLookupNotificationUrl: string | null = null;
   if (body.banLookupCredential.action !== "clear") {
     const masked =
       body.banLookupCredential.action === "replace"
         ? await credentials.replace(banOwner, body.banLookupCredential.url)
         : await credentials.preserve(body.banLookupCredential.credentialId, banOwner);
-    const revealed = await credentials.reveal(masked.credentialId, banOwner);
     banLookupCredentialId = masked.credentialId;
-    banLookupNotificationUrl = revealed.url;
   }
 
   const config: WebhookProxyConfig = {
@@ -673,18 +432,15 @@ async function saveWebhookProxyConfig(
     name: body.name,
     enabled: body.enabled,
     banLookupEnabled: body.banLookupEnabled,
-    banLookupNotificationUrl,
     banLookupCredentialId,
     banLookupAppIds: body.banLookupAppIds,
     destinations,
-    destinationsV2,
     defaultDestinationIds: body.defaultDestinationIds,
     routingRules: body.routingRules.map((rule) => ({ ...rule, flags: rule.flags ?? "" })),
     contentReplacements: (body.contentReplacements ?? []).map((entry) => ({
       ...entry,
       flags: entry.flags ?? "",
     })),
-    credentialMigratedAtMs: now,
     createdAtMs: existing?.createdAtMs ?? now,
     updatedAtMs: now,
   };
@@ -703,8 +459,8 @@ async function saveWebhookProxyConfig(
     commitFree: () => options.stores.webhookProxy.upsertWebhookProxyConfig(config),
   });
 
-  const retainedIds = new Set(destinationsV2.map((destination) => destination.credentialId));
-  for (const old of existing?.destinationsV2 ?? []) {
+  const retainedIds = new Set(destinations.map((destination) => destination.credentialId));
+  for (const old of existing?.destinations ?? []) {
     if (!retainedIds.has(old.credentialId)) {
       await credentials.remove(old.credentialId, {
         kind: "proxy_destination",
@@ -739,10 +495,13 @@ export function createIntegrationsAdminRoutes(
         const config = await options.stores.playerCount.readPlayerCountServer(body.id);
         if (!config || config.guildId !== body.guildId)
           return Response.json({ error: "Configuration not found." }, { status: 404 });
-        const update = options.stores.playerCount.setPlayerCountServerEnabled;
-        if (!update)
-          return Response.json({ error: "Availability changes are unavailable." }, { status: 503 });
-        if (!(await update(body.guildId, body.id, body.enabled)))
+        if (
+          !(await options.stores.playerCount.setPlayerCountServerEnabled(
+            body.guildId,
+            body.id,
+            body.enabled,
+          ))
+        )
           return Response.json({ error: "Configuration not found." }, { status: 404 });
         return Response.json({ ok: true });
       },
@@ -762,10 +521,13 @@ export function createIntegrationsAdminRoutes(
           body.platform,
         );
         if (!config) return Response.json({ error: "Configuration not found." }, { status: 404 });
-        const update = options.stores.platformLink.setPlatformLinkEnabled;
-        if (!update)
-          return Response.json({ error: "Availability changes are unavailable." }, { status: 503 });
-        if (!(await update(body.guildId, body.platform, body.enabled)))
+        if (
+          !(await options.stores.platformLink.setPlatformLinkEnabled(
+            body.guildId,
+            body.platform,
+            body.enabled,
+          ))
+        )
           return Response.json({ error: "Configuration not found." }, { status: 404 });
         return Response.json({ ok: true });
       },
@@ -847,7 +609,7 @@ export function createIntegrationsAdminRoutes(
       handler: async ({ body, request, adminRequest }) =>
         saveWebhookProxyConfig(
           options,
-          webhookProxyConfigBodySchema.parse(body),
+          body,
           await integrationConfigurationActor(options, request, adminRequest),
         ),
     }),
@@ -867,9 +629,7 @@ export function createIntegrationsAdminRoutes(
           return Response.json({ error: "Not found" }, { status: 404 });
         }
         const config = await options.stores.webhookProxy.readWebhookProxyConfig(body.publicId);
-        const destination = config?.destinationsV2?.find(
-          (entry) => entry.id === body.destinationId,
-        );
+        const destination = config?.destinations.find((entry) => entry.id === body.destinationId);
         if (!config || config.guildId !== body.guildId || !destination) {
           return Response.json({ error: "Not found" }, { status: 404 });
         }
@@ -978,7 +738,7 @@ export function createIntegrationsAdminRoutes(
         });
         const credentials = options.webhookCredentialService;
         if (credentials) {
-          for (const destination of existing.destinationsV2 ?? []) {
+          for (const destination of existing.destinations) {
             await credentials.remove(destination.credentialId, {
               kind: "proxy_destination",
               guildId: body.guildId,
@@ -1055,9 +815,7 @@ export function createIntegrationsAdminRoutes(
       errors: adminErrorEnvelopeSchema,
       handler: async ({ query }) => {
         const guildId = requireGuildQueryId(query);
-        const servers = options.services?.playerCountService
-          ? await options.services.playerCountService.listServers(guildId)
-          : await options.stores.playerCount.listPlayerCountServers(guildId);
+        const servers = await options.services.playerCountService.listServers(guildId);
         const targets = (await options.wardogs?.list(guildId)) ?? [];
         return Response.json({
           guildId,
@@ -1182,7 +940,7 @@ export function createIntegrationsAdminRoutes(
             updatedAtMs: now,
           });
           if (replacing)
-            await options.services?.playerCountService?.clearFailureAlerts(body.guildId, body.id);
+            await options.services.playerCountService.clearFailureAlerts(body.guildId, body.id);
           return Response.json({ ok: true });
         }
 
@@ -1236,13 +994,7 @@ export function createIntegrationsAdminRoutes(
       success: deletePlayerCountServer.success.schema,
       errors: adminErrorEnvelopeSchema,
       handler: async ({ body, request }) => {
-        const playerCountService =
-          options.services?.playerCountService ??
-          createServiceFactory({
-            stores: options.stores,
-            discordBotToken: options.discordBotToken,
-            guildResources: resolveGuildResources(options),
-          }).playerCountService;
+        const playerCountService = options.services.playerCountService;
         const actorUserId =
           (await options.readCustomerAdminSession?.(request))?.user.discordUserId ?? "admin-ui";
         const deleted = await playerCountService.deleteServer(body.guildId, body.id, actorUserId);
@@ -1263,10 +1015,7 @@ export function createIntegrationsAdminRoutes(
       success: testPlayerCount.success.schema,
       errors: adminErrorEnvelopeSchema,
       handler: async ({ body }) => {
-        const service = options.services?.playerCountService;
-        if (!service) {
-          return Response.json({ error: "Player Count service unavailable" }, { status: 503 });
-        }
+        const service = options.services.playerCountService;
         const result = await service.testServerReachability(body.guildId, body.serverId);
         if (!result.ok && result.error === "Server not found") {
           return Response.json({ ok: false, error: result.error }, { status: 404 });
@@ -1274,25 +1023,7 @@ export function createIntegrationsAdminRoutes(
         return Response.json(result);
       },
     }),
-    defineRoute({
-      ...getSteamLink,
-      method: "GET",
-      path: "/admin/api/steam-link",
-      feature: "steamLink",
-      query: getSteamLink.query,
-      access: guildScopedAccess("read"),
-      success: getSteamLink.success.schema,
-      errors: adminErrorEnvelopeSchema,
-      handler: async ({ query }) => {
-        const guildId = requireGuildQueryId(query);
-        const [config, links] = await Promise.all([
-          options.stores.platformLink.readPlatformLinkConfig(guildId, "steam"),
-          options.stores.platformLink.listPlatformLinks(guildId, "steam"),
-        ]);
 
-        return Response.json({ guildId, config, links });
-      },
-    }),
     defineRoute({
       ...getPlayerLink,
       method: "GET",
@@ -1345,44 +1076,6 @@ export function createIntegrationsAdminRoutes(
       success: syncPlayerLinkRolesOperation.success.schema,
       errors: adminErrorEnvelopeSchema,
       handler: ({ body }) => syncPlayerLinkRoles(options, body),
-    }),
-    defineRoute({
-      ...saveSteamLinkOperation,
-      method: "POST",
-      path: "/admin/api/steam-link/config",
-      feature: "steamLink",
-      body: saveSteamLinkOperation.body,
-      access: bodyGuildScopedAccess("write"),
-      success: saveSteamLinkOperation.success.schema,
-      errors: adminErrorEnvelopeSchema,
-      handler: ({ body }) =>
-        savePlayerLinkConfig(options, {
-          ...body,
-          platform: "steam",
-          linkedRoleId: body.steamLinkedRoleId,
-        }),
-    }),
-    defineRoute({
-      ...publishSteamLinkOperation,
-      method: "POST",
-      path: "/admin/api/steam-link/publish",
-      feature: "steamLink",
-      body: publishSteamLinkOperation.body,
-      access: bodyGuildScopedAccess("write"),
-      success: publishSteamLinkOperation.success.schema,
-      errors: adminErrorEnvelopeSchema,
-      handler: ({ body }) => publishPlayerLinkPanel(options, { ...body, platform: "steam" }),
-    }),
-    defineRoute({
-      ...syncSteamLinkRolesOperation,
-      method: "POST",
-      path: "/admin/api/steam-link/sync-roles",
-      feature: "steamLink",
-      body: syncSteamLinkRolesOperation.body,
-      access: bodyGuildScopedAccess("write"),
-      success: syncSteamLinkRolesOperation.success.schema,
-      errors: adminErrorEnvelopeSchema,
-      handler: ({ body }) => syncPlayerLinkRoles(options, { ...body, platform: "steam" }),
     }),
   ];
 }

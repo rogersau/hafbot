@@ -1,3 +1,4 @@
+import type { Cache } from "./discord-json-cache";
 import {
   DiscordApiError,
   fetchGuildSummary,
@@ -13,7 +14,7 @@ import {
 } from "../discord";
 import { loadGuildPermissionContext, type GuildPermissionContext } from "./admin-permissions";
 import type { DiscordGuildDiscoveryUserGuild } from "./discord-guild-discovery";
-import { createJsonKvCache } from "./discord-json-cache";
+import { createJsonCache } from "./discord-json-cache";
 
 const ADMIN_DISCORD_CACHE_TTL_MS = 5 * 60 * 1000;
 const GUILD_RESOURCE_CACHE_TTL_MS = 60 * 1000;
@@ -38,13 +39,13 @@ export function shouldRefreshAdminDiscordCache(url: URL): boolean {
 export function getCachedBotGuilds(
   botToken: string,
   refresh: boolean,
-  discordCacheKv?: KVNamespace,
+  discordCache?: Cache<string>,
   allowStaleOnRateLimit = true,
 ): Promise<BotGuild[]> {
   const memoryKey = `bot-guilds:${botToken}`;
   const kvKey = "bot-guilds";
   return readCached(memoryKey, refresh, async () => {
-    const kvCache = createJsonKvCache<BotGuild[]>(discordCacheKv);
+    const kvCache = createJsonCache<BotGuild[]>(discordCache);
     if (!refresh) {
       const cachedGuilds = await kvCache.get(kvKey);
       if (cachedGuilds) return cachedGuilds;
@@ -80,10 +81,10 @@ export function getCachedCurrentUserGuilds(
   accessToken: string,
   refresh: boolean,
   cacheIdentity?: string,
-  discordCacheKv?: KVNamespace,
+  discordCache?: Cache<string>,
 ): Promise<DiscordGuildDiscoveryUserGuild[]> {
   return readCached(`current-user-guilds:${accessToken}`, refresh, async () => {
-    const kvCache = createJsonKvCache<DiscordGuildDiscoveryUserGuild[]>(discordCacheKv);
+    const kvCache = createJsonCache<DiscordGuildDiscoveryUserGuild[]>(discordCache);
     const kvKey = cacheIdentity ? `current-user-guilds:${cacheIdentity}` : null;
     if (!refresh && kvKey) {
       const cachedGuilds = await kvCache.get(kvKey);

@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { CommerceFinancialAction } from "../src/commerce/financial-operations";
-import { CloudflareCommerceFinancialOperationsStore } from "../src/runtime/commerce/cloudflare-financial-operations-store";
-import { processCommerceFinancialProviderActions } from "../src/runtime/commerce/financial-provider-actions";
+import { SqliteCommerceFinancialOperationsStore } from "./support/sqlite/runtime/commerce/sqlite-financial-operations-store";
+import { processCommerceFinancialProviderActions } from "./support/sqlite/runtime/commerce/financial-provider-actions";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 for (const stage of ["initial", "final"] as const) {
@@ -250,7 +250,7 @@ test("provider actions persist their provider stage and resume at reconciliation
 
     database.execRaw(`
       UPDATE commerce_offering_retirements SET status='complete',completed_at_ms=100;
-      UPDATE commerce_offering_lifecycles SET state='archived',archived_at_ms=100;
+      UPDATE commerce_offerings SET state='archived',archived_at_ms=100 WHERE id='off-1';
       INSERT INTO commerce_subscriptions(id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,cancel_at_period_end,current_period_end_ms,created_at_ms,updated_at_ms)
         VALUES ('sub-late','acct-1','customer-late','buyer-late','off-1','price-1','sub_stripe_late','active',0,3000,2,2);
     `);
@@ -354,7 +354,7 @@ test("provider actions quarantine after bounded retries and open an incident", a
 test("parent financial actions quarantine after bounded retries and cannot be reclaimed", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceFinancialOperationsStore(database.d1);
+    const store = new SqliteCommerceFinancialOperationsStore(database.d1);
     const action: CommerceFinancialAction = {
       id: "refund-1",
       connectedAccountId: "acct-1",
@@ -419,10 +419,10 @@ test("expired parent leases cannot mutate seller state", async () => {
     database.execRaw(`
       INSERT INTO commerce_connected_accounts(id,guild_id,stripe_account_id,status,charges_enabled,payouts_enabled,details_submitted,created_at_ms,updated_at_ms)
         VALUES ('acct-1','guild-1','acct_stripe','active',1,1,1,1,1);
-      INSERT INTO commerce_offering_lifecycles(offering_id,connected_account_id,guild_id,state,included_benefits_json,support_contact,role_manageable,created_at_ms,updated_at_ms)
-        VALUES ('off-1','acct-1','guild-1','published','["Access"]','seller@example.test',1,1,1);
+      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,included_benefits_json,support_contact,role_manageable,created_at_ms,updated_at_ms)
+        VALUES ('off-1','acct-1','guild-1','role-1','Gold','subscription','published','["Access"]','seller@example.test',1,1,1);
     `);
-    const store = new CloudflareCommerceFinancialOperationsStore(database.d1);
+    const store = new SqliteCommerceFinancialOperationsStore(database.d1);
     const action = parentSellerAction();
     assert.equal(
       await store.claimAction(action, { leaseToken: "expired", nowMs: 100, leaseMs: 100 }),
@@ -434,9 +434,8 @@ test("expired parent leases cannot mutate seller state", async () => {
       nowMs: 201,
     });
     assert.equal(
-      database.query<{ state: string }>(
-        "SELECT state FROM commerce_offering_lifecycles WHERE offering_id='off-1'",
-      )[0]?.state,
+      database.query<{ state: string }>("SELECT state FROM commerce_offerings WHERE id='off-1'")[0]
+        ?.state,
       "published",
     );
 
@@ -450,9 +449,8 @@ test("expired parent leases cannot mutate seller state", async () => {
       nowMs: 201,
     });
     assert.equal(
-      database.query<{ state: string }>(
-        "SELECT state FROM commerce_offering_lifecycles WHERE offering_id='off-1'",
-      )[0]?.state,
+      database.query<{ state: string }>("SELECT state FROM commerce_offerings WHERE id='off-1'")[0]
+        ?.state,
       "unpublished",
     );
     await store.enqueueSubscriptionCancellations({
@@ -607,10 +605,8 @@ function seedRetirement(database: Awaited<ReturnType<typeof createTestDatabase>>
   database.execRaw(`
     INSERT INTO commerce_connected_accounts(id,guild_id,stripe_account_id,status,charges_enabled,payouts_enabled,details_submitted,created_at_ms,updated_at_ms)
       VALUES ('acct-1','guild-1','acct_stripe','active',1,1,1,1,1);
-    INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms)
-      VALUES ('off-1','acct-1','guild-1','role-1','Gold','subscription','draft',1,1);
-    INSERT INTO commerce_offering_lifecycles(offering_id,connected_account_id,guild_id,state,included_benefits_json,support_contact,role_manageable,retire_at_ms,created_at_ms,updated_at_ms)
-      VALUES ('off-1','acct-1','guild-1','retiring','["Access"]','seller@example.test',1,2,1,1);
+    INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,included_benefits_json,support_contact,role_manageable,retire_at_ms,created_at_ms,updated_at_ms)
+      VALUES ('off-1','acct-1','guild-1','role-1','Gold','subscription','retiring','["Access"]','seller@example.test',1,2,1,1);
     INSERT INTO commerce_offering_retirements(id,connected_account_id,guild_id,offering_id,requested_by_user_id,reason_code,status,active_subscription_count,scheduled_cancellation_count,failed_cancellation_count,created_at_ms,updated_at_ms)
       VALUES ('retire-1','acct-1','guild-1','off-1','seller-1','seller_requested','scheduling_cancellations',1,0,0,1,1);
     INSERT INTO commerce_subscriptions(id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,cancel_at_period_end,current_period_end_ms,created_at_ms,updated_at_ms)

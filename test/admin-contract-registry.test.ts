@@ -1,3 +1,4 @@
+import { composeTestServices } from "./support/compose-services";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { z } from "zod";
@@ -146,6 +147,7 @@ test("Webhook Proxy runtime routes bind every static contract", () => {
     stores: {} as never,
     adminAccess: {} as never,
     discordBotToken: "token",
+    services: composeTestServices(),
   });
   const webhookRoutes = routes.filter(({ path }) => path.startsWith("/admin/api/webhook-proxy"));
   assert.deepEqual(
@@ -192,11 +194,10 @@ test("Player Count and Player Link runtime routes bind every static contract", (
     stores: {} as never,
     adminAccess: {} as never,
     discordBotToken: "token",
+    services: composeTestServices(),
   }).filter(
     ({ path }) =>
-      path.startsWith("/admin/api/player-count") ||
-      path.startsWith("/admin/api/player-link") ||
-      path.startsWith("/admin/api/steam-link"),
+      path.startsWith("/admin/api/player-count") || path.startsWith("/admin/api/player-link"),
   );
   const contracts = [...Object.values(playerCountContracts), ...Object.values(playerLinkContracts)];
   assert.deepEqual(
@@ -231,6 +232,7 @@ test("Cross-cutting runtime routes bind every shared contract", () => {
       stores: {} as never,
       adminAccess: {} as never,
       discordBotToken: "token",
+      services: composeTestServices(),
     }),
     ...createSpaAdminRoutes({ adminRouteServices: {} as never } as never),
   ].filter((route) =>

@@ -49,8 +49,8 @@ export interface Assignment {
   nextAtMs: number;
   updatedAtMs: number;
   transmitted: {
-    // Local marker identity only; this is not upstream idempotency. Optional for older records.
-    operationId?: string;
+    // Local marker identity; the upstream provider does not use this as an idempotency key.
+    operationId: string;
     action: "grant" | "remove";
     acknowledged: boolean;
     atMs: number;

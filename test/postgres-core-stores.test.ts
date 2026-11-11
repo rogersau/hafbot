@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { resolve } from "node:path";
 import test from "node:test";
 
 import { user } from "../src/db/postgres/auth-schema";
@@ -14,12 +13,7 @@ import { createPostgresCustomerAuth } from "../src/runtime/postgres/postgres-cus
 import { createPostgresGuildRbacStore } from "../src/runtime/postgres/postgres-guild-rbac-store";
 import { createPostgresGuildServiceSuspensionStore } from "../src/runtime/postgres/postgres-guild-service-suspension-store";
 import { createPostgresKnownGuildStore } from "../src/runtime/postgres/postgres-known-guild-store";
-import {
-  applyPostgresMigrations,
-  checkPostgresMigrations,
-  readPostgresMigrations,
-  type PostgresMigration,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresUserPreferencesStore } from "../src/runtime/postgres/postgres-user-preferences-store";
 import { createPostgresWorkspaceStore } from "../src/runtime/postgres/postgres-workspace-store";
 import { WorkspaceGuildAlreadyLinkedError } from "../src/runtime/workspace-store";
@@ -84,7 +78,7 @@ test("PostgreSQL production permits only an explicit internal Docker TLS excepti
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 
 test(
-  "PostgreSQL core adapters satisfy persistence, concurrency, auth, and migration contracts",
+  "PostgreSQL core adapters satisfy persistence, concurrency, auth, and fresh schema initialization",
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     assert.ok(postgresUrl);
@@ -96,18 +90,7 @@ test(
     });
     try {
       await resetTestDatabase(database);
-      const migrations = await readPostgresMigrations(resolve("migrations/postgres"));
-      assert.deepEqual((await checkPostgresMigrations(database, migrations)).applied, []);
-      const concurrentMigrationResults = await Promise.all([
-        applyPostgresMigrations(database, migrations),
-        applyPostgresMigrations(database, migrations),
-      ]);
-      assert.deepEqual(
-        concurrentMigrationResults.map(({ pending }) => pending),
-        [[], []],
-      );
-      await verifyMigrationChecksums(database, migrations[0]!);
-      await verifyInvitationMigration(database, migrations);
+      await Promise.all([initializePostgresSchema(database), initializePostgresSchema(database)]);
 
       await verifyAppConfig(database);
       await verifyGuildRbac(database);
@@ -117,57 +100,24 @@ test(
       await verifySuspensions(database);
       await verifyAuthSchema(database);
       await verifyReadOnlyHttpConnection(postgresUrl);
+      assert.deepEqual(
+        await database.query(`
+        SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+        AND (tablename LIKE 'legacy_%' OR tablename IN (
+          'haf_schema_migrations', 'billing_founder_places', 'steam_link_configs',
+          'steam_links', 'pending_steam_links', 'reaction_role_additional_panels'
+        ))
+      `),
+        [],
+      );
+      await database.execute("CREATE TABLE unrelated_private_state (id TEXT)");
+      await assert.rejects(initializePostgresSchema(database), /current public schema or be empty/);
+      await database.execute("DROP TABLE unrelated_private_state");
     } finally {
       await database.close();
     }
   },
 );
-
-async function verifyInvitationMigration(
-  database: PostgresDatabaseCapability,
-  migrations: PostgresMigration[],
-): Promise<void> {
-  const migrationName = "0020_auth-invitation-created-at.sql";
-  assert.ok(migrations.some(({ name }) => name === migrationName));
-  await resetTestDatabase(database);
-  await applyPostgresMigrations(
-    database,
-    migrations.filter(({ name }) => name < migrationName),
-  );
-  await database.execute(`
-    INSERT INTO "Organization" (id,name,slug,"createdAt")
-    VALUES ('legacy-workspace','Workspace','legacy-workspace','2026-01-01T00:00:00.000Z');
-    INSERT INTO "Invitation" (id,"organizationId",email,role,status,"expiresAt","inviterId")
-    VALUES ('pending','legacy-workspace','pending@example.test','member','pending','2099-01-01T00:00:00.000Z','owner'),
-           ('accepted','legacy-workspace','accepted@example.test',NULL,'accepted','2026-01-02T00:00:00.000Z','owner');
-  `);
-  const original = await database.query('SELECT * FROM "Invitation" ORDER BY id');
-  const before = Date.now();
-  await applyPostgresMigrations(database, migrations);
-  const migrated = await database.query<{ createdAt: Date }>(
-    'SELECT * FROM "Invitation" ORDER BY id',
-  );
-  assert.deepEqual(
-    migrated.map(({ createdAt, ...row }) => {
-      assert.ok(createdAt.getTime() >= before && createdAt.getTime() <= Date.now());
-      return row;
-    }),
-    original,
-  );
-  await assert.rejects(
-    database.execute('UPDATE "Invitation" SET "createdAt" = NULL'),
-    /not-null constraint/,
-  );
-  await database.execute(
-    `UPDATE "Organization" SET id = 'renamed-workspace' WHERE id = 'legacy-workspace'`,
-  );
-  assert.equal(
-    (await database.query('SELECT "organizationId" FROM "Invitation"'))[0]?.organizationId,
-    "renamed-workspace",
-  );
-  await database.execute(`DELETE FROM "Organization" WHERE id = 'renamed-workspace'`);
-  assert.deepEqual(await database.query('SELECT * FROM "Invitation"'), []);
-}
 
 async function verifyReadOnlyHttpConnection(url: string): Promise<void> {
   const database = createPostgresDatabaseCapabilityFromEnvironment(
@@ -204,21 +154,6 @@ async function verifyAppConfig(database: PostgresDatabaseCapability): Promise<vo
     ["gateway"],
   );
   assert.equal(rows[0]?.value, "two");
-}
-
-async function verifyMigrationChecksums(
-  database: PostgresDatabaseCapability,
-  migration: { name: string; checksum: string; sql: string },
-): Promise<void> {
-  await database.execute("UPDATE haf_schema_migrations SET checksum = $1 WHERE name = $2", [
-    "changed-checksum",
-    migration.name,
-  ]);
-  await assert.rejects(checkPostgresMigrations(database, [migration]), /has changed checksum/);
-  await database.execute("UPDATE haf_schema_migrations SET checksum = $1 WHERE name = $2", [
-    migration.checksum,
-    migration.name,
-  ]);
 }
 
 async function verifyGuildRbac(database: PostgresDatabaseCapability): Promise<void> {
@@ -383,52 +318,6 @@ async function verifySuspensions(database: PostgresDatabaseCapability): Promise<
     ],
   );
 }
-
-test(
-  "auth invitation migration preserves existing invitations and is applied once",
-  { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
-  async () => {
-    assert.ok(postgresUrl);
-    assertSafeTestDatabase(postgresUrl);
-    const database = createPostgresDatabaseCapabilityFromEnvironment({
-      DATABASE_URL: postgresUrl,
-      NODE_ENV: "test",
-    });
-    try {
-      await resetTestDatabase(database);
-      const migrations = await readPostgresMigrations(resolve("migrations/postgres"));
-      const migrationIndex = migrations.findIndex(
-        ({ name }) => name === "0020_auth-invitation-created-at.sql",
-      );
-      assert.ok(migrationIndex > 0);
-      await applyPostgresMigrations(database, migrations.slice(0, migrationIndex));
-      await database.execute(
-        `INSERT INTO "Organization" (id, name, slug, "createdAt")
-         VALUES ('invitation-workspace', 'Workspace', 'invitation-workspace', CURRENT_TIMESTAMP)`,
-      );
-      await database.execute(
-        `INSERT INTO "Invitation" (id, "organizationId", email, role, status, "expiresAt", "inviterId")
-         VALUES ('existing-invitation', 'invitation-workspace', 'invite@example.test', 'member',
-                 'pending', '2026-12-01T00:00:00Z', 'inviter')`,
-      );
-
-      await applyPostgresMigrations(database, migrations);
-      const readInvitation = () =>
-        database.query<{ id: string; status: string; createdAt: Date }>(
-          `SELECT id, status, "createdAt" FROM "Invitation" WHERE id = 'existing-invitation'`,
-        );
-      const [invitation] = await readInvitation();
-      assert.equal(invitation?.id, "existing-invitation");
-      assert.equal(invitation?.status, "pending");
-      assert.ok(invitation.createdAt instanceof Date);
-      assert.ok(Number.isFinite(invitation.createdAt.getTime()));
-      await applyPostgresMigrations(database, migrations);
-      assert.deepEqual(await readInvitation(), [invitation]);
-    } finally {
-      await database.close();
-    }
-  },
-);
 
 async function verifyAuthSchema(database: PostgresDatabaseCapability): Promise<void> {
   const now = new Date("2026-08-20T00:00:00.000Z");

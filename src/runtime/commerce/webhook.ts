@@ -1,3 +1,4 @@
+import type { CommerceReconciliationMessage } from "./reconciliation";
 import { isRecord } from "../../unknown-parse";
 
 /** The initial Connect event surface. Other verified events are acknowledged and ignored. */
@@ -56,7 +57,7 @@ export interface CommerceWebhookStore {
   accept(
     event: CommerceWebhookMetadata,
   ): Promise<{ accepted: boolean; outboxPending: boolean; generation: number }>;
-  markOutboxSent(eventId: string, connectedAccountId: string, sentAtMs: number): Promise<void>;
+  markOutboxSent(message: CommerceReconciliationMessage, sentAtMs: number): Promise<void>;
 }
 
 export interface CommerceSyncQueueMessage {
@@ -70,9 +71,6 @@ export interface CommerceSyncQueueMessage {
 export interface CommerceSyncQueueSender {
   send(message: CommerceSyncQueueMessage): Promise<unknown>;
 }
-
-/** Alias retained for callers that describe the handler as a Connect webhook. */
-export const createCommerceConnectWebhookHandler = createCommerceStripeWebhookHandler;
 
 export function createCommerceStripeWebhookHandler(options: {
   secret: string;
@@ -112,14 +110,15 @@ export function createCommerceStripeWebhookHandler(options: {
     const accepted = await options.store.accept(parsed);
     if (accepted.outboxPending) {
       try {
-        await options.queue.send({
+        const message: CommerceReconciliationMessage = {
           eventId: parsed.eventId,
           connectedAccountId: parsed.connectedAccountId,
           resourceType: "seller",
           resourceId: parsed.connectedAccountId,
           generation: accepted.generation,
-        });
-        await options.store.markOutboxSent(parsed.eventId, parsed.connectedAccountId, now());
+        };
+        await options.queue.send(message);
+        await options.store.markOutboxSent(message, now());
       } catch {
         // The durable outbox repair sweep owns retries for this gap. Stripe still receives 200.
       }

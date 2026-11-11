@@ -188,8 +188,6 @@ function lifecycleFingerprint(value: BillingSubscriptionProjection): string {
     cancelledAtMs: value.cancelledAtMs,
     scheduleId: value.scheduleId,
     quarantineReason: value.quarantineReason,
-    pricingCohort: value.pricingCohort,
-    founderAwardedAtMs: value.founderAwardedAtMs,
   });
 }
 
@@ -250,16 +248,6 @@ export function projectOwnerState(
   if (!catalogEntry || catalogEntry.productId !== subscription.productId) {
     return quarantinedProjection(ownerId, state, previous, "unknown_catalog", subscription);
   }
-  if (
-    previous?.subscriptionId === subscription.id &&
-    previous.pricingCohort &&
-    previous.pricingCohort !== catalogEntry.cohort &&
-    (catalogEntry.cohort !== "standard" || catalogEntry.legacy === true)
-  ) {
-    return quarantinedProjection(ownerId, state, previous, "pricing_cohort_mismatch", subscription);
-  }
-  // Existing founder awards remain historical subscription state. Moving to a
-  // current standard offer must not quarantine that same subscription.
   return fromSubscription(
     ownerId,
     state,
@@ -267,7 +255,6 @@ export function projectOwnerState(
     catalogEntry,
     normalizeStatus(subscription.status),
     null,
-    previous,
   );
 }
 
@@ -288,7 +275,7 @@ function quarantinedProjection(
     };
   }
   return observed
-    ? fromSubscription(ownerId, state, observed, null, "quarantined", reason, previous)
+    ? fromSubscription(ownerId, state, observed, null, "quarantined", reason)
     : emptyProjection(ownerId, state, "quarantined", reason);
 }
 
@@ -323,8 +310,6 @@ function emptyProjection(
     scheduleId: null,
     observedAtMs: state.observedAtMs,
     quarantineReason,
-    pricingCohort: null,
-    founderAwardedAtMs: null,
   };
 }
 
@@ -335,31 +320,9 @@ function fromSubscription(
   catalogEntry: BillingCatalogEntry | null,
   status: BillingSubscriptionProjection["status"],
   quarantineReason: string | null,
-  previous: BillingSubscriptionProjection | null = null,
 ): BillingSubscriptionProjection {
   const retainsKnownPlan =
     status !== "incomplete" && status !== "cancelled" && status !== "quarantined";
-  const sameSubscription = previous?.subscriptionId === subscription.id;
-  const founderAwardedAtMs =
-    status === "cancelled"
-      ? null
-      : sameSubscription && previous?.founderAwardedAtMs
-        ? previous.founderAwardedAtMs
-        : catalogEntry?.cohort === "founder" &&
-            subscription.livemode === true &&
-            subscription.latestInvoicePaid === true &&
-            subscription.latestInvoiceBillingReason === "subscription_create" &&
-            (subscription.latestInvoiceAmountPaid ?? 0) > 0
-          ? state.observedAtMs
-          : null;
-  const pricingCohort =
-    status === "cancelled"
-      ? null
-      : founderAwardedAtMs
-        ? "founder"
-        : catalogEntry?.cohort === "standard"
-          ? "standard"
-          : null;
   return {
     ownerId,
     customerId: state.customer.id,
@@ -377,8 +340,6 @@ function fromSubscription(
     scheduleId: subscription.scheduleId,
     observedAtMs: state.observedAtMs,
     quarantineReason,
-    pricingCohort,
-    founderAwardedAtMs,
   };
 }
 

@@ -21,13 +21,8 @@ await Promise.all([
   }),
   build({
     ...shared,
-    entryPoints: ["src/runtime/postgres/postgres-migrations.ts"],
-    outfile: "dist-node/postgres-migrations.mjs",
-  }),
-  build({
-    ...shared,
-    entryPoints: ["src/node/object-migration-main.ts"],
-    outfile: "dist-node/object-migration.mjs",
+    entryPoints: ["src/runtime/postgres/postgres-schema.ts"],
+    outfile: "dist-node/postgres-schema.mjs",
   }),
   build({
     ...shared,

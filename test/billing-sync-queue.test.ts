@@ -10,6 +10,8 @@ import {
   type BillingQueueEventStore,
 } from "../src/runtime/billing/sync-queue";
 import type { BillingSyncQueueMessage } from "../src/runtime/billing/webhook";
+import { deliverBillingSync } from "../src/runtime/billing/postgres-runtime";
+import { queueJobMetadata } from "./support/queue-delivery-fixture";
 
 test("queue delivery and redelivery converge through full-owner sync", async () => {
   const store = new MemoryQueueStore();
@@ -78,6 +80,78 @@ test("outbox sweep repairs commit-success and Queue-send failure", async () => {
   );
   assert.deepEqual(queued, store.pending);
   assert.deepEqual(store.sent, ["evt_1"]);
+});
+
+test("Billing sync direct delivery reuses the selected process port for repeated jobs", async () => {
+  const seen: Array<{ eventId: string; attempts: number }> = [];
+  const processing = {
+    async processMessage(message: BillingSyncQueueMessage, attempts: number) {
+      seen.push({ eventId: message.eventId, attempts });
+      return "processed" as const;
+    },
+  };
+
+  const first = await deliverBillingSync(
+    { eventId: "evt_1", customerId: "cus_1" },
+    queueJobMetadata({ jobId: "job-1", queueName: "billing-sync", attempts: 1 }),
+    processing,
+  );
+  const second = await deliverBillingSync(
+    { eventId: "evt_2", customerId: "cus_1" },
+    queueJobMetadata({ jobId: "job-2", queueName: "billing-sync", attempts: 2 }),
+    processing,
+  );
+
+  assert.deepEqual(first, { status: "complete" });
+  assert.deepEqual(second, { status: "complete" });
+  assert.deepEqual(seen, [
+    { eventId: "evt_1", attempts: 1 },
+    { eventId: "evt_2", attempts: 2 },
+  ]);
+});
+
+test("Billing sync direct delivery rejects malformed payloads before the process port", async () => {
+  let calls = 0;
+  const outcome = await deliverBillingSync(
+    { eventId: "evt_1" },
+    queueJobMetadata({ jobId: "malformed", queueName: "billing-sync" }),
+    {
+      async processMessage() {
+        calls++;
+        return "processed" as const;
+      },
+    },
+  );
+
+  assert.deepEqual(outcome, {
+    status: "terminal",
+    reasonCode: "invalid_billing_sync_message",
+  });
+  assert.equal(calls, 0);
+});
+
+test("Billing sync direct delivery maps retry and terminal results explicitly", async () => {
+  const retry = await deliverBillingSync(
+    { eventId: "evt_retry", customerId: "cus_1" },
+    queueJobMetadata({ jobId: "retry", queueName: "billing-sync" }),
+    {
+      async processMessage() {
+        return "retry" as const;
+      },
+    },
+  );
+  const terminal = await deliverBillingSync(
+    { eventId: "evt_terminal", customerId: "cus_1" },
+    queueJobMetadata({ jobId: "terminal", queueName: "billing-sync" }),
+    {
+      async processMessage() {
+        return "terminal" as const;
+      },
+    },
+  );
+
+  assert.deepEqual(retry, { status: "retry", reasonCode: "billing_sync_retry" });
+  assert.deepEqual(terminal, { status: "terminal", reasonCode: "billing_sync_terminal" });
 });
 
 class MemoryQueueStore implements BillingQueueEventStore {

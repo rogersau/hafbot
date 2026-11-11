@@ -82,7 +82,7 @@ async function renderNotice(error: unknown, writeText: ClipboardWrite) {
 test("AdminErrorNotice copies only a valid correlation ID", async () => {
   let copied = "";
   const rendered = await renderNotice(
-    new AdminApiError("Request failed", 500, "legacy_error", "abc-123", false),
+    new AdminApiError("Request failed", 500, "internal_error", "abc-123", false),
     async (value) => {
       copied = value;
     },
@@ -99,7 +99,7 @@ test("AdminErrorNotice copies only a valid correlation ID", async () => {
 
 test("AdminErrorNotice reports clipboard failure", async () => {
   const rendered = await renderNotice(
-    new AdminApiError("Request failed", 500, "legacy_error", "abc-123", false),
+    new AdminApiError("Request failed", 500, "internal_error", "abc-123", false),
     async () => {
       throw new Error("permission denied");
     },
@@ -116,7 +116,7 @@ test("AdminErrorNotice reports clipboard failure", async () => {
 
 test("AdminErrorNotice omits copy action for unknown and non-API errors", async () => {
   for (const error of [
-    new AdminApiError("Request failed", 500, "legacy_error", "unknown", false),
+    new AdminApiError("Request failed", 500, "internal_error", "unknown", false),
     new Error("Request failed"),
   ]) {
     const rendered = await renderNotice(error, async () => undefined);

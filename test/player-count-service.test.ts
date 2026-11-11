@@ -1604,7 +1604,7 @@ test("disabled Player Count servers retain settings and snapshots without querie
   const server = createServer({ enabled: false });
   await fixture.stores.playerCount.upsertPlayerCountServer(server);
   fixture.database.execRaw(
-    "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', 'premium', 'premium', 1)",
+    "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', 'premium', 1)",
   );
   let effects = 0;
   const service = new PlayerCountService(
@@ -1640,7 +1640,7 @@ test("disabling Player Count fences an in-flight query and survives a stale conf
   const server = createServer();
   await fixture.stores.playerCount.upsertPlayerCountServer(server);
   fixture.database.execRaw(
-    "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', 'premium', 'premium', 1)",
+    "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', 'premium', 1)",
   );
   let queries = 0;
   const service = new PlayerCountService(
@@ -1651,7 +1651,7 @@ test("disabling Player Count fences an in-flight query and survives a stale conf
         async query() {
           queries++;
           if (queries === 1)
-            await fixture.stores.playerCount.setPlayerCountServerEnabled?.(
+            await fixture.stores.playerCount.setPlayerCountServerEnabled(
               server.guildId,
               server.id,
               false,
@@ -1672,7 +1672,7 @@ test("disabling Player Count fences an in-flight query and survives a stale conf
       (await fixture.stores.playerCount.readPlayerCountServer(server.id))?.enabled,
       false,
     );
-    await fixture.stores.playerCount.setPlayerCountServerEnabled?.(server.guildId, server.id, true);
+    await fixture.stores.playerCount.setPlayerCountServerEnabled(server.guildId, server.id, true);
     await service.refreshAllServers();
     assert.equal(queries, 2);
     assert.equal(

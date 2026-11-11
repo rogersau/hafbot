@@ -1,5 +1,4 @@
-import type { QueueBatch } from "./queue-types";
-import { fetchGuildMember } from "../discord/members";
+import type { QueueJobMetadata } from "./queue-types";
 import { createChannelMessage } from "../discord/messages";
 import { DiscordApiError } from "../discord/client";
 import type { Env } from "../env";
@@ -14,13 +13,20 @@ import {
   logServerLevelTelemetry,
   type ServerLevelTelemetryEmitter,
 } from "../server-levels/telemetry";
-import { createCloudflareContext } from "./cloudflare-context";
+import type { RuntimeAppContext } from "./app-context";
+
+type ServerLevelRuntimeContext = Pick<
+  RuntimeAppContext,
+  "features" | "serverLevelCredentialService"
+> & {
+  stores: Pick<RuntimeAppContext["stores"], "serverLevels" | "platformLink" | "guildEntitlements">;
+};
 import type { ServerLevelStore } from "./contracts/server-level-store";
 import {
-  DEFAULT_QUEUE_MAX_ATTEMPTS,
   classifyQueueDeliveryError,
-  deliverQueueBatch,
+  deliverQueueJob,
   queueDeliveryEmitter,
+  type QueueDeliveryOutcome,
 } from "./queue-delivery";
 
 export const SERVER_LEVELS_QUEUE_NAME = "haf-bot-server-levels";
@@ -32,16 +38,33 @@ export interface ServerLevelQueueLogger {
   info?(...args: unknown[]): void;
 }
 
-export async function handleServerLevelQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
+export interface ServerLevelDeliveryPorts {
+  serverLevels: Pick<ServerLevelStore, "readProviderEvent">;
+  processor: Pick<ServerLevelProcessor, "processAvailableForServer">;
+  now: () => number;
+}
+
+/**
+ * Scheduled maintenance consumes the composition-selected processor that link
+ * reconciliation and direct queue delivery already share, so processing,
+ * checkpointing and roster reconciliation run with the same credentials,
+ * entitlement policy and telemetry for every caller.
+ */
+export interface ServerLevelMaintenancePorts {
+  processor: Pick<
+    ServerLevelProcessor,
+    "processAvailableForServer" | "checkpointAvailableForServer" | "reconcileCurrentRoster"
+  >;
+}
+
+export async function deliverServerLevel(
+  payload: unknown,
+  metadata: QueueJobMetadata,
+  ports: ServerLevelDeliveryPorts,
   logger: ServerLevelQueueLogger = console,
-  now: () => number = Date.now,
-): Promise<void> {
-  const context = createCloudflareContext(env);
-  const processor = createServerLevelProcessor(env, now, logServerLevelTelemetry);
-  await deliverQueueBatch(batch, {
-    maxAttempts: DEFAULT_QUEUE_MAX_ATTEMPTS,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
     parse(body) {
       const message = parseServerLevelMessage(body);
       return message
@@ -49,11 +72,11 @@ export async function handleServerLevelQueueBatch(
         : { ok: false, reasonCode: "invalid_server_level_message" };
     },
     async handle(message) {
-      const event = await context.stores.serverLevels.readProviderEvent(message.inboxId);
+      const event = await ports.serverLevels.readProviderEvent(message.inboxId);
       if (!event || event.guildId !== message.guildId) {
         return { status: "terminal", reasonCode: "provider_event_missing" };
       }
-      const currentTime = now();
+      const currentTime = ports.now();
       const eligibleAtMs =
         Math.max(event.receivedAtMs, event.occurredAtMs) + SERVER_LEVEL_ORDERING_WINDOW_MS;
       if (currentTime < eligibleAtMs) {
@@ -63,7 +86,7 @@ export async function handleServerLevelQueueBatch(
           delaySeconds: Math.max(1, Math.ceil((eligibleAtMs - currentTime) / 1_000)),
         };
       }
-      await processor.processAvailableForServer(event.configuredGameServerId);
+      await ports.processor.processAvailableForServer(event.configuredGameServerId);
       return { status: "complete" };
     },
     classifyError: classifyQueueDeliveryError,
@@ -73,10 +96,12 @@ export async function handleServerLevelQueueBatch(
 
 export async function maintainServerLevels(
   env: Env,
+  context: ServerLevelRuntimeContext,
+  ports: ServerLevelMaintenancePorts,
   now: () => number = Date.now,
   emitTelemetry: ServerLevelTelemetryEmitter = logServerLevelTelemetry,
 ): Promise<{ published: number; servers: number }> {
-  const context = createCloudflareContext(env);
+  const processor = ports.processor;
   const published = env.SERVER_LEVELS_QUEUE
     ? await sweepServerLevelIngressOutbox({
         store: context.stores.serverLevels,
@@ -84,7 +109,6 @@ export async function maintainServerLevels(
         now,
       })
     : 0;
-  const processor = createServerLevelProcessor(env, now, emitTelemetry);
   const dataApi = context.serverLevelCredentialService
     ? new CftoolsDataApiClient({ credentials: context.serverLevelCredentialService, now })
     : null;
@@ -212,25 +236,6 @@ async function serverLevelAnnouncementNonce(announcementId: string): Promise<str
   return `sl_${Array.from(new Uint8Array(digest).slice(0, 8))
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("")}`;
-}
-
-function createServerLevelProcessor(
-  env: Env,
-  now: () => number,
-  emitTelemetry: ServerLevelTelemetryEmitter,
-): ServerLevelProcessor {
-  const context = createCloudflareContext(env);
-  return new ServerLevelProcessor({
-    store: context.stores.serverLevels,
-    platformLinks: context.stores.platformLink,
-    readEntitlementTier: async (guildId) =>
-      (await context.stores.guildEntitlements.readGuildEntitlement(guildId)).tier,
-    isCurrentGuildMember: async (guildId, userId) =>
-      (await fetchGuildMember(guildId, userId, env.DISCORD_BOT_TOKEN)) !== null,
-    isKillSwitchEnabled: () => context.features.serverLevels === false,
-    now,
-    emitTelemetry,
-  });
 }
 
 function parseServerLevelMessage(value: unknown): ServerLevelIngressMessage | null {

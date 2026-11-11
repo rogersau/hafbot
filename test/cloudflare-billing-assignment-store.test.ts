@@ -3,14 +3,14 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { CloudflareBillingAssignmentStore } from "../src/runtime/billing/cloudflare-assignment-store";
+import { SqliteBillingAssignmentStore } from "./support/sqlite/runtime/billing/sqlite-assignment-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("D1 assignment capacity and unique Guild ownership are transactional with plan projection", async () => {
   const database = new SqliteD1Database();
   await seedOwner(database, "owner-1", "cus-1", "sub-1", "premium");
   await seedOwner(database, "owner-2", "cus-2", "sub-2", "premium_plus");
-  const store = new CloudflareBillingAssignmentStore(database as unknown as D1Database);
+  const store = new SqliteBillingAssignmentStore(database as unknown as D1Database);
   assert.equal(
     await store.assign({
       ownerId: "owner-1",
@@ -56,9 +56,9 @@ test("D1 assignment capacity and unique Guild ownership are transactional with p
   assert.equal(
     (
       await database
-        .prepare("SELECT tier FROM guild_entitlements WHERE guild_id = 'g1'")
-        .first<{ tier: string }>()
-    )?.tier,
+        .prepare("SELECT plan FROM guild_entitlements WHERE guild_id = 'g1'")
+        .first<{ plan: string }>()
+    )?.plan,
     "premium",
   );
   assert.equal(
@@ -97,7 +97,7 @@ test("D1 assignment capacity and unique Guild ownership are transactional with p
 test("D1 assignment rebinds a retained Guild to a replacement Subscription without bypassing capacity", async () => {
   const database = new SqliteD1Database();
   await seedOwner(database, "owner-1", "cus-1", "sub-old", "premium");
-  const store = new CloudflareBillingAssignmentStore(database as unknown as D1Database);
+  const store = new SqliteBillingAssignmentStore(database as unknown as D1Database);
   assert.equal(
     await store.assign({
       ownerId: "owner-1",
@@ -149,7 +149,7 @@ test("D1 assignment rebinds a retained Guild to a replacement Subscription witho
 test("D1 assignment writes its ledger and delivery records only when the mutation succeeds", async () => {
   const database = new SqliteD1Database();
   await seedOwner(database, "owner-1", "cus-1", "sub-1", "premium");
-  const store = new CloudflareBillingAssignmentStore(database as unknown as D1Database);
+  const store = new SqliteBillingAssignmentStore(database as unknown as D1Database);
   assert.equal(
     await store.assign({
       ownerId: "owner-1",

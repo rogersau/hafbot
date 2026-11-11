@@ -1,4 +1,5 @@
-import { Pool, type PoolClient, type PoolConfig } from "pg";
+import { Pool, types as postgresTypes, type PoolClient, type PoolConfig } from "pg";
+import { readPostgresSafeInteger } from "./postgres-values";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/postgres/schema";
 
@@ -9,18 +10,18 @@ export interface PostgresQueryField {
   dataTypeId: number;
 }
 
-export interface PostgresQueryResult<Row extends Record<string, unknown>> {
+export interface PostgresQueryResult<Row extends object = Record<string, unknown>> {
   rows: Row[];
   rowCount: number;
   fields: PostgresQueryField[];
 }
 
 export interface PostgresExecutor {
-  query<Row extends Record<string, unknown>>(
+  query<Row extends object = Record<string, unknown>>(
     statement: string,
     values?: readonly PostgresValue[],
   ): Promise<Row[]>;
-  queryResult<Row extends Record<string, unknown>>(
+  queryResult<Row extends object = Record<string, unknown>>(
     statement: string,
     values?: readonly PostgresValue[],
   ): Promise<PostgresQueryResult<Row>>;
@@ -51,7 +52,18 @@ export interface PostgresConnectionOptions {
 }
 
 export function createPostgresDatabaseCapability(config: PoolConfig): PostgresDatabaseCapability {
-  return new NodePostgresDatabaseCapability(new Pool(config));
+  return new NodePostgresDatabaseCapability(
+    new Pool({
+      ...config,
+      types: config.types ?? {
+        getTypeParser(oid, format) {
+          return oid === 20 && format !== "binary"
+            ? (value: string) => readPostgresSafeInteger(value, "BIGINT")
+            : postgresTypes.getTypeParser(oid, format);
+        },
+      },
+    }),
+  );
 }
 
 export function createPostgresDatabaseCapabilityFromEnvironment(
@@ -103,14 +115,14 @@ class NodePostgresDatabaseCapability implements PostgresDatabaseCapability {
     this.drizzle = drizzle(pool, { schema });
   }
 
-  query<Row extends Record<string, unknown>>(
+  query<Row extends object = Record<string, unknown>>(
     statement: string,
     values: readonly PostgresValue[] = [],
   ): Promise<Row[]> {
     return runQuery<Row>(this.pool, statement, values);
   }
 
-  queryResult<Row extends Record<string, unknown>>(
+  queryResult<Row extends object = Record<string, unknown>>(
     statement: string,
     values: readonly PostgresValue[] = [],
   ): Promise<PostgresQueryResult<Row>> {
@@ -153,13 +165,13 @@ class NodePostgresDatabaseCapability implements PostgresDatabaseCapability {
 
 function createClientExecutor(client: PoolClient): PostgresExecutor {
   return {
-    query<Row extends Record<string, unknown>>(
+    query<Row extends object = Record<string, unknown>>(
       statement: string,
       values: readonly PostgresValue[] = [],
     ) {
       return runQuery<Row>(client, statement, values);
     },
-    queryResult<Row extends Record<string, unknown>>(
+    queryResult<Row extends object = Record<string, unknown>>(
       statement: string,
       values: readonly PostgresValue[] = [],
     ) {
@@ -172,7 +184,7 @@ function createClientExecutor(client: PoolClient): PostgresExecutor {
   };
 }
 
-async function runQuery<Row extends Record<string, unknown>>(
+async function runQuery<Row extends object = Record<string, unknown>>(
   target: Pick<Pool, "query"> | Pick<PoolClient, "query">,
   statement: string,
   values: readonly PostgresValue[],
@@ -180,7 +192,7 @@ async function runQuery<Row extends Record<string, unknown>>(
   return (await runQueryResult<Row>(target, statement, values)).rows;
 }
 
-async function runQueryResult<Row extends Record<string, unknown>>(
+async function runQueryResult<Row extends object = Record<string, unknown>>(
   target: Pick<Pool, "query"> | Pick<PoolClient, "query">,
   statement: string,
   values: readonly PostgresValue[],

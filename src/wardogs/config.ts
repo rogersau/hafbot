@@ -10,7 +10,6 @@ const config = z
             id: z.string().min(1).max(100),
             origin: z.string().max(300),
             securePathEvidence: z.string().min(1).max(2000),
-            runtime: z.enum(["cloudflare", "portable"]),
           })
           .strict(),
       )

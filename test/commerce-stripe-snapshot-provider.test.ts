@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { StripeCommerceSnapshotProvider } from "../src/runtime/commerce/stripe-snapshot-provider";
+import { StripeCommerceSnapshotProvider } from "./support/sqlite/runtime/commerce/stripe-snapshot-provider";
 import { CommerceProjectionQuarantineError } from "../src/runtime/commerce/reconciliation";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
@@ -860,7 +860,7 @@ function seed(database: D1Database) {
     .run();
   database
     .prepare(
-      "INSERT INTO commerce_offerings (id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms) VALUES (?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO commerce_offerings (id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,created_at_ms,updated_at_ms) VALUES (?,?,?,?,?,?,?,?,?)",
     )
     .bind(
       "offering_1",
@@ -869,7 +869,7 @@ function seed(database: D1Database) {
       "role_1",
       "Offering",
       "subscription",
-      "active",
+      "published",
       NOW,
       NOW,
     )

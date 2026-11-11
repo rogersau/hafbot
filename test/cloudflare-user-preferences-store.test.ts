@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareUserPreferencesStore } from "../src/runtime/cloudflare-user-preferences-store";
+import { createSqliteUserPreferencesStore } from "./support/sqlite/runtime/sqlite-user-preferences-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 import type { UserPreferences } from "../src/runtime/admin-types";
 
@@ -18,16 +18,16 @@ const BASE_PREFERENCES: UserPreferences = {
   language: "en",
 };
 
-test("createCloudflareUserPreferencesStore returns null for a first-time user", async () => {
+test("createSqliteUserPreferencesStore returns null for a first-time user", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareUserPreferencesStore(database as unknown as D1Database);
+  const store = createSqliteUserPreferencesStore(database as unknown as D1Database);
 
   assert.equal(await store.readUserPreferences("user-1"), null);
 });
 
-test("createCloudflareUserPreferencesStore persists a user row and reads it back", async () => {
+test("createSqliteUserPreferencesStore persists a user row and reads it back", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareUserPreferencesStore(database as unknown as D1Database);
+  const store = createSqliteUserPreferencesStore(database as unknown as D1Database);
 
   const stored: UserPreferences = {
     ...BASE_PREFERENCES,
@@ -44,9 +44,9 @@ test("createCloudflareUserPreferencesStore persists a user row and reads it back
   assert.deepEqual(await store.readUserPreferences("user-1"), stored);
 });
 
-test("createCloudflareUserPreferencesStore upserts preserve all fields on the same user", async () => {
+test("createSqliteUserPreferencesStore upserts preserve all fields on the same user", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareUserPreferencesStore(database as unknown as D1Database);
+  const store = createSqliteUserPreferencesStore(database as unknown as D1Database);
 
   const initial: UserPreferences = {
     ...BASE_PREFERENCES,
@@ -65,9 +65,9 @@ test("createCloudflareUserPreferencesStore upserts preserve all fields on the sa
   assert.deepEqual(await store.readUserPreferences("user-1"), updated);
 });
 
-test("createCloudflareUserPreferencesStore isolates preferences per user", async () => {
+test("createSqliteUserPreferencesStore isolates preferences per user", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareUserPreferencesStore(database as unknown as D1Database);
+  const store = createSqliteUserPreferencesStore(database as unknown as D1Database);
 
   const alice: UserPreferences = { ...BASE_PREFERENCES, theme: "dark", language: "fr" };
   const bob: UserPreferences = { ...BASE_PREFERENCES, theme: "light", language: "es" };

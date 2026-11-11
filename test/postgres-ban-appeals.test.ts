@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
 import { createPostgresBanAppealStore } from "../src/moderation-appeals/store";
 import { defaultBanAppealConfig } from "../src/moderation-appeals/types";
@@ -26,7 +23,7 @@ test(
     });
     try {
       await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-      await applyPostgresMigrations(database, await readPostgresMigrations("migrations/postgres"));
+      await initializePostgresSchema(database);
       const store = createPostgresBanAppealStore(database);
       const config = defaultBanAppealConfig("100");
       const id = crypto.randomUUID();

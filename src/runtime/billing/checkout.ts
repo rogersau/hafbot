@@ -20,7 +20,6 @@ export interface BillingCheckoutStore {
   readCustomerId(ownerId: string): Promise<string | null>;
   bindCustomer(ownerId: string, customerId: string, nowMs: number): Promise<void>;
   readProjection(ownerId: string): Promise<BillingSubscriptionProjection | null>;
-  countFounderPlaces(): Promise<number>;
 }
 
 export interface BillingCheckoutService {
@@ -49,11 +48,11 @@ export function createBillingCheckoutService(options: {
 }): BillingCheckoutService {
   const now = options.now ?? Date.now;
   return {
-    listCatalog: async () => [...options.catalog.values()].filter((entry) => entry.legacy !== true),
+    listCatalog: async () => [...options.catalog.values()],
     readSummary: (ownerId) => options.store.readProjection(ownerId),
     async startCheckout(input) {
       const catalogEntry = options.catalog.get(input.priceId);
-      if (!catalogEntry || catalogEntry.legacy) {
+      if (!catalogEntry) {
         throw new BillingCheckoutError("unsupported_price", 400);
       }
       if (!/^[A-Za-z0-9_-]{8,100}$/.test(input.intentId)) {

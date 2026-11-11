@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { createAdminApiHandler } from "./helpers/admin-api";
 import type { BotDefenseConfig } from "../src/types";
+import type { SetupRun } from "../src/feature-setup";
 import { createTestConfigurationRevisionCoordinator } from "./support/configuration-revision-store";
 
 test("Bot Defense admin API enforces premium entitlement and saves config", async () => {
@@ -289,9 +290,20 @@ test("Bot Defense admin API creates and returns a safe honeypot channel", async 
     );
 
     assert.equal(response?.status, 200);
-    assert.deepEqual(await response?.json(), {
-      channel: { id: "honeypot-1", name: "do-not-post" },
-      created: true,
+    const result = (await response?.json()) as {
+      channel: { id: string; name: string };
+      created: boolean;
+      run: SetupRun;
+    };
+    assert.deepEqual(result.channel, { id: "honeypot-1", name: "do-not-post" });
+    assert.equal(result.created, true);
+    assert.equal(result.run.guildId, "guild-1");
+    assert.equal(result.run.featureKey, "bot_defense_honeypot");
+    assert.equal(result.run.status, "completed");
+    assert.deepEqual(result.run.resolutions[0].resource, {
+      id: "honeypot-1",
+      name: "do-not-post",
+      kind: "text_channel",
     });
     assert.equal(calls.length, 1);
   } finally {
@@ -435,7 +447,6 @@ function createStores(
       listDueLfgPostRenewalReminders: async () => [],
     },
     playerCount: { listPlayerCountServers: async () => [] },
-    steamLink: { readSteamLinkConfig: async () => null },
     appConfig: {},
     guildRbac: {},
     webhookProxy: {},

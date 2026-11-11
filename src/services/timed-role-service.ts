@@ -1,3 +1,4 @@
+import type { GuildNotificationChannelStore } from "../runtime/contracts";
 import type { TimedRoleStore, GuildAuditLogStore } from "../runtime/contracts";
 import type { TimedRoleAssignment, TimedRoleAutomationRule } from "../types";
 import { DiscordApiError } from "../discord";
@@ -21,7 +22,6 @@ import {
   buildTimedRoleRestorationFailureMessage,
   postGuildActivityUpdate,
   type ChannelMessageSender,
-  type GuildNotificationChannelStore,
   type ActionActor,
 } from "./activity-log";
 
@@ -825,12 +825,10 @@ export class TimedRoleService {
   }
 
   async getNewMemberTimedRoleConfig(guildId: string) {
-    return (
-      this.store.readNewMemberTimedRoleConfig?.(guildId) ?? {
-        guildId,
-        roles: [],
-      }
-    );
+    return {
+      guildId,
+      roles: await this.store.readTimedRoleConfigRules(guildId, "new-member"),
+    };
   }
 
   async updateNewMemberTimedRoleConfig(input: {
@@ -839,20 +837,14 @@ export class TimedRoleService {
   }): Promise<void> {
     const resources = await this.guildResources.forGuild(input.guildId);
     await this.validateAutomationRules(resources, input.roles);
-    if (this.store.upsertTimedRoleConfigRules) {
-      await this.store.upsertTimedRoleConfigRules(input.guildId, "new-member", input.roles);
-      return;
-    }
-    await this.store.upsertNewMemberTimedRoleConfig?.(input);
+    await this.store.upsertTimedRoleConfigRules(input.guildId, "new-member", input.roles);
   }
 
   async getManualAssignmentTimedRoleConfig(guildId: string) {
-    return (
-      this.store.readManualAssignmentTimedRoleConfig?.(guildId) ?? {
-        guildId,
-        roles: [],
-      }
-    );
+    return {
+      guildId,
+      roles: await this.store.readTimedRoleConfigRules(guildId, "manual-assignment"),
+    };
   }
 
   async updateManualAssignmentTimedRoleConfig(input: {
@@ -861,11 +853,7 @@ export class TimedRoleService {
   }): Promise<void> {
     const resources = await this.guildResources.forGuild(input.guildId);
     await this.validateAutomationRules(resources, input.roles);
-    if (this.store.upsertTimedRoleConfigRules) {
-      await this.store.upsertTimedRoleConfigRules(input.guildId, "manual-assignment", input.roles);
-      return;
-    }
-    await this.store.upsertManualAssignmentTimedRoleConfig?.(input);
+    await this.store.upsertTimedRoleConfigRules(input.guildId, "manual-assignment", input.roles);
   }
 
   async assignConfiguredNewMemberRole(input: {
@@ -1144,10 +1132,6 @@ export class TimedRoleService {
   }
 
   private async findAssignmentDmMessage(assignment: TimedRoleAssignment): Promise<string | null> {
-    if (!this.store.readTimedRoleConfigRules) {
-      return null;
-    }
-
     const ruleSets = await Promise.all([
       this.store.readTimedRoleConfigRules(assignment.guildId, "new-member"),
       this.store.readTimedRoleConfigRules(assignment.guildId, "manual-assignment"),

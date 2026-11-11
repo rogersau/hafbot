@@ -1,3 +1,4 @@
+import type { Cache } from "./discord-json-cache";
 import type { QueueProducer } from "./queue-types";
 import type { OperationalIncidentStore as BanIncidentStore } from "../operations/incidents";
 import type { EnforcementStore } from "../ban-case-enforcement/store";
@@ -43,9 +44,10 @@ import type {
 } from "./contracts";
 import type { FeatureFlags } from "./features";
 import type { ServiceFactory } from "./service-factory";
-import type { CustomerAuth } from "./auth/auth";
+import type { GatewayService } from "../services/gateway-service";
+import type { CustomerAuth } from "./auth/customer-auth";
 import type { CustomerSession } from "./auth/customer-session";
-import type { DiscordAccountStore } from "./cloudflare-discord-account-store";
+import type { DiscordAccountStore } from "./contracts/discord-account-store";
 import type { GuildDiscoveryService } from "./discord-guild-discovery";
 import type { WorkspaceStore } from "./workspace-store";
 import type { PlayerCountStreakReportedStore } from "../services/player-count-service";
@@ -61,7 +63,6 @@ import type { ReturnTypeBillingManagement } from "./billing/management-types";
 import type { BillingHistoryStore } from "./billing/history";
 import type { ReturnTypeBillingSupport } from "./billing/support-types";
 import type { LandingPriceCatalog } from "./billing/landing-catalog";
-import type { HafDatabaseCapability } from "./haf-database-capability";
 import type { ConfigurationRevisionStore } from "../configuration-revisions";
 import type { reportOperationalEvent } from "../observability/operational-reporter";
 import type { CommerceBuyerCheckoutService } from "../commerce/buyer-checkout";
@@ -106,7 +107,7 @@ export interface DiscordInteraction {
 }
 
 export interface RuntimeStores {
-  reactionRoles?: import("./contracts/reaction-role-store").ReactionRoleStore;
+  reactionRoles: import("./contracts/reaction-role-store").ReactionRoleStore;
   blocklist: BlocklistStore;
   appConfig: AppConfigStore;
   timedRoles: TimedRoleStore;
@@ -136,13 +137,25 @@ export interface RuntimeStores {
   messageTemplates?: MessageTemplateStore;
   guildServiceSuspensions?: GuildServiceSuspensionStore;
   featureSetup?: FeatureSetupStore;
-  suggestions?: SuggestionStore;
-  operationalIncidents?: OperationalIncidentStore;
+  suggestions: SuggestionStore;
+  operationalIncidents: OperationalIncidentStore;
   adminFeedback?: AdminFeedbackStore;
   oneTimeTokens: OneTimeTokenStore;
   productAnalyticsPreferences?: ProductAnalyticsPreferenceStore;
   serverLevels?: ServerLevelStore;
 }
+
+/**
+ * The complete writable feature-service graph built once by service composition.
+ *
+ * Production callers consume this selected graph; nothing rebuilds or partially
+ * overrides it at request time. Every member reflects the composition's real
+ * capability selection, so genuinely optional capabilities stay optional.
+ */
+export type ApplicationServices = ServiceFactory & {
+  /** The composed Gateway controller service with command-sync wired. */
+  gatewayService: GatewayService;
+};
 
 export interface RuntimeAppOptions {
   banAppealServiceForGuild?: import("../moderation-appeals/routes").BanAppealServiceFactory;
@@ -154,12 +167,11 @@ export interface RuntimeAppOptions {
   resolveGuildBotIdentity?: (guildId: string) => Promise<{ token: string; userId: string }>;
   reportOperationalEvent?: typeof reportOperationalEvent;
   productAnalytics?: ProductAnalyticsReporter;
-  database?: HafDatabaseCapability;
   billingWebhookHandler?: (request: Request) => Promise<Response | null>;
   commerceWebhookHandler?: (request: Request) => Promise<Response | null>;
   commerceAdmin?: import("./admin-routes").CommerceAdminServices;
   commerceGameAccess?: ReturnType<
-    typeof import("./commerce/game-access-runtime").createGameAccessRuntime
+    typeof import("./postgres/postgres-commerce-game-access-runtime").createGameAccessRuntime
   >;
   commerceBuyerCheckoutService?: CommerceBuyerCheckoutService;
   commerceSupportService?: CommerceSupportService;
@@ -235,12 +247,13 @@ export interface RuntimeAppOptions {
     banCase: BanCaseSourceCache;
   };
   features?: FeatureFlags;
-  services?: Partial<ServiceFactory>;
+  /** The selected feature-service graph composed once before the app is created. */
+  services: ApplicationServices;
   guildResources?: GuildResourceValidator;
   waitUntil?: (promise: Promise<unknown>) => void;
   steamWebApiKey?: string;
   discordSupportInvite?: string;
-  discordCacheKv?: KVNamespace;
+  discordCache?: Cache<string>;
   playerCountStreakReportedStore?: PlayerCountStreakReportedStore;
   aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv;
   publicUrl?: string;
@@ -249,8 +262,6 @@ export interface RuntimeAppOptions {
   turnstileSecretKey?: string;
   configurationRevisionSigningSecret?: string;
   componentIdSigner?: ComponentIdSigner;
-  componentIdLegacyUntilMs?: number;
-  memberVerificationPanelLegacyUntilMs?: number;
 }
 
 export interface EvidenceVaultBlobStore {

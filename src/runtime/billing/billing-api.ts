@@ -118,8 +118,6 @@ export function createBillingApiHandler(options: {
           subscription: await options.service.readSummary(session.user.id),
           catalog: await options.service.listCatalog(session.user.id),
           prices: (await options.prices?.read()) ?? [],
-          // Retain the nullable response field for older clients; launch admission has ended.
-          founderAdmission: null,
         });
       } else if (path === "/admin/api/billing/history") {
         if (!options.history) return unavailableResponse(adminRequest);

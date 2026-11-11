@@ -21,7 +21,6 @@ import { Route as eventsRoute } from "./$guildId/events";
 import { Route as playercountRoute } from "./$guildId/playercount";
 import { Route as serverLevelsRoute } from "./$guildId/server-levels";
 import { Route as playerLinkRoute } from "./$guildId/player-link";
-import { Route as steamLinkRoute } from "./$guildId/steam-link";
 import { Route as evidenceVaultRoute } from "./$guildId/evidence-vault";
 import { Route as imageRulesRoute } from "./$guildId/image-rules";
 import { Route as botDefenseRoute } from "./$guildId/bot-defense";
@@ -55,7 +54,6 @@ const guildRouteTree = guildRoute.addChildren([
   serverLevelsRoute,
   wardogsRoute,
   playerLinkRoute,
-  steamLinkRoute,
   evidenceVaultRoute,
   imageRulesRoute,
   botDefenseRoute,

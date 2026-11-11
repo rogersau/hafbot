@@ -1,30 +1,11 @@
-import type { CommerceOffering, CommercePrice, CommerceRecurringInterval } from "./types";
+import type {
+  CommerceOffering,
+  CommerceOfferingLifecycle,
+  CommercePrice,
+  CommerceRecurringInterval,
+} from "./types";
 
-export type CommerceOfferingLifecycle =
-  | "draft"
-  | "published"
-  | "unpublished"
-  | "repair_required"
-  | "retiring"
-  | "archived"
-  | "suspended";
-
-export interface CommerceOfferingLifecycleRecord {
-  offeringId: string;
-  connectedAccountId: string;
-  guildId: string;
-  state: CommerceOfferingLifecycle;
-  termsVersion: string | null;
-  includedBenefits: string[];
-  supportContact: string | null;
-  roleManageable: boolean;
-  repairDeadlineAtMs: number | null;
-  retireAtMs: number | null;
-  publishedAtMs: number | null;
-  archivedAtMs: number | null;
-  createdAtMs: number;
-  updatedAtMs: number;
-}
+export type { CommerceOfferingLifecycle } from "./types";
 
 export type CommerceOfferingRetirementStatus =
   | "requested"
@@ -54,9 +35,6 @@ export interface CommerceOfferingStore {
   createOffering(offering: CommerceOffering): Promise<void>;
   readOffering(offeringId: string): Promise<CommerceOffering | null>;
   listOfferings(connectedAccountId: string): Promise<CommerceOffering[]>;
-  saveLifecycle(record: CommerceOfferingLifecycleRecord): Promise<void>;
-  readLifecycle(offeringId: string): Promise<CommerceOfferingLifecycleRecord | null>;
-  listLifecycles(connectedAccountId: string): Promise<CommerceOfferingLifecycleRecord[]>;
   createPrice(price: CommercePrice): Promise<boolean>;
   listPrices(offeringId: string): Promise<CommercePrice[]>;
   readPublishContext(
@@ -64,6 +42,7 @@ export interface CommerceOfferingStore {
     guildId: string,
     offeringId: string,
   ): Promise<CommerceOfferingPublishContext>;
+  /** Published subscriptions retain their publication slot while a role repair is pending. */
   countPublishedSubscriptions(guildId: string): Promise<number>;
   hasPublishedRoleMapping(
     guildId: string,
@@ -72,13 +51,11 @@ export interface CommerceOfferingStore {
   ): Promise<boolean>;
   beginRoleReplacement(input: {
     offering: CommerceOffering;
-    lifecycle: CommerceOfferingLifecycleRecord;
     replacementRoleId: string;
     nowMs: number;
-  }): Promise<"updated" | "migration_pending">;
+  }): Promise<"updated" | "replacement_pending">;
   beginRetirement(input: {
     offering: CommerceOffering;
-    lifecycle: CommerceOfferingLifecycleRecord;
     actorUserId: string;
     reasonCode: string;
     actionId: string;
@@ -146,7 +123,6 @@ export interface CommerceOfferingDashboard {
   } | null;
   offerings: Array<{
     offering: CommerceOffering;
-    lifecycle: CommerceOfferingLifecycle;
     subscribers: {
       active: number;
       canceling: number;
@@ -159,8 +135,6 @@ export interface CommerceOfferingDashboard {
     disputesByCurrency: Record<"AUD" | "USD", number>;
     estimatedProceedsByCurrency: Record<"AUD" | "USD", number>;
     activePrices: CommercePrice[];
-    includedBenefits: string[];
-    supportContact: string | null;
     upcomingCancellations: number;
     roleFailures: number;
     reconciliationIncidents: number;
@@ -182,7 +156,6 @@ export class CommerceOfferingService {
 
   async createDraft(input: CreateCommerceOfferingInput): Promise<{
     offering: CommerceOffering;
-    lifecycle: CommerceOfferingLifecycleRecord;
     price: CommercePrice;
   }> {
     validateInput(input);
@@ -214,9 +187,15 @@ export class CommerceOfferingService {
       name: input.name.trim(),
       description: normalizeDescription(input.description),
       purchaseType: "subscription",
-      // The legacy table stores published as active; the lifecycle projection
-      // is the authority for all richer states.
-      status: "draft",
+      state: "draft",
+      termsVersion: input.termsVersion ?? null,
+      includedBenefits: input.includedBenefits,
+      supportContact,
+      roleManageable: input.roleManageable,
+      repairDeadlineAtMs: null,
+      repairPreviousState: null,
+      retireAtMs: null,
+      publishedAtMs: null,
       archivedAtMs: null,
       createdAtMs: now,
       updatedAtMs: now,
@@ -238,16 +217,7 @@ export class CommerceOfferingService {
     };
     await this.store.createOffering(offering);
     if (!(await this.store.createPrice(price))) throw new Error("commerce_price_already_exists");
-    const lifecycle = lifecycleFor(
-      offering,
-      input.roleManageable,
-      input.termsVersion ?? null,
-      input.includedBenefits,
-      supportContact,
-      now,
-    );
-    await this.store.saveLifecycle(lifecycle);
-    return { offering, lifecycle, price };
+    return { offering, price };
   }
 
   async updateDraft(input: {
@@ -259,23 +229,22 @@ export class CommerceOfferingService {
     termsVersion?: string | null;
     includedBenefits?: string[];
     supportContact?: string;
-  }): Promise<{ offering: CommerceOffering; lifecycle: CommerceOfferingLifecycleRecord }> {
+  }): Promise<{ offering: CommerceOffering }> {
     const current = await this.requireOffering(input.offeringId);
-    const lifecycle = await this.requireLifecycle(current.id);
-    if (!["draft", "unpublished", "repair_required"].includes(lifecycle.state)) {
+    if (!["draft", "unpublished", "repair_required"].includes(current.state)) {
       throw new Error("commerce_offering_edit_requires_unpublished");
     }
     if (
       input.discordRoleId !== undefined &&
       input.discordRoleId !== current.discordRoleId &&
-      lifecycle.state !== "draft"
+      current.state !== "draft"
     ) {
       throw new Error("commerce_offering_role_replacement_required");
     }
     const now = this.now();
     if (input.includedBenefits) validateBenefits(input.includedBenefits);
     if (input.supportContact !== undefined) validateSupportContact(input.supportContact);
-    const offering = {
+    const offering: CommerceOffering = {
       ...current,
       name: input.name === undefined ? current.name : requiredName(input.name),
       description:
@@ -283,30 +252,24 @@ export class CommerceOfferingService {
           ? current.description
           : normalizeDescription(input.description),
       discordRoleId: input.discordRoleId ?? current.discordRoleId,
-      updatedAtMs: now,
-    };
-    const next = {
-      ...lifecycle,
-      roleManageable: input.roleManageable ?? lifecycle.roleManageable,
-      termsVersion: input.termsVersion === undefined ? lifecycle.termsVersion : input.termsVersion,
-      includedBenefits: input.includedBenefits ?? lifecycle.includedBenefits,
+      roleManageable: input.roleManageable ?? current.roleManageable,
+      termsVersion: input.termsVersion === undefined ? current.termsVersion : input.termsVersion,
+      includedBenefits: input.includedBenefits ?? current.includedBenefits,
       supportContact:
-        input.supportContact === undefined ? lifecycle.supportContact : input.supportContact.trim(),
+        input.supportContact === undefined ? current.supportContact : input.supportContact.trim(),
       updatedAtMs: now,
     };
     await this.store.createOffering(offering);
-    await this.store.saveLifecycle(next);
-    if (lifecycle.state === "repair_required") {
+    if (current.state === "repair_required") {
       await this.onOfferingChanged?.(current.guildId);
     }
-    return { offering, lifecycle: next };
+    return { offering };
   }
 
-  async publish(offeringId: string): Promise<CommerceOfferingLifecycleRecord> {
+  async publish(offeringId: string): Promise<CommerceOffering> {
     await this.assertFulfillmentPublication?.(offeringId);
     const offering = await this.requireOffering(offeringId);
-    const lifecycle = await this.requireLifecycle(offeringId);
-    if (!["draft", "unpublished"].includes(lifecycle.state)) {
+    if (!["draft", "unpublished"].includes(offering.state)) {
       throw new Error("commerce_offering_publish_invalid_state");
     }
     const context = await this.store.readPublishContext(
@@ -317,7 +280,7 @@ export class CommerceOfferingService {
     if (!context.premiumActive) throw new Error("commerce_offering_premium_required");
     if (!context.sellerEligible) throw new Error("commerce_offering_seller_ineligible");
     if (!context.termsAccepted) throw new Error("commerce_offering_terms_required");
-    if (!(context.roleManageable && lifecycle.roleManageable)) {
+    if (!(context.roleManageable && offering.roleManageable)) {
       throw new Error("commerce_offering_role_unmanageable");
     }
     if (
@@ -333,27 +296,24 @@ export class CommerceOfferingService {
       throw new Error("commerce_offering_subscription_limit");
     }
     const now = this.now();
-    const next = {
-      ...lifecycle,
-      state: "published" as const,
-      publishedAtMs: lifecycle.publishedAtMs ?? now,
+    const next: CommerceOffering = {
+      ...offering,
+      state: "published",
+      publishedAtMs: offering.publishedAtMs ?? now,
       updatedAtMs: now,
     };
-    await this.store.saveLifecycle(next);
-    await this.store.createOffering({ ...offering, status: "active", updatedAtMs: now });
+    await this.store.createOffering(next);
     await this.onOfferingChanged?.(offering.guildId);
     return next;
   }
 
-  async unpublish(offeringId: string): Promise<CommerceOfferingLifecycleRecord> {
+  async unpublish(offeringId: string): Promise<CommerceOffering> {
     return this.transition(offeringId, ["published", "suspended"], "unpublished");
   }
 
-  async retire(input: RetireCommerceOfferingInput): Promise<CommerceOfferingLifecycleRecord>;
-  async retire(offeringId: string): Promise<CommerceOfferingLifecycleRecord>;
-  async retire(
-    input: RetireCommerceOfferingInput | string,
-  ): Promise<CommerceOfferingLifecycleRecord> {
+  async retire(input: RetireCommerceOfferingInput): Promise<CommerceOffering>;
+  async retire(offeringId: string): Promise<CommerceOffering>;
+  async retire(input: RetireCommerceOfferingInput | string): Promise<CommerceOffering> {
     if (typeof input === "string") {
       throw new Error("commerce_offering_retire_context_required");
     }
@@ -361,37 +321,34 @@ export class CommerceOfferingService {
     validateRetirementReason(input.reasonCode);
     validateRetirementAction(input.actionId);
     const offering = await this.requireOffering(input.offeringId);
-    const lifecycle = await this.requireLifecycle(input.offeringId);
-    if (lifecycle.state === "retiring") return lifecycle;
+    if (offering.state === "retiring") return offering;
     const retireAtMs = input.retireAtMs ?? this.now();
     if (!Number.isSafeInteger(retireAtMs) || retireAtMs < this.now()) {
       throw new Error("commerce_offering_retire_time_invalid");
     }
-    if (!["published", "unpublished", "suspended"].includes(lifecycle.state)) {
+    if (!["published", "unpublished", "suspended"].includes(offering.state)) {
       throw new Error("commerce_offering_retire_invalid_state");
     }
     await this.store.beginRetirement({
       offering,
-      lifecycle,
       actorUserId: input.actorUserId,
       reasonCode: input.reasonCode,
       actionId: input.actionId,
       retireAtMs,
       nowMs: this.now(),
     });
-    if (lifecycle.state === "published") await this.onOfferingChanged?.(offering.guildId);
-    return this.requireLifecycle(input.offeringId);
+    if (offering.state === "published") await this.onOfferingChanged?.(offering.guildId);
+    return this.requireOffering(input.offeringId);
   }
 
-  async archive(offeringId: string): Promise<CommerceOfferingLifecycleRecord> {
-    await this.requireOffering(offeringId);
-    const lifecycle = await this.requireLifecycle(offeringId);
-    if (lifecycle.state === "published") throw new Error("commerce_offering_unpublish_first");
+  async archive(offeringId: string): Promise<CommerceOffering> {
+    const offering = await this.requireOffering(offeringId);
+    if (offering.state === "published") throw new Error("commerce_offering_unpublish_first");
     const now = this.now();
     if (!(await this.store.archiveOffering(offeringId, now))) {
       throw new Error("commerce_offering_active_subscriptions");
     }
-    return this.requireLifecycle(offeringId);
+    return this.requireOffering(offeringId);
   }
 
   async replacePrice(input: {
@@ -433,25 +390,23 @@ export class CommerceOfferingService {
     // grandfathered on their original price.
     if (!(await this.store.createPrice(next))) throw new Error("commerce_price_already_exists");
     await this.retireLocalPrice(previous, now);
-    const lifecycle = await this.requireLifecycle(offering.id);
-    if (lifecycle.state === "published") await this.onOfferingChanged?.(offering.guildId);
+    if (offering.state === "published") await this.onOfferingChanged?.(offering.guildId);
     return next;
   }
 
   async replaceRole(input: { offeringId: string; discordRoleId: string }): Promise<{
-    lifecycle: CommerceOfferingLifecycleRecord;
-    status: "updated" | "migration_pending";
+    offering: CommerceOffering;
+    status: "updated" | "replacement_pending";
   }> {
     const offering = await this.requireOffering(input.offeringId);
-    const lifecycle = await this.requireLifecycle(input.offeringId);
-    if (!["draft", "published", "unpublished", "repair_required"].includes(lifecycle.state)) {
+    if (!["draft", "published", "unpublished", "repair_required"].includes(offering.state)) {
       throw new Error("commerce_offering_role_replacement_invalid_state");
     }
     if (!input.discordRoleId || input.discordRoleId.length > 100) {
       throw new Error("commerce_offering_discord_role_invalid");
     }
     if (input.discordRoleId === offering.discordRoleId) {
-      return { lifecycle, status: "updated" };
+      return { offering, status: "updated" };
     }
     if (
       await this.store.hasPublishedRoleMapping(offering.guildId, input.discordRoleId, offering.id)
@@ -461,13 +416,12 @@ export class CommerceOfferingService {
     const nowMs = this.now();
     const status = await this.store.beginRoleReplacement({
       offering,
-      lifecycle,
       replacementRoleId: input.discordRoleId,
       nowMs,
     });
-    const next = await this.requireLifecycle(input.offeringId);
-    if (lifecycle.state === "published") await this.onOfferingChanged?.(offering.guildId);
-    return { lifecycle: next, status };
+    const next = await this.requireOffering(input.offeringId);
+    if (offering.state === "published") await this.onOfferingChanged?.(offering.guildId);
+    return { offering: next, status };
   }
 
   async dashboard(connectedAccountId: string): Promise<CommerceOfferingDashboard> {
@@ -483,7 +437,7 @@ export class CommerceOfferingService {
       });
     }
     // Stores expose immutable price creation but not an update operation by
-    // design. CloudflareOfferingStore supplies this narrow optional hook.
+    // design. The offering store supplies this narrow optional hook.
     const storeWithRetire = this.store as CommerceOfferingStore & {
       retirePrice?: (priceId: string, retiredAtMs: number) => Promise<void>;
     };
@@ -496,18 +450,12 @@ export class CommerceOfferingService {
     offeringId: string,
     allowed: CommerceOfferingLifecycle[],
     state: CommerceOfferingLifecycle,
-  ): Promise<CommerceOfferingLifecycleRecord> {
+  ): Promise<CommerceOffering> {
     const offering = await this.requireOffering(offeringId);
-    const current = await this.requireLifecycle(offeringId);
-    if (!allowed.includes(current.state))
+    if (!allowed.includes(offering.state))
       throw new Error("commerce_offering_transition_invalid_state");
-    const next = { ...current, state, updatedAtMs: this.now() };
-    await this.store.saveLifecycle(next);
-    await this.store.createOffering({
-      ...offering,
-      status: state === "published" ? "active" : state === "archived" ? "archived" : "draft",
-      updatedAtMs: next.updatedAtMs,
-    });
+    const next: CommerceOffering = { ...offering, state, updatedAtMs: this.now() };
+    await this.store.createOffering(next);
     await this.onOfferingChanged?.(offering.guildId);
     return next;
   }
@@ -517,38 +465,6 @@ export class CommerceOfferingService {
     if (!offering) throw new Error("commerce_offering_not_found");
     return offering;
   }
-
-  private async requireLifecycle(id: string): Promise<CommerceOfferingLifecycleRecord> {
-    const lifecycle = await this.store.readLifecycle(id);
-    if (!lifecycle) throw new Error("commerce_offering_lifecycle_missing");
-    return lifecycle;
-  }
-}
-
-function lifecycleFor(
-  offering: CommerceOffering,
-  roleManageable: boolean,
-  termsVersion: string | null,
-  includedBenefits: string[],
-  supportContact: string,
-  now: number,
-): CommerceOfferingLifecycleRecord {
-  return {
-    offeringId: offering.id,
-    connectedAccountId: offering.connectedAccountId,
-    guildId: offering.guildId,
-    state: "draft",
-    termsVersion,
-    includedBenefits,
-    supportContact,
-    roleManageable,
-    repairDeadlineAtMs: null,
-    retireAtMs: null,
-    publishedAtMs: null,
-    archivedAtMs: null,
-    createdAtMs: now,
-    updatedAtMs: now,
-  };
 }
 
 function validateInput(input: CreateCommerceOfferingInput): void {

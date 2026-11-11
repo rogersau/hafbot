@@ -1,14 +1,10 @@
-import { createEnforcementStore } from "../../ban-case-enforcement/store";
-import { createWardogsSqlStore } from "../wardogs-sql-store";
+import { createEnforcementStore } from "./postgres-enforcement-records";
+import { createWardogsSqlStore } from "./postgres-wardogs-records";
 import type { PostgresDatabaseCapability } from "./postgres-capability";
 export function createPostgresWardogsStore(db: PostgresDatabaseCapability) {
   return createWardogsSqlStore({
     async rows(sql, values) {
-      let index = 0;
-      return db.query<{ data: string }>(
-        sql.replaceAll("?", () => `$${++index}`),
-        values,
-      );
+      return db.query<{ data: string }>(sql, values);
     },
   });
 }
@@ -18,20 +14,12 @@ export function createPostgresBanEnforcementStore(db: PostgresDatabaseCapability
     batch(statements) {
       return db.transaction(async (tx) => {
         for (const { sql, values } of statements) {
-          let index = 0;
-          await tx.query(
-            sql.replaceAll("?", () => `$${++index}`),
-            values,
-          );
+          await tx.query(sql, values);
         }
       });
     },
     async rows(sql, values) {
-      let index = 0;
-      return db.query<{ data: string }>(
-        sql.replaceAll("?", () => `$${++index}`),
-        values,
-      );
+      return db.query<{ data: string }>(sql, values);
     },
   });
 }

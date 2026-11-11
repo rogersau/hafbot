@@ -5,13 +5,13 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflarePlayerCountStore } from "../src/runtime/cloudflare-player-count-store";
+import { createSqlitePlayerCountStore } from "./support/sqlite/runtime/sqlite-player-count-store";
 import type { PlayerCountServer } from "../src/types/player-count";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("createCloudflarePlayerCountStore creates and reads Player Count servers from the unified database", async () => {
+test("createSqlitePlayerCountStore creates and reads Player Count servers from the unified database", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflarePlayerCountStore(database as unknown as D1Database);
+  const store = createSqlitePlayerCountStore(database as unknown as D1Database);
   const server = createServer({ id: "server-1", guildId: "guild-1", createdAtMs: 100 });
 
   await store.upsertPlayerCountServer(server);
@@ -20,9 +20,9 @@ test("createCloudflarePlayerCountStore creates and reads Player Count servers fr
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflarePlayerCountStore lists Player Count servers by Guild and globally newest first", async () => {
+test("createSqlitePlayerCountStore lists Player Count servers by Guild and globally newest first", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflarePlayerCountStore(database as unknown as D1Database);
+  const store = createSqlitePlayerCountStore(database as unknown as D1Database);
   const olderGuildServer = createServer({ id: "server-1", guildId: "guild-1", createdAtMs: 100 });
   const newerGuildServer = createServer({ id: "server-2", guildId: "guild-1", createdAtMs: 300 });
   const otherGuildServer = createServer({ id: "server-3", guildId: "guild-2", createdAtMs: 200 });
@@ -42,9 +42,9 @@ test("createCloudflarePlayerCountStore lists Player Count servers by Guild and g
   ]);
 });
 
-test("createCloudflarePlayerCountStore updates and deletes Player Count servers within their Guild", async () => {
+test("createSqlitePlayerCountStore updates and deletes Player Count servers within their Guild", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflarePlayerCountStore(database as unknown as D1Database);
+  const store = createSqlitePlayerCountStore(database as unknown as D1Database);
   const original = createServer({ id: "server-1", guildId: "guild-1", createdAtMs: 100 });
   const updated = {
     ...original,
@@ -73,9 +73,9 @@ test("createCloudflarePlayerCountStore updates and deletes Player Count servers 
   assert.deepEqual(await store.listPlayerCountServers("guild-1"), []);
 });
 
-test("createCloudflarePlayerCountStore preserves latest Player Count snapshot updates", async () => {
+test("createSqlitePlayerCountStore preserves latest Player Count snapshot updates", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflarePlayerCountStore(database as unknown as D1Database);
+  const store = createSqlitePlayerCountStore(database as unknown as D1Database);
   const server = createServer({ id: "server-1", guildId: "guild-1", createdAtMs: 100 });
   const restoreDateNow = stubDateNow(999);
 
@@ -108,9 +108,9 @@ test("createCloudflarePlayerCountStore preserves latest Player Count snapshot up
   }
 });
 
-test("createCloudflarePlayerCountStore persists failure tracking state", async () => {
+test("createSqlitePlayerCountStore persists failure tracking state", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflarePlayerCountStore(database as unknown as D1Database);
+  const store = createSqlitePlayerCountStore(database as unknown as D1Database);
   const server = createServer({ id: "server-1", guildId: "guild-1", createdAtMs: 100 });
   const restoreDateNow = stubDateNow(500);
 

@@ -1,3 +1,4 @@
+import { testWebhookCredential } from "./support/webhook-credentials";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -5,7 +6,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareWebhookProxyStore } from "../src/runtime/cloudflare-webhook-proxy-store";
+import { createSqliteWebhookProxyStore } from "./support/sqlite/runtime/sqlite-webhook-proxy-store";
 import type { WebhookProxyConfig, WebhookProxyForwardLog } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
@@ -15,9 +16,15 @@ const baseConfig: WebhookProxyConfig = {
   name: "Alerts",
   enabled: true,
   banLookupEnabled: false,
-  banLookupNotificationUrl: null,
+  banLookupCredentialId: null,
   banLookupAppIds: [],
-  destinations: [{ id: "main", label: "Main", url: "https://discord.com/api/webhooks/1/main" }],
+  destinations: [
+    {
+      id: "main",
+      label: "Main",
+      credentialId: testWebhookCredential("https://discord.com/api/webhooks/1/main"),
+    },
+  ],
   defaultDestinationIds: ["main"],
   routingRules: [],
   contentReplacements: [],
@@ -25,10 +32,10 @@ const baseConfig: WebhookProxyConfig = {
   updatedAtMs: 200,
 };
 
-test("createCloudflareWebhookProxyStore reuses the store without runtime DDL", async () => {
+test("createSqliteWebhookProxyStore reuses the store without runtime DDL", async () => {
   const database = new SqliteD1Database();
-  const firstStore = createCloudflareWebhookProxyStore(database as unknown as D1Database);
-  const secondStore = createCloudflareWebhookProxyStore(database as unknown as D1Database);
+  const firstStore = createSqliteWebhookProxyStore(database as unknown as D1Database);
+  const secondStore = createSqliteWebhookProxyStore(database as unknown as D1Database);
 
   await firstStore.listWebhookProxyConfigs("guild-1");
   await firstStore.readWebhookProxyConfig("missing");
@@ -37,9 +44,9 @@ test("createCloudflareWebhookProxyStore reuses the store without runtime DDL", a
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareWebhookProxyStore stores and reads webhook configs", async () => {
+test("createSqliteWebhookProxyStore stores and reads webhook configs", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareWebhookProxyStore(database as unknown as D1Database);
+  const store = createSqliteWebhookProxyStore(database as unknown as D1Database);
   const newerConfig: WebhookProxyConfig = {
     ...baseConfig,
     publicId: "public_webhook_5678",
@@ -64,15 +71,19 @@ test("createCloudflareWebhookProxyStore stores and reads webhook configs", async
   assert.equal(await store.readWebhookProxyConfig(baseConfig.publicId), null);
 });
 
-test("createCloudflareWebhookProxyStore updates webhook configs on upsert conflict", async () => {
+test("createSqliteWebhookProxyStore updates webhook configs on upsert conflict", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareWebhookProxyStore(database as unknown as D1Database);
+  const store = createSqliteWebhookProxyStore(database as unknown as D1Database);
   const updatedConfig: WebhookProxyConfig = {
     ...baseConfig,
     name: "Alerts v2",
     enabled: false,
     destinations: [
-      { id: "secondary", label: "Secondary", url: "https://discord.com/api/webhooks/1/secondary" },
+      {
+        id: "secondary",
+        label: "Secondary",
+        credentialId: testWebhookCredential("https://discord.com/api/webhooks/1/secondary"),
+      },
     ],
     defaultDestinationIds: ["secondary"],
     routingRules: [
@@ -106,9 +117,9 @@ test("createCloudflareWebhookProxyStore updates webhook configs on upsert confli
   });
 });
 
-test("createCloudflareWebhookProxyStore stores and reads content replacements", async () => {
+test("createSqliteWebhookProxyStore stores and reads content replacements", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareWebhookProxyStore(database as unknown as D1Database);
+  const store = createSqliteWebhookProxyStore(database as unknown as D1Database);
   const config: WebhookProxyConfig = {
     ...baseConfig,
     contentReplacements: [
@@ -127,13 +138,13 @@ test("createCloudflareWebhookProxyStore stores and reads content replacements", 
   assert.deepEqual(await store.readWebhookProxyConfig(config.publicId), config);
 });
 
-test("createCloudflareWebhookProxyStore stores and reads Steam ban lookup settings", async () => {
+test("createSqliteWebhookProxyStore stores and reads Steam ban lookup settings", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareWebhookProxyStore(database as unknown as D1Database);
+  const store = createSqliteWebhookProxyStore(database as unknown as D1Database);
   const config: WebhookProxyConfig = {
     ...baseConfig,
     banLookupEnabled: true,
-    banLookupNotificationUrl: "https://example.com/ban-reports",
+    banLookupCredentialId: testWebhookCredential("https://example.com/ban-reports"),
     banLookupAppIds: [221100, 730],
   };
 
@@ -142,15 +153,15 @@ test("createCloudflareWebhookProxyStore stores and reads Steam ban lookup settin
   assert.deepEqual(await store.readWebhookProxyConfig(config.publicId), config);
 });
 
-test("createCloudflareWebhookProxyStore caps stored delivery logs per guild", async () => {
+test("createSqliteWebhookProxyStore caps stored delivery logs per guild", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareWebhookProxyStore(database as unknown as D1Database);
+  const store = createSqliteWebhookProxyStore(database as unknown as D1Database);
   const olderSameGuildLog: WebhookProxyForwardLog = {
     guildId: "guild-1",
     id: "old-same-guild",
     publicId: "public_old_same_guild",
     destinationId: "main",
-    destinationUrl: "https://discord.com/api/webhooks/1/main",
+    credentialFingerprint: null,
     status: 200,
     ok: true,
     attempt: 1,
@@ -173,7 +184,7 @@ test("createCloudflareWebhookProxyStore caps stored delivery logs per guild", as
       id: `log-${index}`,
       publicId: baseConfig.publicId,
       destinationId: "main",
-      destinationUrl: "https://discord.com/api/webhooks/1/main",
+      credentialFingerprint: null,
       status: 200,
       ok: true,
       attempt: 1,

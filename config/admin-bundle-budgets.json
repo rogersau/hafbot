@@ -29,7 +29,7 @@
       "route.reactionRoles": { "gzipBytes": 38000 },
       "route.reputation": { "gzipBytes": 33000 },
       "route.serverLevels": { "gzipBytes": 40000 },
-      "route.steamLink": { "gzipBytes": 51000 },
+      "route.platformLink": { "gzipBytes": 51000 },
       "route.suggestions": { "gzipBytes": 40000 },
       "route.tickets": { "gzipBytes": 67000 },
       "route.timedRoles": { "gzipBytes": 43000 },

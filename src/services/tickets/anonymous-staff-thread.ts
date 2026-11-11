@@ -9,14 +9,15 @@ import type { DiscordMessageCreate, DiscordMessageDelete, DiscordMessageUpdate }
 import { resolveMessageDisplayName } from "../../runtime/discord-user";
 import { suppressMentions } from "../../discord/messages";
 
-type CreateStore = Pick<TicketStore, "readOpenTicketByStaffThread" | "readTicketPanelConfig"> &
-  Required<
-    Pick<
-      TicketStore,
-      "claimStaffMessageDelivery" | "completeStaffMessageDelivery" | "releaseStaffMessageDelivery"
-    >
-  > &
-  Partial<Pick<TicketStore, "readTicketPanelConfigById">>;
+type CreateStore = Pick<
+  TicketStore,
+  | "readOpenTicketByStaffThread"
+  | "readTicketPanelConfigById"
+  | "claimStaffMessageDelivery"
+  | "completeStaffMessageDelivery"
+  | "releaseStaffMessageDelivery"
+>;
+
 type UpdateStore = Pick<
   TicketStore,
   "readStaffMessageMappingByStaffMessage" | "updateStaffMessageMapping"
@@ -112,12 +113,9 @@ export async function handleAnonymousStaffThreadMessageCreate(
     return;
   }
 
-  const panel =
-    ticket.panelId && store.readTicketPanelConfigById
-      ? await store.readTicketPanelConfigById(message.guild_id, ticket.panelId)
-      : await store.readTicketPanelConfig(message.guild_id);
+  const panel = await store.readTicketPanelConfigById(message.guild_id, ticket.panelId ?? "main");
   const ticketType = panel?.ticketTypes.find((entry) => entry.id === ticket.ticketTypeId);
-  if (!(ticketType?.anonymousSupportEnabled ?? ticketType?.anonymousEnabled ?? false)) {
+  if (!(ticketType?.anonymousSupportEnabled ?? false)) {
     return;
   }
 

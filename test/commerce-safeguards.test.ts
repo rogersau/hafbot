@@ -10,7 +10,7 @@ import {
   COMMERCE_PILOT_LIMITS,
   CommerceSafeguardsService,
 } from "../src/commerce/safeguards";
-import { CloudflareCommerceSafeguardStore } from "../src/runtime/commerce/cloudflare-safeguard-store";
+import { SqliteCommerceSafeguardStore } from "./support/sqlite/runtime/commerce/sqlite-safeguard-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 const NOW = Date.UTC(2030, 5, 15);
@@ -21,7 +21,7 @@ test("atomic capacity claims enforce subscriber and per-currency volume limits",
   for (let index = 0; index < 99; index += 1) {
     insertSubscription(database, `sub-${index}`);
   }
-  const store = new CloudflareCommerceSafeguardStore(database.d1);
+  const store = new SqliteCommerceSafeguardStore(database.d1);
   assert.equal(await store.claimCapacity(claim("claim-100", "AUD", 100)), true);
   assert.equal(
     await store.claimCapacity(claim("claim-101", "AUD", 100)),
@@ -45,7 +45,7 @@ test("atomic capacity claims enforce subscriber and per-currency volume limits",
 test("control switches block only their declared financial surface and expire safely", async () => {
   const database = await createTestDatabase();
   seedSeller(database);
-  const store = new CloudflareCommerceSafeguardStore(database.d1);
+  const store = new SqliteCommerceSafeguardStore(database.d1);
   const service = new CommerceSafeguardsService(
     store,
     () => NOW,
@@ -88,7 +88,7 @@ test("control switches block only their declared financial surface and expire sa
     actorUserId: "operator-1",
     expiresAtMs: NOW + 1,
   });
-  const afterExpiry = new CloudflareCommerceSafeguardStore(database.d1);
+  const afterExpiry = new SqliteCommerceSafeguardStore(database.d1);
   assert.equal(
     await afterExpiry.claimCapacity({ ...claim("after-expiry", "AUD", 100), nowMs: NOW + 2 }),
     true,
@@ -99,7 +99,7 @@ test("control switches block only their declared financial surface and expire sa
 test("renewal shutdown blocks new subscriptions but preserves support checkout", async () => {
   const database = await createTestDatabase();
   seedSeller(database);
-  const store = new CloudflareCommerceSafeguardStore(database.d1);
+  const store = new SqliteCommerceSafeguardStore(database.d1);
   const service = new CommerceSafeguardsService(
     store,
     () => NOW,
@@ -129,7 +129,7 @@ test("renewal shutdown blocks new subscriptions but preserves support checkout",
 test("storefront visibility applies global and offering-scoped purchase controls", async () => {
   const database = await createTestDatabase();
   seedSeller(database);
-  const store = new CloudflareCommerceSafeguardStore(database.d1);
+  const store = new SqliteCommerceSafeguardStore(database.d1);
   let sequence = 0;
   const service = new CommerceSafeguardsService(
     store,
@@ -177,7 +177,7 @@ test("storefront visibility applies global and offering-scoped purchase controls
 test("support claims enforce the 500-unit payment ceiling and threshold alerts are durable", async () => {
   const database = await createTestDatabase();
   seedSeller(database);
-  const store = new CloudflareCommerceSafeguardStore(database.d1);
+  const store = new SqliteCommerceSafeguardStore(database.d1);
   assert.equal(
     await store.claimCapacity({
       ...claim("support-max", "USD", COMMERCE_PILOT_LIMITS.supportPaymentMinor),
@@ -235,16 +235,12 @@ function seedSeller(database: Awaited<ReturnType<typeof createTestDatabase>>): v
     VALUES ('acct_1','guild-1','active','approved','seller@example.test',${NOW},
       'discord_verified',0,NULL,1,1,'[]','[]','[]',NULL,'operator-1',${NOW},${NOW},${NOW},${NOW});
     INSERT INTO commerce_offerings
-      (id,connected_account_id,guild_id,discord_role_id,name,description,purchase_type,status,
+      (id,connected_account_id,guild_id,discord_role_id,name,description,purchase_type,state,
+       terms_version,included_benefits_json,support_contact,role_manageable,
+       repair_deadline_at_ms,repair_previous_state,retire_at_ms,published_at_ms,
        archived_at_ms,created_at_ms,updated_at_ms)
-    VALUES ('offering-1','acct_1','guild-1','role-1','Role',NULL,'subscription','active',
-      NULL,${NOW},${NOW});
-    INSERT INTO commerce_offering_lifecycles
-      (offering_id,connected_account_id,guild_id,state,terms_version,included_benefits_json,
-       support_contact,role_manageable,repair_deadline_at_ms,retire_at_ms,published_at_ms,
-       archived_at_ms,created_at_ms,updated_at_ms)
-    VALUES ('offering-1','acct_1','guild-1','published','terms','["Role"]',
-      'seller@example.test',1,NULL,NULL,${NOW},NULL,${NOW},${NOW});
+    VALUES ('offering-1','acct_1','guild-1','role-1','Role',NULL,'subscription','published',
+      'terms','["Role"]','seller@example.test',1,NULL,NULL,NULL,${NOW},NULL,${NOW},${NOW});
   `);
 }
 

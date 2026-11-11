@@ -9,12 +9,6 @@ import { createBillingCatalog } from "../src/runtime/billing/catalog";
 import { createLandingPriceCatalog } from "../src/runtime/billing/landing-catalog";
 
 const billingCatalog = createBillingCatalog({
-  founderPremiumMonthlyPriceId: "price_fpm",
-  founderPremiumYearlyPriceId: "price_fpy",
-  legacyFounderPremiumYearlyPriceId: "price_legacy_fpy",
-  founderPremiumPlusMonthlyPriceId: "price_fppm",
-  founderPremiumPlusYearlyPriceId: "price_fppy",
-  legacyFounderPremiumPlusYearlyPriceId: "price_legacy_fppy",
   premiumMonthlyPriceId: "price_pm",
   premiumMonthlyProductId: "prod_premium",
   premiumYearlyPriceId: "price_py",
@@ -28,14 +22,13 @@ const billingCatalog = createBillingCatalog({
 test("landing catalogue publishes only a complete approved Stripe Price set and caches it", async () => {
   const requested: string[] = [];
   const values = new Map([
-    ["price_fpm", stripePrice("price_fpm", "prod_premium", 2900, "month")],
-    ["price_fpy", stripePrice("price_fpy", "prod_premium", 29000, "year")],
-    ["price_fppm", stripePrice("price_fppm", "prod_plus", 4900, "month")],
-    ["price_fppy", stripePrice("price_fppy", "prod_plus", 49000, "year")],
+    ["price_pm", stripePrice("price_pm", "prod_premium", 2900, "month")],
+    ["price_py", stripePrice("price_py", "prod_premium", 29000, "year")],
+    ["price_ppm", stripePrice("price_ppm", "prod_plus", 4900, "month")],
+    ["price_ppy", stripePrice("price_ppy", "prod_plus", 49000, "year")],
   ]);
   const catalogue = createLandingPriceCatalog({
     catalog: billingCatalog,
-    countFounderPlaces: async () => 3,
     stripe: {
       readPrice: async (priceId) => {
         requested.push(priceId);
@@ -79,29 +72,7 @@ test("landing catalogue publishes only a complete approved Stripe Price set and 
     },
   ]);
   assert.equal((await catalogue.read())?.length, 4);
-  assert.deepEqual(requested.sort(), ["price_fpm", "price_fppm", "price_fppy", "price_fpy"]);
-});
-
-test("standard landing prices ignore the retired founder counter", async () => {
-  const catalogue = createLandingPriceCatalog({
-    catalog: billingCatalog,
-    countFounderPlaces: async () => {
-      throw new Error("historical counter unavailable");
-    },
-    stripe: {
-      readPrice: async (priceId) => {
-        const entry = billingCatalog.get(priceId)!;
-        return stripePrice(
-          priceId,
-          entry.productId,
-          499,
-          entry.frequency === "monthly" ? "month" : "year",
-        );
-      },
-    },
-  });
-  assert.equal((await catalogue.read())?.length, 4);
-  assert.equal(catalogue.readFounderAdmission, undefined);
+  assert.deepEqual(requested.sort(), ["price_pm", "price_ppm", "price_ppy", "price_py"]);
 });
 
 test("landing catalogue serves bounded stale data and then fails closed", async () => {
@@ -177,7 +148,7 @@ test("landing catalogue rejects mismatched, partial, and unavailable Stripe data
     },
   });
   const partialCatalog = new Map(billingCatalog);
-  partialCatalog.delete("price_fppy");
+  partialCatalog.delete("price_ppy");
   const partial = createLandingPriceCatalog({
     catalog: partialCatalog,
     cache: new Map(),

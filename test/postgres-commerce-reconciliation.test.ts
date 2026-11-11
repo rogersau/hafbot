@@ -1,12 +1,12 @@
+import type { PostgresDatabaseCapability } from "../src/runtime/postgres/postgres-capability";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { resolve } from "node:path";
 import test from "node:test";
 
-import { createCloudflareCommerceStore } from "../src/runtime/cloudflare-commerce-store";
-import { CloudflareCommerceBuyerCheckoutStore } from "../src/runtime/commerce/cloudflare-buyer-checkout-store";
-import { CloudflarePaidRoleStore } from "../src/runtime/commerce/cloudflare-paid-role-store";
-import { CloudflareCommerceReconciliationStore } from "../src/runtime/commerce/cloudflare-reconciliation-store";
+import { createPostgresCommerceStore } from "../src/runtime/postgres/postgres-commerce-store";
+import { PostgresCommerceBuyerCheckoutStore } from "../src/runtime/postgres/postgres-commerce-buyer-checkout-store";
+import { PostgresPaidRoleStore } from "../src/runtime/postgres/postgres-commerce-paid-role-store";
+import { PostgresCommerceReconciliationStore } from "../src/runtime/postgres/postgres-commerce-reconciliation-store";
 import {
   processCommerceReconciliationMessage,
   requestCommerceRefresh,
@@ -16,11 +16,7 @@ import {
 } from "../src/runtime/commerce/reconciliation";
 import { createCommerceStripeWebhookHandler } from "../src/runtime/commerce/webhook";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 const NOW = 1_800_000_000_000;
@@ -30,8 +26,8 @@ test(
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     await withPostgres(async (database, accountId) => {
-      const store = new CloudflareCommerceReconciliationStore(database, () => NOW);
-      const commerce = createCloudflareCommerceStore(database);
+      const store = new PostgresCommerceReconciliationStore(database, () => NOW);
+      const commerce = createPostgresCommerceStore(database);
       const paid = paidSnapshot(accountId);
       const first = await accept(store, accountId, "first");
       const claim = (message: CommerceReconciliationMessage, leaseToken: string, nowMs = NOW) =>
@@ -69,12 +65,12 @@ test(
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     await withPostgres(async (database, accountId) => {
-      const store = new CloudflareCommerceReconciliationStore(database, () => NOW);
-      const commerce = createCloudflareCommerceStore(database);
-      const buyerStore = new CloudflareCommerceBuyerCheckoutStore(database, {
+      const store = new PostgresCommerceReconciliationStore(database, () => NOW);
+      const commerce = createPostgresCommerceStore(database);
+      const buyerStore = new PostgresCommerceBuyerCheckoutStore(database, {
         isPremium: async () => true,
       });
-      const roles = new CloudflarePaidRoleStore(database);
+      const roles = new PostgresPaidRoleStore(database);
       const paid = paidSnapshot(accountId);
       const request = await store.requestRefresh({
         connectedAccountId: accountId,
@@ -205,7 +201,7 @@ test(
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     await withPostgres(async (database, accountId) => {
-      const store = new CloudflareCommerceReconciliationStore(database, () => NOW);
+      const store = new PostgresCommerceReconciliationStore(database, () => NOW);
       const first = await accept(store, accountId, "earlier");
       const current = await accept(store, accountId, "current");
       const otherSeller = await accept(store, `${accountId}:other`, "current");
@@ -229,31 +225,31 @@ test(
         "its own older outbox can still be marked",
       );
       await store.markOutboxSent(current, NOW + 3);
-      await store.markOutboxSent(current.eventId, accountId, NOW + 4);
+      await store.markOutboxSent(current, NOW + 4);
       assert.equal(
         await readSentAt(database, current),
         NOW + 2,
-        "both overloads retain the first timestamp",
+        "repeated delivery retains the first timestamp",
       );
-      await store.markOutboxSent(otherSeller.eventId, otherSeller.connectedAccountId, NOW + 5);
+      await store.markOutboxSent(otherSeller, NOW + 5);
       assert.equal(await readSentAt(database, otherSeller), NOW + 5);
     });
   },
 );
 
 test(
-  "native PostgreSQL Commerce webhook publication marks the legacy outbox once",
+  "native PostgreSQL Commerce webhook publication marks the current outbox once",
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     await withPostgres(async (database, fixtureId) => {
       const accountId = `acct_${fixtureId.replaceAll("-", "")}`;
       let nowMs = NOW;
-      const store = new CloudflareCommerceReconciliationStore(database, () => nowMs);
+      const store = new PostgresCommerceReconciliationStore(database, () => nowMs);
       await accept(store, accountId, "earlier");
       const sent: CommerceReconciliationMessage[] = [];
       const secret = "synthetic-local-webhook-signing-secret";
       const body = JSON.stringify({
-        id: "legacy",
+        id: "evt_current",
         type: "invoice.paid",
         account: accountId,
         created: NOW / 1_000,
@@ -280,13 +276,13 @@ test(
       });
       assert.equal((await handler(request()))?.status, 200);
       assert.equal(sent.length, 1);
-      assert.equal(sent[0].generation, 2, "legacy publication is not fenced to generation one");
+      assert.equal(sent[0].generation, 2, "publication is not fenced to generation one");
       assert.equal(await readSentAt(database, sent[0]), NOW);
       nowMs += 10;
       const duplicate = await handler(request());
       assert.deepEqual(await duplicate?.json(), { received: true, duplicate: true });
       assert.equal(sent.length, 1, "a duplicate webhook does not send again");
-      await store.markOutboxSent("legacy", accountId, nowMs);
+      await store.markOutboxSent(sent[0], nowMs);
       assert.equal(await readSentAt(database, sent[0]), NOW, "the first sent timestamp survives");
     });
   },
@@ -297,8 +293,8 @@ test(
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     await withPostgres(async (database, accountId) => {
-      const store = new CloudflareCommerceReconciliationStore(database, () => NOW);
-      const commerce = createCloudflareCommerceStore(database);
+      const store = new PostgresCommerceReconciliationStore(database, () => NOW);
+      const commerce = createPostgresCommerceStore(database);
       const paid = paidSnapshot(accountId);
       const message = await accept(store, accountId, "atomic");
       const claim = (leaseToken: string) =>
@@ -339,8 +335,8 @@ for (const leaseToken of [null, "fixture-lease"]) {
     { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
     async () => {
       await withPostgres(async (database, accountId) => {
-        const store = new CloudflareCommerceReconciliationStore(database, () => NOW);
-        await createCloudflareCommerceStore(database).saveConnectedAccount(
+        const store = new PostgresCommerceReconciliationStore(database, () => NOW);
+        await createPostgresCommerceStore(database).saveConnectedAccount(
           snapshot(accountId).connectedAccount,
         );
         const message = await accept(store, accountId, "nullable-lease");
@@ -365,8 +361,8 @@ test(
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     await withPostgres(async (database, accountId) => {
-      const store = new CloudflareCommerceReconciliationStore(database, () => NOW);
-      await createCloudflareCommerceStore(database).saveConnectedAccount(
+      const store = new PostgresCommerceReconciliationStore(database, () => NOW);
+      await createPostgresCommerceStore(database).saveConnectedAccount(
         snapshot(accountId).connectedAccount,
       );
       const message = await accept(store, accountId, "wrong-lease");
@@ -392,8 +388,8 @@ test(
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     await withPostgres(async (database, accountId) => {
-      const store = new CloudflareCommerceReconciliationStore(database, () => NOW);
-      await createCloudflareCommerceStore(database).saveConnectedAccount(
+      const store = new PostgresCommerceReconciliationStore(database, () => NOW);
+      await createPostgresCommerceStore(database).saveConnectedAccount(
         snapshot(accountId).connectedAccount,
       );
       const stale = await accept(store, accountId, "stale-quarantine");
@@ -426,8 +422,8 @@ test(
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async () => {
     await withPostgres(async (database, accountId) => {
-      const store = new CloudflareCommerceReconciliationStore(database, () => NOW);
-      const commerce = createCloudflareCommerceStore(database);
+      const store = new PostgresCommerceReconciliationStore(database, () => NOW);
+      const commerce = createPostgresCommerceStore(database);
       const otherAccountId = `${accountId}:other-seller`;
       for (const id of [accountId, otherAccountId]) {
         await commerce.saveConnectedAccount(snapshot(id).connectedAccount);
@@ -473,29 +469,33 @@ test(
   },
 );
 
-async function readRecoveryState(database: D1Database, accountId: string) {
-  const sync = await database
-    .prepare("SELECT * FROM commerce_sync_state WHERE connected_account_id = ? ORDER BY id")
-    .bind(accountId)
-    .all();
-  const events = await database
-    .prepare("SELECT * FROM commerce_webhook_events WHERE connected_account_id = ? ORDER BY id")
-    .bind(accountId)
-    .all();
-  const incidents = await database
-    .prepare("SELECT * FROM commerce_incidents WHERE connected_account_id = ? ORDER BY id")
-    .bind(accountId)
-    .all();
-  return { sync: sync.results, events: events.results, incidents: incidents.results };
+async function readRecoveryState(database: PostgresDatabaseCapability, accountId: string) {
+  const sync = await database.queryResult(
+    "SELECT * FROM commerce_sync_state WHERE connected_account_id = $1 ORDER BY id",
+    [accountId],
+  );
+  const events = await database.queryResult(
+    "SELECT * FROM commerce_webhook_events WHERE connected_account_id = $1 ORDER BY id",
+    [accountId],
+  );
+  const incidents = await database.queryResult(
+    "SELECT * FROM commerce_incidents WHERE connected_account_id = $1 ORDER BY id",
+    [accountId],
+  );
+  return { sync: sync.rows, events: events.rows, incidents: incidents.rows };
 }
 
-async function assertQuarantined(database: D1Database, message: CommerceReconciliationMessage) {
+async function assertQuarantined(
+  database: PostgresDatabaseCapability,
+  message: CommerceReconciliationMessage,
+) {
   assert.deepEqual(
     await database
-      .prepare(`SELECT generation, applied_generation, status, last_error_code, lease_token, lease_expires_at_ms, updated_at_ms
-    FROM commerce_sync_state WHERE connected_account_id = ? AND resource_type = ? AND resource_id = ?`)
-      .bind(message.connectedAccountId, message.resourceType, message.resourceId)
-      .first(),
+      .query(
+        "SELECT generation, applied_generation, status, last_error_code, lease_token, lease_expires_at_ms, updated_at_ms\n    FROM commerce_sync_state WHERE connected_account_id = $1 AND resource_type = $2 AND resource_id = $3",
+        [message.connectedAccountId, message.resourceType, message.resourceId],
+      )
+      .then((rows) => rows[0] ?? null),
     {
       generation: message.generation,
       applied_generation: 0,
@@ -508,10 +508,11 @@ async function assertQuarantined(database: D1Database, message: CommerceReconcil
   );
   assert.deepEqual(
     await database
-      .prepare(`SELECT generation, status, attempt_count, last_error_code, processed_at_ms, updated_at_ms
-    FROM commerce_webhook_events WHERE connected_account_id = ? AND stripe_event_id = ?`)
-      .bind(message.connectedAccountId, message.eventId)
-      .first(),
+      .query(
+        "SELECT generation, status, attempt_count, last_error_code, processed_at_ms, updated_at_ms\n    FROM commerce_webhook_events WHERE connected_account_id = $1 AND stripe_event_id = $2",
+        [message.connectedAccountId, message.eventId],
+      )
+      .then((rows) => rows[0] ?? null),
     {
       generation: message.generation,
       status: "failed",
@@ -521,13 +522,11 @@ async function assertQuarantined(database: D1Database, message: CommerceReconcil
       updated_at_ms: NOW + 1,
     },
   );
-  const incidents = await database
-    .prepare(`SELECT connected_account_id, guild_id, incident_key, severity, status, summary_code, entity_type, entity_id,
-      safe_args_json, occurrence_count, first_seen_at_ms, last_seen_at_ms, resolved_at_ms, created_at_ms, updated_at_ms
-    FROM commerce_incidents WHERE connected_account_id = ?`)
-    .bind(message.connectedAccountId)
-    .all();
-  assert.deepEqual(incidents.results, [
+  const incidents = await database.queryResult(
+    "SELECT connected_account_id, guild_id, incident_key, severity, status, summary_code, entity_type, entity_id,\n      safe_args_json, occurrence_count, first_seen_at_ms, last_seen_at_ms, resolved_at_ms, created_at_ms, updated_at_ms\n    FROM commerce_incidents WHERE connected_account_id = $1",
+    [message.connectedAccountId],
+  );
+  assert.deepEqual(incidents.rows, [
     {
       connected_account_id: message.connectedAccountId,
       guild_id: message.connectedAccountId,
@@ -548,7 +547,9 @@ async function assertQuarantined(database: D1Database, message: CommerceReconcil
   ]);
 }
 
-async function withPostgres(operation: (database: D1Database, accountId: string) => Promise<void>) {
+async function withPostgres(
+  operation: (database: PostgresDatabaseCapability, accountId: string) => Promise<void>,
+) {
   assert.ok(postgresUrl);
   const url = new URL(postgresUrl);
   assert.ok(url.hostname === "127.0.0.1" || url.hostname === "localhost");
@@ -558,18 +559,15 @@ async function withPostgres(operation: (database: D1Database, accountId: string)
     NODE_ENV: "test",
   });
   try {
-    await applyPostgresMigrations(
-      database,
-      await readPostgresMigrations(resolve("migrations/postgres")),
-    );
-    await operation(createPostgresD1CompatibilityDatabase(database), crypto.randomUUID());
+    await initializePostgresSchema(database);
+    await operation(database, crypto.randomUUID());
   } finally {
     await database.close();
   }
 }
 
 async function accept(
-  store: CloudflareCommerceReconciliationStore,
+  store: PostgresCommerceReconciliationStore,
   accountId: string,
   eventId: string,
 ): Promise<CommerceReconciliationMessage> {
@@ -590,13 +588,16 @@ async function accept(
   };
 }
 
-async function readSentAt(database: D1Database, message: CommerceReconciliationMessage) {
+async function readSentAt(
+  database: PostgresDatabaseCapability,
+  message: CommerceReconciliationMessage,
+) {
   const row = await database
-    .prepare(
-      "SELECT sent_at_ms FROM commerce_sync_outbox WHERE connected_account_id = ? AND event_id = ?",
+    .query<{ sent_at_ms: number | null }>(
+      "SELECT sent_at_ms FROM commerce_sync_outbox WHERE connected_account_id = $1 AND event_id = $2",
+      [message.connectedAccountId, message.eventId],
     )
-    .bind(message.connectedAccountId, message.eventId)
-    .first<{ sent_at_ms: number | null }>();
+    .then((rows) => rows[0] ?? null);
   assert.ok(row, "the durable outbox row exists");
   return row.sent_at_ms;
 }

@@ -12,13 +12,15 @@ application on your Docker host. Follow [the Docker guide](/self-hosting) for ex
 ## Can everything run on Cloudflare?
 
 There is currently no maintained, tested deployment of this release entirely on Cloudflare.
-The repo retains a former Workers/D1/Durable Objects/Queues/KV/R2 implementation for compatibility
-and historical recovery. Its `wrangler.toml`, resource IDs, migration history and
-`legacy:cloudflare:*` scripts are not a fresh-account installer. Do not deploy those files against
-the maintainer's resources or run PostgreSQL migrations against D1.
+The repo retains Workers/D1/Durable Objects/Queues/KV/R2 code, and the Node runtime still uses
+several of those stores through a PostgreSQL compatibility adapter. This release supplies no
+Worker deployment configuration or Cloudflare-only installer. The current PostgreSQL schema is `schema/postgres.sql`. Startup initializes an empty database
+without replaying private deployment history. The SQLite schema under `test/support/fixtures`
+is only an adapter test fixture.
 
-This follows the repository's portable-runtime architecture decision. Restoring a Cloudflare-only
-release is a separate project; the self-hosting announcement must not describe it as available.
+Restoring a Cloudflare-only release is a separate project. The
+[architecture audit](https://github.com/rogersau/hafbot/blob/main/docs/architecture-audit.md)
+records the remaining runtime coupling and cleanup work.
 
 ## Use private R2 object storage
 

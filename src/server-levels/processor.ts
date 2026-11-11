@@ -503,20 +503,22 @@ export class ServerLevelProcessor {
     skipped: T,
     task: () => Promise<T>,
   ): Promise<T> {
-    const acquire = this.options.store.acquireProcessingLease;
-    const release = this.options.store.releaseProcessingLease;
-    if (!acquire || !release) return task();
     const leaseId = this.options.createId?.() ?? crypto.randomUUID();
     const now = this.options.now?.() ?? Date.now();
     if (
-      !(await acquire(configuredGameServerId, leaseId, now, now + SERVER_LEVEL_PROCESSING_LEASE_MS))
+      !(await this.options.store.acquireProcessingLease(
+        configuredGameServerId,
+        leaseId,
+        now,
+        now + SERVER_LEVEL_PROCESSING_LEASE_MS,
+      ))
     ) {
       return skipped;
     }
     try {
       return await task();
     } finally {
-      await release(configuredGameServerId, leaseId);
+      await this.options.store.releaseProcessingLease(configuredGameServerId, leaseId);
     }
   }
 

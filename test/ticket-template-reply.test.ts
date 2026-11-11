@@ -12,6 +12,8 @@ import {
 import { buildTicketTemplateReplyCustomId } from "../src/tickets";
 import type { DiscordInteraction, RuntimeStores } from "../src/runtime/app-types";
 import type { MessageTemplate, TicketInstance, TicketTemplateReply } from "../src/types";
+import { createProductionRuntimeStores } from "./support/production-runtime-stores";
+import { createTicketHandlerLifecycle } from "./support/ticket-handler-lifecycle";
 
 const ticket: TicketInstance = {
   guildId: "guild-1",
@@ -112,24 +114,26 @@ function interaction(type: number, channelId = "staff-thread-1"): DiscordInterac
 }
 
 test("Ticket reply autocomplete returns only eligible Guild templates in Ticket context", async () => {
-  const response = await handleTicketReplyAutocompleteInteraction(interaction(4), stores());
+  const runtimeStores = stores();
+  const response = await handleTicketReplyAutocompleteInteraction(interaction(4), {
+    stores: runtimeStores,
+    ticketLifecycle: createTicketHandlerLifecycle(runtimeStores),
+  });
   assert.deepEqual(((await response.json()) as any).data.choices, [
     { name: "Appeal denied", value: "template-1" },
   ]);
 });
 
 test("Ticket reply command previews embeds ephemerally before sending", async () => {
-  const response = await handleTicketSlashCommandInteraction(
-    interaction(2),
-    stores(),
-    "token",
-    "https://runtime.example",
-    "reply",
-    undefined,
-    undefined,
-    undefined,
-    template.id,
-  );
+  const runtimeStores = stores();
+  const response = await handleTicketSlashCommandInteraction(interaction(2), {
+    stores: runtimeStores,
+    ticketLifecycle: createTicketHandlerLifecycle(runtimeStores),
+    discordBotToken: "token",
+    requestOrigin: "https://runtime.example",
+    subcommandName: "reply",
+    templateId: template.id,
+  });
   const body = (await response.json()) as any;
   assert.equal(body.data.flags, 64);
   assert.equal(body.data.embeds[0].description, "Your appeal was denied.");
@@ -146,6 +150,7 @@ test("confirmed Staff Discussion Thread reply is delivered once and records the 
   const claimed: TicketTemplateReply[] = [];
   const completed: Array<{ interactionId: string; botMessageId: string }> = [];
   const runtimeStores = stores({ claimed, completed });
+  const ticketLifecycle = createTicketHandlerLifecycle(runtimeStores);
   const component = interaction(3);
   component.data = {
     custom_id: buildTicketTemplateReplyCustomId(
@@ -155,19 +160,19 @@ test("confirmed Staff Discussion Thread reply is delivered once and records the 
     ),
   };
   try {
-    const first = await handleMessageComponentInteraction(
-      component,
-      runtimeStores,
-      "token",
-      "https://runtime.example",
-    );
+    const first = await handleMessageComponentInteraction(component, {
+      stores: runtimeStores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
     assert.equal(((await first.json()) as any).data.content, "Sent **Appeal denied**.");
-    const second = await handleMessageComponentInteraction(
-      component,
-      runtimeStores,
-      "token",
-      "https://runtime.example",
-    );
+    const second = await handleMessageComponentInteraction(component, {
+      stores: runtimeStores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
     assert.match(((await second.json()) as any).data.content, /already sent/);
   } finally {
     globalThis.fetch = originalFetch;
@@ -176,4 +181,123 @@ test("confirmed Staff Discussion Thread reply is delivered once and records the 
   assert.match(requests[0] ?? "", /channels\/ticket-1\/messages/);
   assert.equal(claimed[0]?.staffUserId, "staff-1");
   assert.deepEqual(completed, [{ interactionId: "interaction-1", botMessageId: "bot-message-1" }]);
+});
+
+test("Ticket Template Reply claim failure never sends or releases an unowned claim", async () => {
+  const originalFetch = globalThis.fetch;
+  let discordCalls = 0;
+  let releases = 0;
+  globalThis.fetch = async () => {
+    discordCalls += 1;
+    return Response.json({ id: "bot-message-1" });
+  };
+  const base = stores();
+  const runtimeStores = {
+    ...base,
+    tickets: {
+      ...base.tickets,
+      async claimTicketTemplateReply() {
+        throw new Error("claim unavailable");
+      },
+      async releaseTicketTemplateReply() {
+        releases += 1;
+      },
+    },
+  } as RuntimeStores;
+  const ticketLifecycle = createTicketHandlerLifecycle(runtimeStores);
+  const component = interaction(3);
+  component.data = {
+    custom_id: buildTicketTemplateReplyCustomId(
+      ticket.channelId,
+      template.id,
+      template.updatedAtMs,
+    ),
+  };
+
+  try {
+    const response = await handleMessageComponentInteraction(component, {
+      stores: runtimeStores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
+    assert.equal(
+      ((await response.json()) as any).data.content,
+      "Failed to send this Ticket Template Reply.",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(discordCalls, 0);
+  assert.equal(releases, 0);
+});
+
+test("failed Ticket Template Reply delivery releases its claim so a retry sends once", async () => {
+  const fixture = createProductionRuntimeStores();
+  const ticketLifecycle = createTicketHandlerLifecycle(fixture.stores);
+  const originalFetch = globalThis.fetch;
+  let sends = 0;
+  globalThis.fetch = async () => {
+    sends += 1;
+    if (sends === 1) throw new Error("Discord unavailable");
+    return Response.json({ id: "bot-message-1" });
+  };
+  await fixture.stores.messageTemplates!.upsert(template);
+  await fixture.stores.tickets.createTicketInstance(ticket);
+  const component = interaction(3);
+  component.data = {
+    custom_id: buildTicketTemplateReplyCustomId(
+      ticket.channelId,
+      template.id,
+      template.updatedAtMs,
+    ),
+  };
+
+  try {
+    const first = await handleMessageComponentInteraction(component, {
+      stores: fixture.stores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
+    assert.equal(
+      ((await first.json()) as any).data.content,
+      "Failed to send this Ticket Template Reply.",
+    );
+    assert.deepEqual(
+      await fixture.stores.tickets.listTicketTemplateReplies("guild-1", ticket.channelId),
+      [],
+    );
+
+    const retry = await handleMessageComponentInteraction(component, {
+      stores: fixture.stores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
+    assert.equal(((await retry.json()) as any).data.content, "Sent **Appeal denied**.");
+
+    const duplicate = await handleMessageComponentInteraction(component, {
+      stores: fixture.stores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
+    assert.equal(
+      ((await duplicate.json()) as any).data.content,
+      "This Ticket Template Reply was already sent.",
+    );
+    const stored = await fixture.stores.tickets.listTicketTemplateReplies(
+      "guild-1",
+      ticket.channelId,
+    );
+    assert.deepEqual(
+      stored.map(({ status, botMessageId }) => ({ status, botMessageId })),
+      [{ status: "sent", botMessageId: "bot-message-1" }],
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    fixture.close();
+  }
+  assert.equal(sends, 2);
 });

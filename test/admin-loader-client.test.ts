@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -7,6 +8,7 @@ import test from "node:test";
 
 import type { AdminLoaderContext, AdminRouteTableRow } from "../src/admin/lib/admin-loader-client";
 import { createAdminLoaderClient } from "../src/admin/lib/admin-loader-client";
+import { AdminApiError } from "../src/admin/lib/api";
 import type { EntitlementInfo } from "../src/admin/hooks/use-entitlement";
 
 test("admin loader client GETs JSON with route query parameters and abort signal", async () => {
@@ -81,11 +83,7 @@ test("admin loader client POSTs JSON with workspace/guild threading and parses e
 
 test("admin loader client reports POST error body via readResponseError", async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(JSON.stringify({ error: "bad request" }), {
-      status: 400,
-      statusText: "Bad Request",
-    });
+  globalThis.fetch = async () => adminErrorResponse("bad request", 400);
 
   try {
     const client = createAdminLoaderClient();
@@ -107,7 +105,7 @@ test("admin loader client reports friendly non-JSON failures", async () => {
   try {
     const client = createAdminLoaderClient();
     await assert.rejects(client.getJson("/admin/api/guilds"), {
-      message: "Discord lookup failed right now.",
+      message: "The dashboard request failed. Please try again.",
     });
   } finally {
     globalThis.fetch = originalFetch;
@@ -209,22 +207,83 @@ test("loadRoute returns null-on-free without fetching", async () => {
   }
 });
 
-test("loadRoute fetchErrorFallback swallows GET failure", async () => {
+test("loadRoute propagates configuration HTTP failures to the route boundary", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    const client = createAdminLoaderClient();
+    const ctx: AdminLoaderContext = { params: { guildId: "g1" } };
+    const row: AdminRouteTableRow<{ value: number }> = { path: "/admin/api/route" };
+    const expectedCodes = {
+      401: "authentication_required",
+      403: "permission_denied",
+      503: "service_unavailable",
+    } as const;
+
+    for (const [status, code] of Object.entries(expectedCodes)) {
+      globalThis.fetch = async () =>
+        Response.json(
+          {
+            error: `Request failed with ${status}`,
+            code,
+            correlationId: `ref-${status}`,
+            retryable: Number(status) >= 500,
+            action: Number(status) === 401 ? "sign_in" : "retry",
+          },
+          { status: Number(status) },
+        );
+
+      await assert.rejects(
+        client.loadRoute(row, ctx, async () => null),
+        (error: unknown) =>
+          error instanceof AdminApiError && error.status === Number(status) && error.code === code,
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("loadRoute propagates malformed successful response JSON", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
-    new Response("error", { status: 500, statusText: "Internal Server Error" });
+    new Response('{"config":', {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
 
   try {
     const client = createAdminLoaderClient();
     const ctx: AdminLoaderContext = { params: { guildId: "g1" } };
-    const row: AdminRouteTableRow<{ value: number }, { value: number } | null> = {
-      path: "/admin/api/route",
-      fetchErrorFallback: () => null,
-    };
+    await assert.rejects(
+      client.loadRoute({ path: "/admin/api/route" }, ctx, async () => null),
+      (error: unknown) => error instanceof SyntaxError,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
-    const result = await client.loadRoute(row, ctx, async () => null);
-    assert.equal(result.data, null);
-    assert.equal(typeof result.loadedAt, "number");
+test("loadRoute propagates an aborted configuration request", async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  controller.abort();
+  globalThis.fetch = async (_input, init) => {
+    if (init?.signal?.aborted) {
+      throw new DOMException("The operation was aborted.", "AbortError");
+    }
+    return Response.json({ value: 1 });
+  };
+
+  try {
+    const client = createAdminLoaderClient(controller.signal);
+    const ctx: AdminLoaderContext = {
+      abortController: controller,
+      params: { guildId: "g1" },
+    };
+    await assert.rejects(
+      client.loadRoute({ path: "/admin/api/route" }, ctx, async () => null),
+      (error: unknown) => error instanceof Error && error.name === "AbortError",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -252,7 +311,7 @@ test("loadRoute freeTierFallback does not swallow premium GET failures", async (
 
     await assert.rejects(
       client.loadRoute(row, ctx, async () => entitlement),
-      { message: "error" },
+      { message: "The dashboard request failed. Please try again." },
     );
   } finally {
     globalThis.fetch = originalFetch;

@@ -52,28 +52,18 @@ test("Bot Defense component IDs bind the flag generation and reject legacy shape
     { kind: "valid", purpose: "bot-defense-confirm", customId: raw },
   );
   assert.deepEqual(parseBotDefenseComponentId(raw), {
-    kind: "generation",
     action: "confirm",
     guildId: "guild",
     userId: "member",
     createdAtMs: 1_760_000_000_000,
   });
-  assert.deepEqual(parseBotDefenseComponentId("bot-defense:confirm:guild:member"), {
-    kind: "legacy",
-    action: "confirm",
-    guildId: "guild",
-    userId: "member",
-  });
+  assert.equal(parseBotDefenseComponentId("bot-defense:confirm:guild:member"), null);
   const legacySigned = await signSensitiveComponentId("bot-defense:confirm:guild:member", signer, {
     guildId: "guild",
   });
   assert.deepEqual(
     await verifySensitiveComponentId(legacySigned, signer, { interactionGuildId: "guild" }),
-    {
-      kind: "legacy",
-      purpose: "bot-defense-confirm",
-      customId: "bot-defense:confirm:guild:member",
-    },
+    { kind: "invalid" },
   );
 });
 
@@ -251,7 +241,7 @@ test("ticket close confirmation controls bind the opener and expire after 24 hou
   }
 });
 
-test("ticket close confirmation keeps existing guild-only envelopes on the migration path", async () => {
+test("ticket close confirmation rejects old guild-only envelopes", async () => {
   const signer = createComponentIdSigner({ currentSecret: CURRENT_SECRET });
   const legacyCases = [
     {
@@ -276,11 +266,7 @@ test("ticket close confirmation keeps existing guild-only envelopes on the migra
         interactionGuildId: "guild",
         actorUserId: "opener",
       }),
-      {
-        kind: "legacy",
-        purpose: legacyCase.purpose,
-        customId: legacyCase.customId,
-      },
+      { kind: "invalid" },
     );
   }
 });

@@ -51,8 +51,8 @@ function buildTicketSetupChecks(input: TicketPanelDiagnosticsInput): TicketSetup
   const basePermissions = getBaseGuildPermissions(context);
   const staffThreadsEnabled = panel.ticketTypes.some(
     (ticketType) =>
-      (ticketType.anonymousSupportEnabled ?? ticketType.anonymousEnabled ?? false) ||
-      (ticketType.staffDiscussionThreadEnabled ?? ticketType.anonymousEnabled ?? false),
+      (ticketType.anonymousSupportEnabled ?? false) ||
+      (ticketType.staffDiscussionThreadEnabled ?? false),
   );
   return [
     {

@@ -153,7 +153,7 @@ export interface TimedRoleAssignment {
 }
 
 export interface TimedRoleAutomationRule {
-  /** Omitted legacy values are enabled. */
+  /** Defaults to enabled when omitted from a new configuration. */
   enabled?: boolean;
   roleId: string;
   durationInput: string;
@@ -312,7 +312,7 @@ export interface TicketTemplateReply {
 }
 
 export interface EvidenceVaultConfig {
-  /** Omitted legacy values are enabled. */
+  /** Defaults to enabled when omitted from a new configuration. */
   enabled?: boolean;
   guildId: string;
   auditChannelId: string;
@@ -600,8 +600,6 @@ export interface EvidenceVaultImage {
   contentType: string;
   sizeBytes: number;
   r2Key: string;
-  /** @deprecated Display links are issued from authoritative record metadata. */
-  url: string;
 }
 
 export interface EvidenceVaultRecord {
@@ -769,7 +767,7 @@ export interface TicketQuestion {
 }
 
 export interface TicketTypeConfig {
-  /** Omitted legacy values are enabled. */
+  /** Defaults to enabled when omitted from a new configuration. */
   enabled?: boolean;
   id: string;
   label: string;
@@ -779,12 +777,8 @@ export interface TicketTypeConfig {
   allowedCreatorRoleIds?: string[];
   channelNamePrefix: string;
   questions: TicketQuestion[];
-  autoReplyEnabled: boolean;
-  autoReplyMessage: string | null;
-  responseRules?: TicketResponseRule[];
+  responseRules: TicketResponseRule[];
   defaultTicketLinkPlatform?: TicketLinkPlatform | null;
-  /** @deprecated Stored-input alias. New configurations use the two explicit settings below. */
-  anonymousEnabled?: boolean;
   anonymousSupportEnabled?: boolean;
   staffDiscussionThreadEnabled?: boolean;
   ticketHistoryPromptVisibility?: "off" | "staff-thread";
@@ -1240,7 +1234,7 @@ export interface EventLifecycleHistoryRecord {
 export interface WebhookProxyDestination {
   id: string;
   label: string;
-  url: string;
+  credentialId: string;
 }
 
 export interface WebhookProxyRoutingRule {
@@ -1265,12 +1259,9 @@ export interface WebhookProxyConfig {
   name: string;
   enabled: boolean;
   banLookupEnabled: boolean;
-  banLookupNotificationUrl: string | null;
   banLookupAppIds: number[];
   destinations: WebhookProxyDestination[];
-  destinationsV2?: Array<{ id: string; label: string; credentialId: string }>;
-  banLookupCredentialId?: string | null;
-  credentialMigratedAtMs?: number | null;
+  banLookupCredentialId: string | null;
   defaultDestinationIds: string[];
   routingRules: WebhookProxyRoutingRule[];
   contentReplacements?: WebhookProxyContentReplacement[];
@@ -1283,7 +1274,6 @@ export interface WebhookProxyForwardLog {
   id: string;
   publicId: string;
   destinationId: string;
-  destinationUrl?: string;
   credentialFingerprint?: string | null;
   status: number | null;
   ok: boolean;

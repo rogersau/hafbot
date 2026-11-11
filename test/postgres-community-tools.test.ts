@@ -9,15 +9,9 @@ import {
   moderationConfigSchema,
 } from "../src/community-tools/config";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
-import {
-  createGatewayEventOperationRunner,
-  createGatewayEventOperationStore,
-} from "../src/runtime/gateway-event-idempotency";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { createGatewayEventOperationRunner } from "../src/runtime/gateway-event-idempotency";
+import { createPostgresGatewayEventOperationStore } from "../src/runtime/postgres/postgres-gateway-event-operation-store";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 test(
@@ -34,11 +28,10 @@ test(
     });
     try {
       await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-      await applyPostgresMigrations(database, await readPostgresMigrations("migrations/postgres"));
+      await initializePostgresSchema(database);
       let now = Date.now();
       const store = new CommunityToolsStore(database, () => now);
-      const d1 = createPostgresD1CompatibilityDatabase(database);
-      const receipts = createGatewayEventOperationStore(d1);
+      const receipts = createPostgresGatewayEventOperationStore(database);
       let suspended = false;
       let botUserId = "199";
       let failDelivery = false;

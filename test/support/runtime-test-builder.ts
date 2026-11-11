@@ -1,5 +1,4 @@
-import { createRuntimeApp } from "../../src/runtime/app";
-import type { RuntimeAppOptions } from "../../src/runtime/app-types";
+import { createTestRuntimeApp, type TestRuntimeAppOptions } from "./create-runtime-app";
 import { RecordingDiscordApi } from "./adapters/recording-discord";
 import { RecordingFetch } from "./adapters/recording-fetch";
 import { RecordingQueue } from "./adapters/recording-queue";
@@ -15,13 +14,16 @@ export class RuntimeTestBuilder {
   readonly r2 = new MemoryR2();
   readonly waitUntil = new WaitUntilRecorder();
   readonly queues = new Map<string, RecordingQueue<unknown>>();
-  #options: RuntimeAppOptions;
+  #options: TestRuntimeAppOptions;
 
-  constructor(options: RuntimeAppOptions) {
-    this.#options = { ...options, waitUntil: this.waitUntil.waitUntil };
+  constructor(options: TestRuntimeAppOptions) {
+    this.#options = {
+      ...options,
+      waitUntil: (promise: Promise<unknown>) => this.waitUntil.waitUntil(promise),
+    };
   }
 
-  with(options: Partial<RuntimeAppOptions>): this {
+  with(options: Partial<TestRuntimeAppOptions>): this {
     this.#options = { ...this.#options, ...options };
     return this;
   }
@@ -34,7 +36,7 @@ export class RuntimeTestBuilder {
     return queue;
   }
 
-  build(): ReturnType<typeof createRuntimeApp> {
-    return createRuntimeApp(this.#options);
+  build(): ReturnType<typeof createTestRuntimeApp> {
+    return createTestRuntimeApp(this.#options);
   }
 }

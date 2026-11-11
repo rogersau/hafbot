@@ -5,12 +5,12 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareGuildServiceSuspensionStore } from "../src/runtime/cloudflare-guild-service-suspension-store";
+import { createSqliteGuildServiceSuspensionStore } from "./support/sqlite/runtime/sqlite-guild-service-suspension-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("guild service suspensions persist, audit, and restore without deleting history", async () => {
   const db = new SqliteD1Database();
-  const store = createCloudflareGuildServiceSuspensionStore(db as unknown as D1Database);
+  const store = createSqliteGuildServiceSuspensionStore(db as unknown as D1Database);
 
   await store.suspendGuild({
     guildId: "guild-1",

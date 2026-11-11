@@ -7,10 +7,7 @@ import test from "node:test";
 
 import { createAdminApiHandler } from "./helpers/admin-api";
 import { createPermissiveGuildResourceValidator } from "./helpers/guild-resource-validator";
-import {
-  createMemoryOperationalIncidentStore,
-  OperationalIncidentService,
-} from "../src/operations/incidents";
+import { OperationalIncidentService } from "../src/operations/incidents";
 import {
   createProductionRuntimeStores,
   type ProductionRuntimeStoresFixture,
@@ -54,7 +51,7 @@ test("Player Link panel permission failures are audited and shown as an operatio
     updatedAtMs: 1,
   });
 
-  const incidents = new OperationalIncidentService(createMemoryOperationalIncidentStore());
+  const incidents = new OperationalIncidentService(fixture.stores.operationalIncidents);
   const handler = createAdminApiHandler({
     stores: fixture.stores,
     discordBotToken: "token",

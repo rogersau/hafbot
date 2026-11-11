@@ -11,7 +11,7 @@ export type ScopedGatewayEventCapabilities<
   TCapability extends GatewayTopLevelCapability,
   TStore extends keyof GatewayEventStores,
 > = Pick<GatewayEventCapabilities, TCapability> & {
-  readonly stores: Pick<GatewayEventStores, TStore> | null;
+  readonly stores: Pick<GatewayEventStores, TStore>;
 };
 
 export function defineGatewayEventHandler<
@@ -48,11 +48,8 @@ function selectGatewayEventCapabilities<
   const selected = Object.fromEntries(
     capabilityKeys.map((key) => [key, capabilities[key]]),
   ) as Pick<GatewayEventCapabilities, TCapability>;
-  const stores = capabilities.stores
-    ? (Object.fromEntries(storeKeys.map((key) => [key, capabilities.stores![key]])) as Pick<
-        GatewayEventStores,
-        TStore
-      >)
-    : null;
+  const stores = Object.fromEntries(
+    storeKeys.map((key) => [key, capabilities.stores[key]]),
+  ) as Pick<GatewayEventStores, TStore>;
   return { ...selected, stores };
 }

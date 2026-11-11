@@ -5,13 +5,13 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareGuildR2ObjectStore } from "../src/runtime/cloudflare-guild-r2-object-store";
-import { reconcileGuildR2ObjectsPage } from "../src/runtime/r2-quota-reconciliation";
+import { createSqliteGuildR2ObjectStore } from "./support/sqlite/runtime/sqlite-guild-r2-object-store";
+import { reconcileGuildR2ObjectsPage } from "./support/sqlite/runtime/r2-quota-reconciliation";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("R2 reconciliation repairs orphaned objects, stale rows, and size drift", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/stale.bin",
@@ -47,7 +47,7 @@ test("R2 reconciliation repairs orphaned objects, stale rows, and size drift", a
 
 test("R2 reconciliation persists its cursor and defers stale-row removal until completion", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/stale.bin",
@@ -89,7 +89,7 @@ test("R2 reconciliation persists its cursor and defers stale-row removal until c
 
 test("R2 reconciliation does not remove metadata written during a paginated scan", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/stale.bin",
@@ -127,7 +127,7 @@ test("R2 reconciliation does not remove metadata written during a paginated scan
 
 test("expired post-upload reservations are resolved by exact R2 metadata before cursor scanning", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.reserveObject({
     guildId: "guild-1",
     key: "guild-1/uploaded.bin",
@@ -166,7 +166,7 @@ test("expired post-upload reservations are resolved by exact R2 metadata before 
 
 test("completed reconciliation garbage-collects only expired delete tombstones", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.deleteObject({
     guildId: "guild-1",
     key: "guild-1/old.bin",
@@ -222,7 +222,7 @@ test("R2 reconciliation resumes after state initialization fails before any page
 
   assert.equal(recovered.completed, true);
   assert.equal(
-    await createCloudflareGuildR2ObjectStore(faultedDatabase).getGuildUsageBytes("guild-1"),
+    await createSqliteGuildR2ObjectStore(faultedDatabase).getGuildUsageBytes("guild-1"),
     30,
   );
   assert.deepEqual(bucket.cursors, [undefined]);
@@ -231,7 +231,7 @@ test("R2 reconciliation resumes after state initialization fails before any page
 test("R2 reconciliation replays an object page after its committed write response is lost", async () => {
   const database = new SqliteD1Database();
   const faultedDatabase = databaseWithTransientFailure(database, "page-write-after-commit");
-  const store = createCloudflareGuildR2ObjectStore(faultedDatabase);
+  const store = createSqliteGuildR2ObjectStore(faultedDatabase);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/stale.bin",
@@ -319,7 +319,7 @@ test("R2 reconciliation replays an object page after its committed write respons
 test("R2 reconciliation resumes from a committed cursor after checkpoint response loss", async () => {
   const database = new SqliteD1Database();
   const faultedDatabase = databaseWithTransientFailure(database, "cursor-checkpoint-after-commit");
-  const store = createCloudflareGuildR2ObjectStore(faultedDatabase);
+  const store = createSqliteGuildR2ObjectStore(faultedDatabase);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/stale.bin",
@@ -362,7 +362,7 @@ test("R2 reconciliation resumes from a committed cursor after checkpoint respons
 test("R2 reconciliation remains safe when final cleanup commits before its response is lost", async () => {
   const database = new SqliteD1Database();
   const faultedDatabase = databaseWithTransientFailure(database, "finalization-after-commit");
-  const store = createCloudflareGuildR2ObjectStore(faultedDatabase);
+  const store = createSqliteGuildR2ObjectStore(faultedDatabase);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/stale.bin",

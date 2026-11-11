@@ -9,10 +9,10 @@ import type { GuildAuditLogConfig } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("guild audit log store reads and writes config", async () => {
-  const { createCloudflareGuildAuditLogStore } =
-    await import("../src/runtime/cloudflare-guild-audit-log-store");
+  const { createSqliteGuildAuditLogStore } =
+    await import("./support/sqlite/runtime/sqlite-guild-audit-log-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildAuditLogStore(database as unknown as D1Database);
+  const store = createSqliteGuildAuditLogStore(database as unknown as D1Database);
 
   assert.equal(await store.readConfig("guild-1"), null);
 
@@ -42,10 +42,10 @@ test("guild audit log store reads and writes config", async () => {
 });
 
 test("guild audit log store does not leak between guilds", async () => {
-  const { createCloudflareGuildAuditLogStore } =
-    await import("../src/runtime/cloudflare-guild-audit-log-store");
+  const { createSqliteGuildAuditLogStore } =
+    await import("./support/sqlite/runtime/sqlite-guild-audit-log-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildAuditLogStore(database as unknown as D1Database);
+  const store = createSqliteGuildAuditLogStore(database as unknown as D1Database);
 
   await store.upsertConfig({
     guildId: "guild-1",
@@ -59,10 +59,10 @@ test("guild audit log store does not leak between guilds", async () => {
 });
 
 test("guild audit log store updates existing config", async () => {
-  const { createCloudflareGuildAuditLogStore } =
-    await import("../src/runtime/cloudflare-guild-audit-log-store");
+  const { createSqliteGuildAuditLogStore } =
+    await import("./support/sqlite/runtime/sqlite-guild-audit-log-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildAuditLogStore(database as unknown as D1Database);
+  const store = createSqliteGuildAuditLogStore(database as unknown as D1Database);
 
   await store.upsertConfig({
     guildId: "guild-1",

@@ -24,8 +24,7 @@ export interface TicketModalFieldValidationIssue {
 /**
  * Validate values that are copied into Discord modal/component fields.
  *
- * Read paths intentionally keep accepting legacy values, so this validator is
- * applied only at mutation boundaries (and by the dashboard before submit).
+ * Applied at mutation boundaries and by the dashboard before submit.
  */
 export function listTicketModalFieldValidationIssues(
   panel: Pick<TicketPanelConfig, "panelId" | "ticketTypes">,

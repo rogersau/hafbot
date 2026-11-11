@@ -159,8 +159,7 @@ export type TicketPanelFailureCode =
   | "provider-failure"
   | "persistence-failure"
   | "partial-success"
-  | "open-tickets"
-  | "unsupported";
+  | "open-tickets";
 
 export type TicketPanelResult<T> =
   | { ok: true; value: T }
@@ -209,17 +208,10 @@ export interface TicketPanelMessage {
 
 export function createTicketPanelService(options: TicketPanelServiceOptions) {
   const readPanel = async (guildId: string, panelId: string): Promise<TicketPanelConfig | null> =>
-    options.store.readTicketPanelConfigById
-      ? options.store.readTicketPanelConfigById(guildId, panelId)
-      : options.store.readTicketPanelConfig(guildId);
+    options.store.readTicketPanelConfigById(guildId, panelId);
 
-  const listPanels = async (guildId: string): Promise<TicketPanelConfig[]> => {
-    if (options.store.listTicketPanelConfigs) {
-      return options.store.listTicketPanelConfigs(guildId);
-    }
-    const panel = await options.store.readTicketPanelConfig(guildId);
-    return panel ? [panel] : [];
-  };
+  const listPanels = async (guildId: string): Promise<TicketPanelConfig[]> =>
+    options.store.listTicketPanelConfigs(guildId);
 
   const readGuildResources = async (guildId: string): Promise<GuildResourceScope> =>
     options.guildResources.forGuild(guildId);
@@ -322,7 +314,7 @@ export function createTicketPanelService(options: TicketPanelServiceOptions) {
     if (!paid) {
       if (nextPanel) {
         await options.store.upsertTicketPanelConfig(nextPanel);
-      } else if (options.store.deleteTicketPanelConfig) {
+      } else {
         await options.store.deleteTicketPanelConfig(panel.guildId, panel.panelId ?? "main");
       }
       return;
@@ -351,9 +343,7 @@ export function createTicketPanelService(options: TicketPanelServiceOptions) {
       },
       commitFree: async () => {
         if (nextPanel) await options.store.upsertTicketPanelConfig(nextPanel);
-        else if (options.store.deleteTicketPanelConfig) {
-          await options.store.deleteTicketPanelConfig(panel.guildId, panel.panelId ?? "main");
-        }
+        else await options.store.deleteTicketPanelConfig(panel.guildId, panel.panelId ?? "main");
       },
     });
   };
@@ -388,7 +378,7 @@ export function createTicketPanelService(options: TicketPanelServiceOptions) {
     const parsed = JSON.parse(
       targetRevision.snapshotJson,
     ) as ConfigurationSnapshotEnvelope<unknown>;
-    const targetSnapshot = ticketPanelRevisionAdapter.migrateSnapshot(parsed);
+    const targetSnapshot = ticketPanelRevisionAdapter.parseSnapshot(parsed);
     let targetPanel = targetSnapshot.exists
       ? ticketSnapshotToPanel(
           input.guildId,
@@ -425,10 +415,7 @@ export function createTicketPanelService(options: TicketPanelServiceOptions) {
   return {
     async deferRecovery(recovery: TicketPanelRecovery): Promise<boolean> {
       if (!options.recoveryQueue) return false;
-      await options.recoveryQueue.send(
-        { kind: "panel-recovery", recovery },
-        { contentType: "json" },
-      );
+      await options.recoveryQueue.send({ kind: "panel-recovery", recovery });
       return true;
     },
     diagnose(input: TicketPanelDiagnosticsInput) {
@@ -687,16 +674,10 @@ export function createTicketPanelService(options: TicketPanelServiceOptions) {
       },
       actor?: ConfigurationActorContext,
     ): Promise<TicketPanelResult<undefined>> {
-      if (!options.store.deleteTicketPanelConfig) {
-        return {
-          ok: false,
-          code: "unsupported",
-          message: "Ticket panel deletion is not supported.",
-        };
-      }
-      const openTickets = options.store.countOpenTicketsForPanel
-        ? await options.store.countOpenTicketsForPanel(command.guildId, command.panelId)
-        : 0;
+      const openTickets = await options.store.countOpenTicketsForPanel(
+        command.guildId,
+        command.panelId,
+      );
       if (openTickets > 0) {
         return {
           ok: false,
@@ -889,7 +870,7 @@ export function createTicketPanelService(options: TicketPanelServiceOptions) {
             "Configuration, entitlement, or Discord resources changed. Create a new restore preview.",
         };
       }
-      if (!prepared.targetPanel && options.store.countOpenTicketsForPanel) {
+      if (!prepared.targetPanel) {
         const count = await options.store.countOpenTicketsForPanel(
           input.guildId,
           prepared.resourceKey,
@@ -916,13 +897,6 @@ export function createTicketPanelService(options: TicketPanelServiceOptions) {
     ): Promise<TicketPanelResult<TicketPanelConfig | undefined>> {
       try {
         if (recovery.operation === "delete") {
-          if (!options.store.deleteTicketPanelConfig) {
-            return {
-              ok: false,
-              code: "unsupported",
-              message: "Ticket panel deletion is not supported.",
-            };
-          }
           const saved = await readPanel(recovery.guildId, recovery.panelId);
           if (!saved) return { ok: true, value: undefined };
           if (
@@ -931,9 +905,10 @@ export function createTicketPanelService(options: TicketPanelServiceOptions) {
           ) {
             return invalidRecovery();
           }
-          const openTickets = options.store.countOpenTicketsForPanel
-            ? await options.store.countOpenTicketsForPanel(recovery.guildId, recovery.panelId)
-            : 0;
+          const openTickets = await options.store.countOpenTicketsForPanel(
+            recovery.guildId,
+            recovery.panelId,
+          );
           if (openTickets > 0) {
             return {
               ok: false,
@@ -1152,11 +1127,8 @@ function applyFreePanelDefaults(panel: TicketPanelConfig): TicketPanelConfig {
     ticketTypes: panel.ticketTypes.map((ticketType) => ({
       ...ticketType,
       allowedCreatorRoleIds: [],
-      autoReplyEnabled: false,
-      autoReplyMessage: null,
       responseRules: [],
       defaultTicketLinkPlatform: null,
-      anonymousEnabled: false,
       anonymousSupportEnabled: false,
       staffDiscussionThreadEnabled: false,
       ticketHistoryPromptVisibility: "off",
@@ -1189,21 +1161,19 @@ function findChangedPaidTicketControl(
     if (!sameStringArray(ticketType.allowedCreatorRoleIds, savedType?.allowedCreatorRoleIds))
       return "Creator role restrictions";
     if (
-      JSON.stringify(normalizeTicketTypeResponseRules(ticketType)) !==
-        JSON.stringify(savedType ? normalizeTicketTypeResponseRules(savedType) : []) ||
-      (ticketType.autoReplyMessage ?? null) !== (savedType?.autoReplyMessage ?? null) ||
+      JSON.stringify(ticketType.responseRules) !== JSON.stringify(savedType?.responseRules ?? []) ||
       (ticketType.defaultTicketLinkPlatform ?? null) !==
         (savedType?.defaultTicketLinkPlatform ?? null)
     )
       return "Ticket Response Rules";
     if (
-      (ticketType.anonymousSupportEnabled ?? ticketType.anonymousEnabled ?? false) !==
-      (savedType?.anonymousSupportEnabled ?? savedType?.anonymousEnabled ?? false)
+      (ticketType.anonymousSupportEnabled ?? false) !==
+      (savedType?.anonymousSupportEnabled ?? false)
     )
       return "Anonymous Support";
     if (
-      (ticketType.staffDiscussionThreadEnabled ?? ticketType.anonymousEnabled ?? false) !==
-        (savedType?.staffDiscussionThreadEnabled ?? savedType?.anonymousEnabled ?? false) ||
+      (ticketType.staffDiscussionThreadEnabled ?? false) !==
+        (savedType?.staffDiscussionThreadEnabled ?? false) ||
       (ticketType.ticketHistoryPromptVisibility ?? "off") !==
         (savedType?.ticketHistoryPromptVisibility ?? "off")
     )
@@ -1213,22 +1183,6 @@ function findChangedPaidTicketControl(
   }
   return null;
 }
-
-function normalizeTicketTypeResponseRules(value: {
-  responseRules?: unknown;
-  autoReplyEnabled?: unknown;
-  autoReplyMessage?: unknown;
-}): NonNullable<TicketTypeConfig["responseRules"]> {
-  if (Array.isArray(value.responseRules)) {
-    return value.responseRules as NonNullable<TicketTypeConfig["responseRules"]>;
-  }
-  if (value.autoReplyEnabled === false) return [];
-  if (typeof value.autoReplyMessage !== "string" || value.autoReplyMessage.trim().length === 0) {
-    return [];
-  }
-  return [{ id: "legacy-auto-reply", conditions: [], message: value.autoReplyMessage }];
-}
-
 function sameStringArray(left: string[] | undefined, right: string[] | undefined): boolean {
   return JSON.stringify(left ?? []) === JSON.stringify(right ?? []);
 }

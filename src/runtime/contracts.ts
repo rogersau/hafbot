@@ -1,14 +1,4 @@
-import type {
-  BlocklistConfig,
-  ChannelFilterMode,
-  ManualAssignmentTimedRoleConfig,
-  NewMemberTimedRoleConfig,
-  TicketInstance,
-  TicketPanelConfig,
-  TimedRoleAssignment,
-} from "../types";
-import type { AppConfigMutation } from "./admin-types";
-
+export type { GuildNotificationChannelStore } from "./contracts/guild-notification-channel-store";
 export type { BlocklistStore } from "./contracts/blocklist-store";
 export type { AppConfigStore } from "./contracts/app-config-store";
 export type { TimedRoleStore } from "./contracts/timed-role-store";
@@ -18,7 +8,6 @@ export type { LfgStore } from "./contracts/lfg-store";
 export type { ClanStore } from "./contracts/clan-store";
 export type { SuggestionStore } from "./contracts/suggestion-store";
 export type { FeatureSetupStore } from "./contracts/feature-setup-store";
-export type { SteamLinkStore } from "./contracts/steam-link-store";
 export type { PlatformLinkStore } from "./contracts/platform-link-store";
 export type { GuildRbacStore } from "./contracts/guild-rbac-store";
 export type { ProductAnalyticsPreferenceStore } from "./contracts/product-analytics-preference-store";
@@ -71,59 +60,6 @@ export interface GatewaySnapshot {
   backoffAttempt: number;
   lastError: string | null;
   heartbeatIntervalMs: number | null;
-}
-
-export interface RuntimeStore {
-  readConfig(): Promise<BlocklistConfig>;
-  upsertAppConfig(body: AppConfigMutation): Promise<void>;
-  applyGuildEmojiMutation(body: {
-    guildId: string;
-    emoji: string;
-    action: "add" | "remove";
-  }): Promise<BlocklistConfig>;
-  upsertGuildChannelFilter?(body: {
-    guildId: string;
-    channelMode: ChannelFilterMode;
-    channelIds: string[];
-  }): Promise<BlocklistConfig>;
-  reserveNextTicketNumber(guildId: string): Promise<number>;
-  readTicketPanelConfig(guildId: string): Promise<TicketPanelConfig | null>;
-  upsertTicketPanelConfig(panel: TicketPanelConfig): Promise<void>;
-  countOpenTicketsByUser(guildId: string, userId: string): Promise<number>;
-  createTicketInstance(instance: TicketInstance): Promise<void>;
-  deleteTicketInstance(body: { guildId: string; channelId: string }): Promise<void>;
-  readOpenTicketByChannel(guildId: string, channelId: string): Promise<TicketInstance | null>;
-  updateTicketClaim(body: {
-    guildId: string;
-    channelId: string;
-    claimedByUserId: string | null;
-    claimedAtMs: number | null;
-  }): Promise<void>;
-  listClosedTicketInstances(body: {
-    guildId: string;
-    panelId?: string | null;
-    limit: number;
-    beforeOpenedAtMs: number | null;
-  }): Promise<{ tickets: TicketInstance[]; total: number; nextCursor: number | null }>;
-  closeTicketInstance(body: {
-    guildId: string;
-    channelId: string;
-    closedByUserId: string;
-    closedAtMs: number;
-    transcriptMessageId: string | null;
-    staffThreadId?: string | null;
-  }): Promise<void>;
-  listTimedRoles(): Promise<TimedRoleAssignment[]>;
-  listTimedRolesByGuild(guildId: string): Promise<TimedRoleAssignment[]>;
-  upsertTimedRole(body: TimedRoleAssignment): Promise<void>;
-  deleteTimedRole(body: { guildId: string; userId: string; roleId: string }): Promise<void>;
-  listExpiredTimedRoles(nowMs: number): Promise<TimedRoleAssignment[]>;
-  readNewMemberTimedRoleConfig(guildId: string): Promise<NewMemberTimedRoleConfig>;
-  upsertNewMemberTimedRoleConfig(body: NewMemberTimedRoleConfig): Promise<void>;
-  readManualAssignmentTimedRoleConfig(guildId: string): Promise<ManualAssignmentTimedRoleConfig>;
-  upsertManualAssignmentTimedRoleConfig(body: ManualAssignmentTimedRoleConfig): Promise<void>;
-  readGatewaySnapshot(): Promise<GatewaySnapshot>;
-  writeGatewaySnapshot(snapshot: GatewaySnapshot): Promise<void>;
 }
 
 export interface TicketTranscriptBlobStore {
@@ -190,8 +126,4 @@ export interface GatewayController {
 
 export interface ManagedGatewayController extends GatewayController {
   stop(): void;
-}
-
-export interface ClosableRuntimeStore extends RuntimeStore {
-  close(): void;
 }

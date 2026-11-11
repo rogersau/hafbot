@@ -1,13 +1,8 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
-import { createCloudflareEventStore } from "../src/runtime/cloudflare-event-store";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
+import { createPostgresEventStore } from "../src/runtime/postgres/postgres-event-store";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { EventsService, type EventsDiscordApi } from "../src/services/events-service";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
@@ -26,11 +21,8 @@ test(
     });
     try {
       await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-      await applyPostgresMigrations(
-        database,
-        await readPostgresMigrations(resolve("migrations/postgres")),
-      );
-      const store = createCloudflareEventStore(createPostgresD1CompatibilityDatabase(database));
+      await initializePostgresSchema(database);
+      const store = createPostgresEventStore(database);
       const discord: EventsDiscordApi = {
         createChannelMessage: async (channelId) => ({
           id: "500",

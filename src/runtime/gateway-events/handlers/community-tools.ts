@@ -13,7 +13,7 @@ export const communityToolsGatewayHandler = defineGatewayEventHandler(
       if (!isRecord(data) || typeof data.guild_id !== "string") return;
       if (envelope.type !== "MESSAGE_CREATE") {
         if (
-          stores?.reputationServiceForGuild &&
+          stores.reputationServiceForGuild &&
           isRecord(data.user) &&
           typeof data.user.id === "string"
         ) {
@@ -29,7 +29,7 @@ export const communityToolsGatewayHandler = defineGatewayEventHandler(
         return;
       }
       if (
-        !stores?.communityTools ||
+        !stores.communityTools ||
         !isRecord(data.author) ||
         typeof data.author.id !== "string" ||
         data.author.bot === true ||

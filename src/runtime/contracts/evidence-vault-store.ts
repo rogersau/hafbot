@@ -7,7 +7,7 @@ import type {
 } from "../../types";
 
 export interface EvidenceVaultStore {
-  setEnabled?(guildId: string, enabled: boolean): Promise<boolean>;
+  setEnabled(guildId: string, enabled: boolean): Promise<boolean>;
   readConfig(guildId: string): Promise<EvidenceVaultConfig | null>;
   upsertConfig(config: EvidenceVaultConfig): Promise<void>;
   createRecord(record: EvidenceVaultRecord): Promise<void>;

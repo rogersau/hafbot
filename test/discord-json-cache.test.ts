@@ -1,3 +1,4 @@
+import type { Cache } from "../src/runtime/discord-json-cache";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -5,11 +6,11 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { createJsonKvCache } from "../src/runtime/discord-json-cache";
+import { createJsonCache } from "../src/runtime/discord-json-cache";
 
 test("JSON KV cache returns null on miss and cached values after put", async () => {
   const kv = createMemoryKv();
-  const cache = createJsonKvCache<{ guildId: string; name: string }>(kv);
+  const cache = createJsonCache<{ guildId: string; name: string }>(kv);
 
   assert.equal(await cache.get("guild:guild-1"), null);
 
@@ -21,14 +22,14 @@ test("JSON KV cache returns null on miss and cached values after put", async () 
   });
 });
 
-test("JSON KV cache passes TTL to KV put as expirationTtl", async () => {
-  const puts: Array<{ key: string; value: string; options?: { expirationTtl?: number } }> = [];
+test("JSON KV cache passes TTL to KV put as ttlSeconds", async () => {
+  const puts: Array<{ key: string; value: string; options?: { ttlSeconds?: number } }> = [];
   const kv = {
-    async put(key: string, value: string, options?: { expirationTtl?: number }) {
+    async put(key: string, value: string, options?: { ttlSeconds?: number }) {
       puts.push({ key, value, options });
     },
-  } as unknown as KVNamespace;
-  const cache = createJsonKvCache<{ value: string }>(kv);
+  } as unknown as Cache<string>;
+  const cache = createJsonCache<{ value: string }>(kv);
 
   await cache.put("key", { value: "cached" }, { ttlSeconds: 300 });
 
@@ -36,13 +37,13 @@ test("JSON KV cache passes TTL to KV put as expirationTtl", async () => {
     {
       key: "key",
       value: JSON.stringify({ value: "cached" }),
-      options: { expirationTtl: 300 },
+      options: { ttlSeconds: 300 },
     },
   ]);
 });
 
 test("JSON KV cache treats unavailable and throwing KV as no-op misses", async () => {
-  const unavailableCache = createJsonKvCache<{ value: string }>();
+  const unavailableCache = createJsonCache<{ value: string }>();
   await unavailableCache.put("key", { value: "cached" });
   await unavailableCache.delete("key");
   assert.equal(await unavailableCache.get("key"), null);
@@ -57,8 +58,8 @@ test("JSON KV cache treats unavailable and throwing KV as no-op misses", async (
     async delete() {
       throw new Error("KV delete failed");
     },
-  } as unknown as KVNamespace;
-  const throwingCache = createJsonKvCache<{ value: string }>(throwingKv);
+  } as unknown as Cache<string>;
+  const throwingCache = createJsonCache<{ value: string }>(throwingKv);
 
   await throwingCache.put("key", { value: "cached" });
   await throwingCache.delete("key");
@@ -70,13 +71,13 @@ test("JSON KV cache treats invalid JSON as a cache miss", async () => {
     async get() {
       return "{";
     },
-  } as unknown as KVNamespace;
-  const cache = createJsonKvCache<{ value: string }>(kv);
+  } as unknown as Cache<string>;
+  const cache = createJsonCache<{ value: string }>(kv);
 
   assert.equal(await cache.get("key"), null);
 });
 
-function createMemoryKv(): KVNamespace {
+function createMemoryKv(): Cache<string> {
   const values = new Map<string, string>();
   return {
     async get(key: string) {
@@ -85,5 +86,5 @@ function createMemoryKv(): KVNamespace {
     async put(key: string, value: string) {
       values.set(key, value);
     },
-  } as unknown as KVNamespace;
+  } as unknown as Cache<string>;
 }

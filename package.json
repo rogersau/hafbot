@@ -47,9 +47,6 @@
     "container:smoke": "node scripts/container-smoke.mjs",
     "start:node": "node dist-node/main.mjs",
     "start": "pnpm run start:node",
-    "postgres:migrate:check": "pnpm run build:node && node scripts/run-postgres-migrations.mjs --check",
-    "postgres:migrate:apply": "pnpm run build:node && node scripts/run-postgres-migrations.mjs --apply",
-    "migration:objects": "pnpm run build:node && node dist-node/object-migration.mjs",
     "postgres:jobs": "pnpm run build:node && node dist-node/postgres-jobs.mjs",
     "docs:dev": "vitepress dev docs-site",
     "docs:build": "vitepress build docs-site && node --test scripts/check-public-docs.mjs",
@@ -61,14 +58,14 @@
     "test": "node scripts/run-public-tests.mjs",
     "test:all": "node scripts/run-public-tests.mjs",
     "test:prebuilt": "node scripts/run-public-tests.mjs --prebuilt",
-    "validate": "pnpm lint && pnpm format:check && pnpm build && pnpm typecheck && pnpm test && pnpm docs:build"
+    "validate": "pnpm lint && pnpm format:check && pnpm build && pnpm typecheck && pnpm test && pnpm docs:build",
+    "postgres:init": "pnpm run build:node && node scripts/initialize-postgres.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1113.0",
     "@azure/identity": "^4.14.0",
     "@azure/storage-blob": "^12.33.0",
     "@better-auth/drizzle-adapter": "1.7.7",
-    "@cloudflare/workers-types": "^5.20261016.1",
     "@fontsource-variable/oxanium": "5.3.0",
     "@radix-ui/react-alert-dialog": "^1.2.1",
     "@radix-ui/react-checkbox": "^1.4.1",
@@ -78,7 +75,6 @@
     "@radix-ui/react-slot": "^1.5.0",
     "@radix-ui/react-switch": "^1.4.1",
     "@radix-ui/react-tooltip": "^1.4.1",
-    "@sentry/cloudflare": "^10.68.0",
     "@sentry/node": "^11.11.0",
     "@skyra/discord-components-core": "^4.0.2",
     "@skyra/discord-components-react": "^4.0.2",
@@ -97,7 +93,6 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.20.1",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "4.3.5",
     "@types/jsdom": "^30.0.0",
@@ -109,7 +104,6 @@
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^5.2.0",
     "dotenv": "^18.0.9",
-    "drizzle-kit": "^0.31.10",
     "esbuild": "^0.28.2",
     "jsdom": "^30.1.1",
     "oxfmt": "^0.76.0",
@@ -121,8 +115,7 @@
     "typescript": "^7.0.2",
     "vite": "^6.4.5",
     "vitepress": "2.0.0-alpha.20",
-    "vitest": "^4.1.12",
-    "wrangler": "^4.114.0"
+    "@cloudflare/workers-types": "^5.20261016.1"
   },
   "homepage": "https://github.com/rogersau/hafbot#readme",
   "bugs": {

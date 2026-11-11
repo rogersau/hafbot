@@ -10,7 +10,7 @@ import {
   type ImageRulesMessageFilterDependencies,
 } from "../src/services/image-rules/message-filter";
 import type { ImageRulesConfig, DiscordMessageCreate } from "../src/types";
-import type { Env } from "../src/env";
+import type { Env } from "./support/test-env";
 
 function createEnv(overrides: Partial<Env> = {}): Env {
   return {
@@ -220,7 +220,7 @@ function createDependencies(
   };
 }
 
-test("moderateImageRulesMessageCreate does nothing when HAF_DB is missing", async () => {
+test("moderateImageRulesMessageCreate uses injected storage without database bindings", async () => {
   const dependencies = createDependencies();
 
   await moderateImageRulesMessageCreate(
@@ -229,8 +229,10 @@ test("moderateImageRulesMessageCreate does nothing when HAF_DB is missing", asyn
     dependencies,
   );
 
-  assert.deepEqual(dependencies.readConfigCalls, []);
-  assert.deepEqual(dependencies.classifyCalls, []);
+  assert.deepEqual(dependencies.readConfigCalls, ["guild-1"]);
+  assert.deepEqual(dependencies.classifyCalls, [
+    "https://cdn.discordapp.com/attachments/1/1/image.png",
+  ]);
 });
 
 test("moderateImageRulesMessageCreate does nothing for non-guild messages", async () => {

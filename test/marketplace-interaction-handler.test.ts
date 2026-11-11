@@ -54,8 +54,7 @@ test("marketplace interaction skips disabled server choice and continues through
   const choiceResponse = await handleMarketplaceComponentInteraction(
     interaction("market:type:have"),
     stores,
-    "token",
-    { marketplaceService: service },
+    service,
   );
   const choiceBody = (await choiceResponse.json()) as {
     type: number;
@@ -72,8 +71,7 @@ test("marketplace interaction skips disabled server choice and continues through
   const secondChoiceResponse = await handleMarketplaceComponentInteraction(
     interaction("market:choice:have:~:0:1:~:16"),
     stores,
-    "token",
-    { marketplaceService: service },
+    service,
   );
   const secondChoiceBody = (await secondChoiceResponse.json()) as {
     data: { content: string; components: Array<{ components: Array<{ custom_id: string }> }> };
@@ -87,8 +85,7 @@ test("marketplace interaction skips disabled server choice and continues through
   const modalResponse = await handleMarketplaceComponentInteraction(
     interaction("market:choice:have:~:1:1:1:16"),
     stores,
-    "token",
-    { marketplaceService: service },
+    service,
   );
   const modalBody = (await modalResponse.json()) as { type: number; data: { custom_id: string } };
 
@@ -111,8 +108,7 @@ test("marketplace interaction puts additional choices after an enabled server ch
   const serverResponse = await handleMarketplaceComponentInteraction(
     interaction("market:type:want"),
     stores,
-    "token",
-    { marketplaceService: service },
+    service,
   );
   const serverBody = (await serverResponse.json()) as {
     data: { components: Array<{ components: Array<{ custom_id: string }> }> };
@@ -125,8 +121,7 @@ test("marketplace interaction puts additional choices after an enabled server ch
   const choiceResponse = await handleMarketplaceComponentInteraction(
     interaction("market:server:want:namalsk:16"),
     stores,
-    "token",
-    { marketplaceService: service },
+    service,
   );
   const choiceBody = (await choiceResponse.json()) as { data: { content: string } };
   assert.equal(choiceBody.data.content, "Choose a listing type");
@@ -164,9 +159,7 @@ for (const messageId of ["published-message", ""]) {
       });
       const response = await handleMarketplaceModalSubmitInteraction(
         { ...interaction("market:modal:have:~"), type: 5 },
-        fixture.stores,
-        "token",
-        { marketplaceService: service },
+        service,
       );
       const post = await fixture.stores.marketplace.readActiveMarketplacePostByOwner(
         "guild-1",
@@ -218,8 +211,7 @@ test("disabled Marketplace rejects stale creation steps and modal submissions", 
       const response = await handleMarketplaceComponentInteraction(
         interaction(id),
         fixture.stores,
-        "token",
-        { marketplaceService: service },
+        service,
       );
       assert.equal(
         ((await response.json()) as { data: { content: string } }).data.content,
@@ -228,9 +220,7 @@ test("disabled Marketplace rejects stale creation steps and modal submissions", 
     }
     const response = await handleMarketplaceModalSubmitInteraction(
       { ...interaction("market:modal:have:~"), type: 5 },
-      fixture.stores,
-      "token",
-      { marketplaceService: service },
+      service,
     );
     assert.equal(
       ((await response.json()) as { data: { content: string } }).data.content,

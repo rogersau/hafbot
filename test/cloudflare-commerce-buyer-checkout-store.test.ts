@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CloudflareCommerceBuyerCheckoutStore } from "../src/runtime/commerce/cloudflare-buyer-checkout-store";
+import { SqliteCommerceBuyerCheckoutStore } from "./support/sqlite/runtime/commerce/sqlite-buyer-checkout-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 const NOW = 1_900_000_000_000;
@@ -10,7 +10,7 @@ const OFFERING_ID = "11111111-1111-4111-8111-111111111111";
 test("D1 buyer checkout store reads only the seller-scoped published price and reserves once", async () => {
   const database = await createTestDatabase();
   await seedStorefront(database);
-  const store = new CloudflareCommerceBuyerCheckoutStore(
+  const store = new SqliteCommerceBuyerCheckoutStore(
     database.d1,
     {
       async isPremium() {
@@ -22,7 +22,7 @@ test("D1 buyer checkout store reads only the seller-scoped published price and r
 
   const view = await store.readStorefront(OFFERING_ID);
   assert.equal(view?.account.stripeAccountId, "acct_seller");
-  assert.equal(view?.lifecycle.state, "published");
+  assert.equal(view?.offering.state, "published");
   assert.equal(view?.price.stripePriceId, "price_current");
   assert.equal(view?.publishContext.sellerEligible, true);
   assert.equal(view?.publishContext.termsAccepted, true);
@@ -98,7 +98,7 @@ test("D1 buyer checkout store reads only the seller-scoped published price and r
 
 test("D1 checkout rate limit resets after its window", async () => {
   const database = await createTestDatabase();
-  const store = new CloudflareCommerceBuyerCheckoutStore(database.d1, {
+  const store = new SqliteCommerceBuyerCheckoutStore(database.d1, {
     async isPremium() {
       return true;
     },
@@ -151,20 +151,12 @@ async function seedStorefront(database: Awaited<ReturnType<typeof createTestData
     .prepare(
       `INSERT INTO commerce_offerings
        (id, connected_account_id, guild_id, discord_role_id, name, description,
-        purchase_type, status, archived_at_ms, created_at_ms, updated_at_ms)
+        purchase_type, state, terms_version, included_benefits_json, support_contact,
+        role_manageable, repair_deadline_at_ms, repair_previous_state, retire_at_ms,
+        published_at_ms, archived_at_ms, created_at_ms, updated_at_ms)
        VALUES (?, 'acct_seller', '111111111111111111', '222222222222222222',
-        'VIP', 'VIP access', 'subscription', 'active', NULL, ?, ?)`,
-    )
-    .bind(OFFERING_ID, NOW, NOW)
-    .run();
-  await database.d1
-    .prepare(
-      `INSERT INTO commerce_offering_lifecycles
-       (offering_id, connected_account_id, guild_id, state, terms_version,
-        included_benefits_json, support_contact, role_manageable, repair_deadline_at_ms,
-        retire_at_ms, published_at_ms, archived_at_ms, created_at_ms, updated_at_ms)
-       VALUES (?, 'acct_seller', '111111111111111111', 'published', 'terms-v1',
-        '["VIP channels"]', 'seller@example.test', 1, NULL, NULL, ?, NULL, ?, ?)`,
+        'VIP', 'VIP access', 'subscription', 'published', 'terms-v1',
+        '["VIP channels"]', 'seller@example.test', 1, NULL, NULL, NULL, ?, NULL, ?, ?)`,
     )
     .bind(OFFERING_ID, NOW, NOW, NOW)
     .run();

@@ -1,9 +1,10 @@
+import { gatewayEnvelope } from "./support/gateway-envelope";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
-import { createCloudflareObservationStore } from "../src/runtime/attendance-observation-runtime";
-import { createCloudflareWardogsStore } from "../src/runtime/cloudflare-wardogs-store";
+import { createSqliteObservationStore } from "./support/sqlite/observation-store";
+import { createSqliteWardogsStore } from "./support/sqlite/runtime/sqlite-wardogs-store";
 import { WardogsService } from "../src/wardogs/service";
 import { createWebhookCredentialKeyRing } from "../src/security/webhook-credentials";
 import type { NetworkPolicy } from "../src/wardogs/model";
@@ -11,11 +12,11 @@ import { AttendanceObservationService } from "../src/server-levels/observations/
 import { createWardogsObservationProvider } from "../src/server-levels/observations/provider";
 import { createPlatformLinkIdentityReader } from "../src/services/platform-link-identity-reader";
 import { createAdminApiHandler } from "./helpers/admin-api";
-import { createAttendanceObservationRuntime } from "../src/runtime/attendance-observation-runtime";
-import { createRuntimeApp, type RuntimeAppOptions } from "../src/runtime/app";
+import { createAttendanceObservationRuntime } from "./support/sqlite/observation-store";
+import { createTestRuntimeApp } from "./support/create-runtime-app";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { createPermissiveGuildResourceValidator } from "./helpers/guild-resource-validator";
-import { processGatewayEventQueueMessages } from "../src/runtime/gateway-event-queue-consumer";
+import { processGatewayEventQueueMessages } from "./support/gateway-event-consumer";
 import { ObservationError, observationMemberKey } from "../src/server-levels/observations/model";
 import { SafeDiagnosticError } from "../src/observability/safe-diagnostic-error";
 import {
@@ -23,7 +24,8 @@ import {
   reportOperationalEvent,
 } from "../src/observability/operational-reporter";
 import { handleApplicationCommand } from "../src/runtime/application-command-handler";
-import type { Env } from "../src/env";
+import { applicationCommandServices } from "./support/handler-services";
+import type { Env } from "./support/test-env";
 import type { CustomerSession } from "../src/runtime/auth/customer-session";
 const STEAM = "76561198000000001",
   MANUAL = "76561198000000002",
@@ -50,16 +52,14 @@ async function fixture() {
       {
         id: "fixture",
         origin: "https://wardogs.example",
-        runtime: "cloudflare",
         securePathEvidence: "Synthetic fixture",
       },
     ],
     approvals: [],
   };
-  const targetStore = createCloudflareWardogsStore(f.database.d1);
+  const targetStore = createSqliteWardogsStore(f.database.d1);
   const wardogs = new WardogsService({
     store: targetStore,
-    runtime: "cloudflare",
     policy,
     keyRing: () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) }),
     now: () => now,
@@ -135,7 +135,7 @@ async function fixture() {
     });
   await link();
   await link(MANUAL, true);
-  const store = createCloudflareObservationStore(f.database.d1);
+  const store = createSqliteObservationStore(f.database.d1);
   const service = new AttendanceObservationService({
     store,
     provider: createWardogsObservationProvider(wardogs),
@@ -216,7 +216,7 @@ test("authorized start/stop and durable polling retain only linked subjects, wit
   });
   await h.f.database.d1
     .prepare(
-      "INSERT INTO guild_entitlements(guild_id,tier,plan,updated_at_ms) VALUES('guild','premium','premium',1)",
+      "INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES('guild','premium',1)",
     )
     .run();
   const handler = createAdminApiHandler({
@@ -538,8 +538,7 @@ test("an explicit stop during a request discards its observation", async (t) => 
 });
 
 test("runtime readiness uses real paid and Steam configuration without DayZ or Player Count setup", async (t) => {
-  const { createAttendanceObservationRuntime } =
-    await import("../src/runtime/attendance-observation-runtime");
+  const { createAttendanceObservationRuntime } = await import("./support/sqlite/observation-store");
   const h = await fixture();
   const originalFetch = globalThis.fetch;
   t.after(() => {
@@ -563,7 +562,7 @@ test("runtime readiness uses real paid and Steam configuration without DayZ or P
   assert.equal((await ready()).ready, false);
   await h.f.database.d1
     .prepare(
-      "INSERT INTO guild_entitlements(guild_id,tier,plan,updated_at_ms) VALUES('guild','premium','premium',1)",
+      "INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES('guild','premium',1)",
     )
     .run();
   assert.equal((await ready()).ready, false);
@@ -623,13 +622,13 @@ async function publicRuntime(
   h: Awaited<ReturnType<typeof fixture>>,
   t: import("node:test").TestContext,
   scheduledOptions: Pick<
-    RuntimeAppOptions,
+    import("./support/create-runtime-app").TestRuntimeAppOptions,
     "sweepBillingSyncOutbox" | "reportOperationalEvent"
   > = {},
 ) {
   await h.f.database.d1
     .prepare(
-      "INSERT INTO guild_entitlements(guild_id,tier,plan,updated_at_ms) VALUES('guild','premium','premium',1)",
+      "INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES('guild','premium',1)",
     )
     .run();
   await h.f.stores.platformLink.upsertPlatformLinkConfig({
@@ -694,7 +693,7 @@ async function publicRuntime(
       wait: async (ms) => h.advance(ms),
     });
   const newWorker = () =>
-    createRuntimeApp({
+    createTestRuntimeApp({
       stores: h.f.stores,
       discordPublicKey: "a".repeat(64),
       discordBotToken: "fake",
@@ -997,7 +996,7 @@ test("public runtime uses current Guild Admin authorization for readiness, start
   assert.equal((await h.store.read(id))?.state, "running");
   runtime.authorization.admin = true;
   await h.f.database.d1
-    .prepare("UPDATE guild_entitlements SET tier='free',plan='free' WHERE guild_id='guild'")
+    .prepare("UPDATE guild_entitlements SET plan='free' WHERE guild_id='guild'")
     .run();
   assert.equal(
     (await runtime.request("/stop", { guildId: "guild", id })).status,
@@ -1054,9 +1053,9 @@ test("public Gateway uninstall delivery erases observations, unavailable events 
     error: (...args: unknown[]) => assert.fail(JSON.stringify(args)),
     info: () => {},
   };
-  const event = { type: "GUILD_DELETE", data: { id: "guild" } };
+  const event = gatewayEnvelope({ type: "GUILD_DELETE", data: { id: "guild" } });
   await processGatewayEventQueueMessages(
-    [{ ...event, data: { id: "guild", unavailable: true } }],
+    [gatewayEnvelope({ ...event, data: { id: "guild", unavailable: true } })],
     env,
     logger,
   );
@@ -1088,7 +1087,7 @@ for (const boundary of ["stop", "generation", "paid"] as const)
         });
       if (boundary === "paid")
         await h.f.database.d1
-          .prepare("UPDATE guild_entitlements SET tier='free',plan='free' WHERE guild_id='guild'")
+          .prepare("UPDATE guild_entitlements SET plan='free' WHERE guild_id='guild'")
           .run();
     };
     await runtime.app.refreshPlayerCount();
@@ -1424,6 +1423,7 @@ test("restricted personal erasure preserves cadence and the durable slot across 
       hafAdminGuildId: "haf-admin-guild",
       hafAdminRoleId: "support-role",
       eraseAttendanceObservationMember: (guildId, userId) => h.service.eraseMember(guildId, userId),
+      services: applicationCommandServices(),
     },
   );
   assert.equal(response.status, 200);
@@ -1520,6 +1520,7 @@ test("restricted support erasure removes observation identity after unlink and f
         hafAdminRoleId: "support-role",
         eraseAttendanceObservationMember: (guildId, userId) =>
           h.service.eraseMember(guildId, userId),
+        services: applicationCommandServices(),
       },
     );
     assert.equal(response.status, 200);

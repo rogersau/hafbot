@@ -1,18 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolve } from "node:path";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresGameAccessStore } from "../src/runtime/postgres/postgres-game-access-store";
 import { createPostgresJobQueue } from "../src/runtime/postgres/postgres-job-queue";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
-import { CloudflareCommerceBuyerCheckoutStore } from "../src/runtime/commerce/cloudflare-buyer-checkout-store";
-import { createGameAccessRuntime } from "../src/runtime/commerce/game-access-runtime";
-import { createCloudflarePlatformLinkStore } from "../src/runtime/cloudflare-platform-link-store";
-import { createCloudflareWardogsStore } from "../src/runtime/cloudflare-wardogs-store";
+import { PostgresCommerceBuyerCheckoutStore } from "../src/runtime/postgres/postgres-commerce-buyer-checkout-store";
+import { createGameAccessRuntime } from "../src/runtime/postgres/postgres-commerce-game-access-runtime";
+import { createPostgresPlatformLinkStore } from "../src/runtime/postgres/postgres-platform-link-store";
+import { createPostgresWardogsStore } from "../src/runtime/postgres/postgres-wardogs-store";
 import { WardogsService } from "../src/wardogs/service";
 import type { Assignment } from "../src/commerce/game-access/model";
 const url = process.env.TEST_POSTGRES_URL;
@@ -27,12 +22,9 @@ test(
       NODE_ENV: "test",
     });
     try {
-      await applyPostgresMigrations(
-        db,
-        await readPostgresMigrations(resolve("migrations/postgres")),
-      );
-      const d1 = createPostgresD1CompatibilityDatabase(db);
-      const store = new CloudflareCommerceBuyerCheckoutStore(d1, { isPremium: async () => true });
+      await initializePostgresSchema(db);
+      const d1 = db;
+      const store = new PostgresCommerceBuyerCheckoutStore(d1, { isPremium: async () => true });
       const scope = crypto.randomUUID();
       const input = {
         connectedAccountId: scope,
@@ -41,12 +33,10 @@ test(
         nowMs: 10_000,
       };
       assert.equal((await store.readBuyerStatus(input)).checkoutAttemptId, null);
-      await d1
-        .prepare(`INSERT INTO commerce_offerings
-      (id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms)
-      VALUES(?,?,'guild','role','Fixture','subscription','draft',1,1)`)
-        .bind(scope, scope)
-        .run();
+      await d1.queryResult(
+        "INSERT INTO commerce_offerings\n      (id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,created_at_ms,updated_at_ms)\n      VALUES($1,$2,'guild','role','Fixture','subscription','draft',1,1)",
+        [scope, scope],
+      );
       for (const [suffix, createdAtMs] of [
         ["old", 1],
         ["current", 2],
@@ -68,36 +58,33 @@ test(
         });
         // Both subscriptions were first observed in one snapshot; checkout chronology
         // still identifies the latest purchase when both later become terminal.
-        await d1
-          .prepare(`INSERT INTO commerce_subscriptions
-        (id,checkout_attempt_id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,created_at_ms,updated_at_ms,current_period_end_ms)
-        VALUES(?,?,?,'customer','buyer',?,'price',?,'canceled',100,100,?)`)
-          .bind(id, id, scope, scope, `sub_${id}`, createdAtMs * 1000)
-          .run();
+        await d1.queryResult(
+          "INSERT INTO commerce_subscriptions\n        (id,checkout_attempt_id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,created_at_ms,updated_at_ms,current_period_end_ms)\n        VALUES($1,$2,$3,'customer','buyer',$4,'price',$5,'canceled',100,100,$6)",
+          [id, id, scope, scope, `sub_${id}`, createdAtMs * 1000],
+        );
       }
       const currentId = `${scope}-current`;
       assert.equal((await store.readBuyerStatus(input)).checkoutAttemptId, currentId);
       // All non-terminal states are current, even those that do not grant access.
       for (const status of ["active", "incomplete", "trialing", "past_due", "paused", "unpaid"]) {
-        await d1
-          .prepare("UPDATE commerce_subscriptions SET status=? WHERE id=?")
-          .bind(status, currentId)
-          .run();
+        await d1.queryResult("UPDATE commerce_subscriptions SET status=$1 WHERE id=$2", [
+          status,
+          currentId,
+        ]);
         // A more recently refreshed historical row must not displace current truth.
-        await d1
-          .prepare("UPDATE commerce_subscriptions SET updated_at_ms=200 WHERE id=?")
-          .bind(`${scope}-old`)
-          .run();
+        await d1.queryResult("UPDATE commerce_subscriptions SET updated_at_ms=200 WHERE id=$1", [
+          `${scope}-old`,
+        ]);
         const result = await store.readBuyerStatus(input);
         assert.equal(result.subscriptionStatus, status);
         assert.equal(result.checkoutAttemptId, currentId);
         assert.equal(result.currentPeriodEndMs, 2000);
       }
       for (const status of ["canceled", "ended"]) {
-        await d1
-          .prepare("UPDATE commerce_subscriptions SET status=? WHERE id=?")
-          .bind(status, currentId)
-          .run();
+        await d1.queryResult("UPDATE commerce_subscriptions SET status=$1 WHERE id=$2", [
+          status,
+          currentId,
+        ]);
         assert.equal((await store.readBuyerStatus(input)).checkoutAttemptId, currentId);
       }
       const pendingId = `${scope}-pending`;
@@ -145,10 +132,7 @@ test(
       NODE_ENV: "test",
     });
     try {
-      await applyPostgresMigrations(
-        db,
-        await readPostgresMigrations(resolve("migrations/postgres")),
-      );
+      await initializePostgresSchema(db);
       const store = createPostgresGameAccessStore(db);
       const physical = crypto.randomUUID();
       const base: Assignment = {
@@ -267,8 +251,8 @@ test(
       );
       // Exercise the actual portable checkout failure/truth readers, without the
       // unrelated pre-existing financial readSyncState camel-case alias limitation.
-      const d1 = createPostgresD1CompatibilityDatabase(db);
-      const buyerStore = new CloudflareCommerceBuyerCheckoutStore(d1, {
+      const d1 = db;
+      const buyerStore = new PostgresCommerceBuyerCheckoutStore(d1, {
         isPremium: async () => true,
       });
       let now = 1_900_000_000_000;
@@ -276,10 +260,9 @@ test(
         database: d1,
         store,
         wardogs: new WardogsService({
-          store: createCloudflareWardogsStore(d1),
-          runtime: "portable",
+          store: createPostgresWardogsStore(d1),
         }),
-        platformLink: createCloudflarePlatformLinkStore(d1),
+        platformLink: createPostgresPlatformLinkStore(d1),
         botUserId: "fixture",
         botToken: "synthetic-only",
         now: () => now,
@@ -335,33 +318,29 @@ test(
         });
         await buyerStore.failCheckout(checkoutId, now, outcome);
         const row = await d1
-          .prepare(
-            "SELECT pre_session_failed_at_ms,provider_terminal_at_ms FROM commerce_checkout_attempts WHERE id=?",
-          )
-          .bind(checkoutId)
-          .first<{
+          .query<{
             pre_session_failed_at_ms: number | null;
             provider_terminal_at_ms: number | null;
-          }>();
+          }>(
+            "SELECT pre_session_failed_at_ms,provider_terminal_at_ms FROM commerce_checkout_attempts WHERE id=$1",
+            [checkoutId],
+          )
+          .then((rows) => rows[0] ?? null);
         assert.equal(row?.pre_session_failed_at_ms, outcome === "confirmed_not_sent" ? now : null);
         assert.equal(row?.provider_terminal_at_ms, null);
       }
       // Remove only this test's deliberately orphaned initial selection so all real
       // selections now correspond to checkout attempts with distinct failure evidence.
-      await d1
-        .prepare("DELETE FROM commerce_game_selections WHERE checkout_id=?")
-        .bind(physical)
-        .run();
+      await d1.queryResult("DELETE FROM commerce_game_selections WHERE checkout_id=$1", [physical]);
       await runtime.service.processDue();
       assert.notEqual(
         (await store.read(saved.id))?.slot,
         null,
         "an ambiguous checkout retains aggregated capacity",
       );
-      await d1
-        .prepare("DELETE FROM commerce_game_selections WHERE checkout_id=?")
-        .bind(`${physical}-unknown`)
-        .run();
+      await d1.queryResult("DELETE FROM commerce_game_selections WHERE checkout_id=$1", [
+        `${physical}-unknown`,
+      ]);
       now += 900001;
       await runtime.service.processDue();
       assert.equal(
@@ -393,12 +372,10 @@ test(
       });
       assert.equal(status.checkoutAttemptId, replacementId);
       assert.equal(status.subscriptionStatus, null);
-      await d1
-        .prepare(`INSERT INTO commerce_subscriptions
-        (id,checkout_attempt_id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,created_at_ms,updated_at_ms)
-        VALUES(?,?,?,'customer','buyer',?,'price',?,'active',?,?)`)
-        .bind(physical, replacementId, physical, physical, `sub_${physical}`, now, now)
-        .run();
+      await d1.queryResult(
+        "INSERT INTO commerce_subscriptions\n        (id,checkout_attempt_id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,created_at_ms,updated_at_ms)\n        VALUES($1,$2,$3,'customer','buyer',$4,'price',$5,'active',$6,$7)",
+        [physical, replacementId, physical, physical, `sub_${physical}`, now, now],
+      );
       const paidStatus = await buyerStore.readBuyerStatus({
         connectedAccountId: physical,
         buyerId: "buyer",

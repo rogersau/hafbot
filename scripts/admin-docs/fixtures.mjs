@@ -318,35 +318,7 @@ export const commonResponses = {
       },
     ],
   },
-  "/admin/api/steam-link": {
-    guildId: "docs-guild",
-    config: {
-      guildId: "docs-guild",
-      platform: "steam",
-      linkedRoleId: "role-verified",
-      requireRelinkOnRejoin: false,
-      logChannelId: "channel-mod-log",
-      gameAppIds: [221100],
-      panelTitle: "Link your Steam account",
-      panelDescription: "Connect Steam to unlock linked-member features.",
-      panelButtonLabel: "Link Steam",
-      panelButtonStyle: "primary",
-      panelColor: 5_940_479,
-      allowRelink: true,
-      allowMultipleLinks: false,
-      whoisFields: ["steamId64", "profileUrl"],
-      customLinks: [
-        {
-          label: "Steam profile",
-          url: "https://steamcommunity.com/profiles/{steamId64}",
-        },
-      ],
-      panelChannelId: "channel-setup",
-      panelMessageId: "message-steam-link",
-      updatedAtMs: now,
-    },
-    links: [],
-  },
+
   "/admin/api/player-link": {
     guildId: "docs-guild",
     platform: "xbox",

@@ -62,7 +62,8 @@ export interface PostgresJobMetadata {
   createdAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
-  terminalReasonCode: string | null;
+  /** Last retry or terminal reason; completion and operator retry clear it. */
+  reasonCode: string | null;
 }
 
 export interface PostgresJobStats {
@@ -159,7 +160,7 @@ export function createPostgresJobQueue(
         await transaction.execute(
           `UPDATE jobs
              SET state = 'terminal',
-                 terminal_reason_code = 'lease_expired_after_max_attempts',
+                 reason_code = 'lease_expired_after_max_attempts',
                  lease_owner = NULL,
                  lease_token = NULL,
                  lease_expires_at = NULL,
@@ -264,7 +265,7 @@ export function createPostgresJobQueue(
                   WHEN attempts >= max_attempts THEN $2::timestamptz
                   ELSE NULL
                 END,
-                terminal_reason_code = CASE WHEN attempts >= max_attempts THEN $3 ELSE NULL END,
+                reason_code = $3,
                 updated_at = $2
           WHERE id = $4 AND state = 'running' AND lease_token = $5
           RETURNING state`,
@@ -307,7 +308,7 @@ export function createPostgresJobQueue(
         (await database.execute(
           `UPDATE jobs
               SET state = 'queued', attempts = 0, available_at = $1,
-                  completed_at = NULL, terminal_reason_code = NULL, updated_at = $1
+                  completed_at = NULL, reason_code = NULL, updated_at = $1
             WHERE id = $2 AND state = 'terminal'`,
           [now, jobId],
         )) === 1
@@ -320,7 +321,7 @@ export function createPostgresJobQueue(
       return (
         (await database.execute(
           `UPDATE jobs
-              SET state = 'terminal', terminal_reason_code = $1, completed_at = $2,
+              SET state = 'terminal', reason_code = $1, completed_at = $2,
                   lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL, updated_at = $2
             WHERE id = $3
               AND (state = 'queued' OR (state = 'running' AND lease_expires_at <= $2))`,
@@ -353,7 +354,7 @@ interface JobRow extends Record<string, unknown> {
   created_at: Date;
   updated_at: Date;
   completed_at: Date | null;
-  terminal_reason_code: string | null;
+  reason_code: string | null;
 }
 
 interface JobStatsRow extends Record<string, unknown> {
@@ -395,7 +396,7 @@ function mapJobMetadata(row: JobRow): PostgresJobMetadata {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
-    terminalReasonCode: row.terminal_reason_code,
+    reasonCode: row.reason_code,
   };
 }
 
@@ -420,7 +421,7 @@ async function updateFinishedState(
   const rows = await database.query<{ state: PostgresJobState }>(
     `UPDATE jobs
         SET state = $1, lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL,
-            completed_at = $2, terminal_reason_code = $3, updated_at = $2
+            completed_at = $2, reason_code = $3, updated_at = $2
       WHERE id = $4 AND state = 'running' AND lease_token = $5
       RETURNING state`,
     [state, now, reasonCode, job.id, job.leaseToken],

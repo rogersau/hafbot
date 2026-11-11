@@ -1,3 +1,5 @@
+import { composeTestServices } from "./support/compose-services";
+import { gatewayEnvelope } from "./support/gateway-envelope";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
@@ -7,8 +9,8 @@ import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { allowAllAdminAccess } from "./helpers/admin-api";
 import { createDiscordReactionRoleOperations } from "../src/discord/reaction-roles";
 import { reactionRoleGatewayHandler } from "../src/runtime/gateway-events/handlers/reaction-roles";
-import { processGatewayEventQueueMessages } from "../src/runtime/gateway-event-queue-consumer";
-import type { Env } from "../src/env";
+import { processGatewayEventQueueMessages } from "./support/gateway-event-consumer";
+import type { Env } from "./support/test-env";
 import type { TicketPanelConfig } from "../src/types";
 import { ReactionRoleService } from "../src/services/reaction-role-service";
 import type {
@@ -48,24 +50,19 @@ function ticketPanel(panelId = "main", supportRoleId = "600"): TicketPanelConfig
         supportRoleId,
         channelNamePrefix: "support",
         questions: [],
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
         limitExclusion: false,
+        responseRules: [],
       },
     ],
   };
 }
 
-test("reaction-role protection reads current and legacy ticket panels, including empty and multiple panels", async (t) => {
+test("reaction-role protection reads current ticket panels, including empty and multiple panels", async (t) => {
   const f = createProductionRuntimeStores();
   t.after(f.close);
   await f.stores.tickets!.upsertTicketPanelConfig(ticketPanel());
-  await f.stores.tickets!.upsertTicketPanelConfig(ticketPanel("legacy", "601"));
+  await f.stores.tickets!.upsertTicketPanelConfig(ticketPanel("secondary", "601"));
   await f.stores.tickets!.upsertTicketPanelConfig({ ...ticketPanel("empty"), ticketTypes: [] });
-  await f.database.d1
-    .prepare("UPDATE ticket_panels SET ticket_types_json = ? WHERE guild_id = ? AND panel_id = ?")
-    .bind(JSON.stringify(ticketPanel("legacy", "601").ticketTypes), "100", "legacy")
-    .run();
   assert.deepEqual(
     await f.stores.reactionRoles!.readRestrictedRoleIds("100"),
     new Set(["600", "601"]),
@@ -144,6 +141,7 @@ test("reaction-role API publishes through Discord, enforces guild/workspace acce
   };
   const routes = createReactionRolesAdminRoutes({
     stores: f.stores,
+    services: composeTestServices(f.stores),
     discordBotToken: "unused-standard-token",
     discordBotUserId: "unused-standard-bot",
     resolveGuildBotIdentity: async (guildId) => {
@@ -412,11 +410,7 @@ test("ticket-panel storage allows publication and queued grant/removal after a r
   );
   for (const supportRoleId of ["600", "601"]) {
     if (supportRoleId === "601") {
-      await f.stores.tickets!.upsertTicketPanelConfig(ticketPanel("legacy", "601"));
-      await f.database.d1
-        .prepare("UPDATE ticket_panels SET ticket_types_json = ? WHERE panel_id = ?")
-        .bind(JSON.stringify(ticketPanel("legacy", "601").ticketTypes), "legacy")
-        .run();
+      await f.stores.tickets!.upsertTicketPanelConfig(ticketPanel("secondary", "601"));
     }
     await assert.rejects(
       () =>
@@ -429,7 +423,7 @@ test("ticket-panel storage allows publication and queued grant/removal after a r
   }
   await service.save("100", settings);
   await service.publish("100");
-  const message = {
+  const message = gatewayEnvelope({
     type: "MESSAGE_REACTION_REMOVE",
     data: {
       guild_id: "100",
@@ -438,12 +432,12 @@ test("ticket-panel storage allows publication and queued grant/removal after a r
       user_id: "800",
       emoji: { name: "🟢", id: null },
     },
-  };
+  });
   const logger = {
     error: (...args) => assert.fail(JSON.stringify(args)),
   } satisfies Parameters<typeof processGatewayEventQueueMessages>[2];
   await processGatewayEventQueueMessages(
-    [{ ...message, type: "MESSAGE_REACTION_ADD" }],
+    [gatewayEnvelope({ ...message, type: "MESSAGE_REACTION_ADD" })],
     env,
     logger,
   );

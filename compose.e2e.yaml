@@ -14,7 +14,6 @@ services:
       PORT: "8080"
       BETTER_AUTH_URL: http://localhost:8081
       HAF_ROLE: all
-      HAF_RUN_MIGRATIONS: "true"
       HAF_GATEWAY_ENABLED: "true"
       HAF_JOBS_ENABLED: "true"
       HAF_SCHEDULER_ENABLED: "false"

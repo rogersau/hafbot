@@ -11,7 +11,7 @@ import {
 } from "../src/runtime/ticket-transcript-collector";
 import { TICKET_TRANSCRIPT_ACCESS_TOKEN_PLACEHOLDER } from "../src/tickets";
 import type { DiscordMessageListItem } from "../src/discord/messages";
-import { createCloudflareTicketTranscriptCapabilityStore } from "../src/runtime/cloudflare-ticket-transcript-capability-store";
+import { createSqliteTicketTranscriptCapabilityStore } from "./support/sqlite/runtime/sqlite-ticket-transcript-capability-store";
 import type { TicketInstance } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
@@ -30,7 +30,7 @@ test("buildTicketTranscriptArtifacts issues expiring access separate from its ob
     throw new Error(`Unexpected Discord request: ${url}`);
   }) as typeof fetch;
   const database = new SqliteD1Database();
-  const capabilities = createCloudflareTicketTranscriptCapabilityStore(database.d1);
+  const capabilities = createSqliteTicketTranscriptCapabilityStore(database.d1);
   const htmlKeys: string[] = [];
   const deleted: Array<{ guildId: string; channelId: string; objectId: string }> = [];
 
@@ -224,7 +224,7 @@ test("buildTicketTranscriptArtifacts omits failed attachment URLs and cleans up 
 
 test("Ticket transcript capability access timestamps never move backwards", async () => {
   const database = new SqliteD1Database();
-  const capabilities = createCloudflareTicketTranscriptCapabilityStore(database.d1);
+  const capabilities = createSqliteTicketTranscriptCapabilityStore(database.d1);
   try {
     await capabilities.issue({
       objectId: "transcript-object-1",

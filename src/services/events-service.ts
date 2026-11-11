@@ -131,10 +131,6 @@ export interface EventTeamReadiness {
 
 export class EventsService {
   private readonly eventTeamRateLimits: Record<EventTeamRateLimitAction, EventTeamRateLimitPolicy>;
-  private readonly localEventTeamRateLimits = new Map<
-    string,
-    { windowStartedAtMs: number; attemptCount: number }
-  >();
 
   constructor(
     private readonly store: EventStore,
@@ -431,41 +427,11 @@ export class EventsService {
     deleteSignup?: Pick<EventSignup, "guildId" | "eventId" | "userId" | "groupId">;
   }): Promise<void> {
     const artifacts = this.buildEventTeamMutationArtifacts(input);
-    if (this.store.commitEventTeamMutation) {
-      await this.store.commitEventTeamMutation({
-        mutation: input.mutation,
-        deleteSignup: input.deleteSignup,
-        ...artifacts,
-      });
-      return;
-    }
-    switch (input.mutation.kind) {
-      case "create_team":
-        await this.store.createEventTeamWithCaptain(input.mutation);
-        break;
-      case "add_membership":
-        await this.store.addEventTeamMembership(input.mutation.membership);
-        break;
-      case "leave_membership":
-        await this.store.leaveEventTeamMembership(input.mutation);
-        break;
-      case "update_team":
-        await this.updateEventTeam(input.mutation.team);
-        break;
-      case "create_proposal":
-        if (!this.store.createEventTeamProposal)
-          throw new EventConfigError("Event Team proposals are unavailable.");
-        await this.store.createEventTeamProposal(input.mutation.proposal);
-        break;
-      case "update_proposal":
-        await this.updateProposal(input.mutation.proposal);
-        break;
-    }
-    if (input.deleteSignup) await this.store.deleteSignup(input.deleteSignup);
-    if (this.store.appendEventTeamAudit) await this.store.appendEventTeamAudit(artifacts.audit);
-    for (const delivery of artifacts.deliveries) {
-      if (this.store.enqueueEventTeamDelivery) await this.store.enqueueEventTeamDelivery(delivery);
-    }
+    await this.store.commitEventTeamMutation({
+      mutation: input.mutation,
+      deleteSignup: input.deleteSignup,
+      ...artifacts,
+    });
   }
 
   private async commitEventTeamDisband(input: {
@@ -483,39 +449,14 @@ export class EventsService {
   }): Promise<void> {
     const artifacts = this.buildEventTeamMutationArtifacts(input);
     const leftAtMs = input.team.disbandedAtMs ?? input.team.updatedAtMs;
-    if (this.store.commitEventTeamDisband) {
-      await this.store.commitEventTeamDisband({
-        team: input.team,
-        membershipIds: input.memberships.map((membership) => membership.id),
-        leftAtMs,
-        cancelPendingProposals: true,
-        deleteSignup: input.deleteSignup,
-        ...artifacts,
-      });
-      return;
-    }
-    for (const membership of input.memberships) {
-      await this.store.leaveEventTeamMembership({
-        team: input.team,
-        membershipId: membership.id,
-        leftAtMs,
-      });
-    }
-    await this.updateEventTeam(input.team);
-    if (this.store.cancelEventTeamProposals) {
-      await this.store.cancelEventTeamProposals({
-        guildId: input.team.guildId,
-        eventId: input.team.eventId,
-        teamId: input.team.id,
-        status: "pending",
-        nowMs: leftAtMs,
-      });
-    }
-    if (input.deleteSignup) await this.store.deleteSignup(input.deleteSignup);
-    if (this.store.appendEventTeamAudit) await this.store.appendEventTeamAudit(artifacts.audit);
-    for (const delivery of artifacts.deliveries) {
-      if (this.store.enqueueEventTeamDelivery) await this.store.enqueueEventTeamDelivery(delivery);
-    }
+    await this.store.commitEventTeamDisband({
+      team: input.team,
+      membershipIds: input.memberships.map((membership) => membership.id),
+      leftAtMs,
+      cancelPendingProposals: true,
+      deleteSignup: input.deleteSignup,
+      ...artifacts,
+    });
   }
 
   async cancelEvent(input: {
@@ -805,9 +746,7 @@ export class EventsService {
       this.store.listEventTeams(input.guildId, input.eventId),
       this.store.listActiveEventTeamMemberships(input.guildId, input.eventId),
       this.store.listSignups(input.guildId, input.eventId),
-      this.store.listEventTeamProposals
-        ? this.store.listEventTeamProposals({ guildId: input.guildId, eventId: input.eventId })
-        : Promise.resolve([]),
+      this.store.listEventTeamProposals({ guildId: input.guildId, eventId: input.eventId }),
     ]);
     const publicTeams = await Promise.all(
       teams
@@ -1245,33 +1184,13 @@ export class EventsService {
         },
       ],
     });
-    if (this.store.acceptEventTeamProposalAtomic) {
-      await this.store.acceptEventTeamProposalAtomic({
-        proposal: accepted,
-        membership,
-        signup,
-        cancelProposalIds: competing,
-        ...artifacts,
-      });
-    } else {
-      await this.updateProposal(accepted);
-      if (signup && !existingSignup) await this.store.upsertSignup(signup);
-      await this.store.addEventTeamMembership(membership);
-      for (const id of competing) {
-        const other = await this.requireProposal({ ...input, proposalId: id });
-        await this.updateProposal({
-          ...other,
-          status: "cancelled",
-          updatedAtMs: now,
-          resolvedAtMs: now,
-        });
-      }
-      if (this.store.appendEventTeamAudit) await this.store.appendEventTeamAudit(artifacts.audit);
-      for (const delivery of artifacts.deliveries) {
-        if (this.store.enqueueEventTeamDelivery)
-          await this.store.enqueueEventTeamDelivery(delivery);
-      }
-    }
+    await this.store.acceptEventTeamProposalAtomic({
+      proposal: accepted,
+      membership,
+      signup,
+      cancelProposalIds: competing,
+      ...artifacts,
+    });
     if (signup?.status === "confirmed" && !existingSignup)
       await this.applyConfirmedSideEffects(event, requireGroup(event, team.groupId), memberUserId);
     return membership;
@@ -1310,14 +1229,13 @@ export class EventsService {
       throw new EventConfigError("This invitation is no longer available.");
     const now = Date.now();
     const result = await this.transitionProposal(proposal, "declined");
-    if (this.store.createEventTeamInvitationBlock)
-      await this.store.createEventTeamInvitationBlock({
-        guildId: proposal.guildId,
-        eventId: proposal.eventId,
-        teamId: proposal.teamId,
-        userId: proposal.targetUserId,
-        createdAtMs: now,
-      });
+    await this.store.createEventTeamInvitationBlock({
+      guildId: proposal.guildId,
+      eventId: proposal.eventId,
+      teamId: proposal.teamId,
+      userId: proposal.targetUserId,
+      createdAtMs: now,
+    });
     return result;
   }
 
@@ -1383,14 +1301,13 @@ export class EventsService {
       prior: membership,
       result: { leftAtMs },
     });
-    if (this.store.createEventTeamInvitationBlock)
-      await this.store.createEventTeamInvitationBlock({
-        guildId: team.guildId,
-        eventId: team.eventId,
-        teamId: team.id,
-        userId: input.userId,
-        createdAtMs: Date.now(),
-      });
+    await this.store.createEventTeamInvitationBlock({
+      guildId: team.guildId,
+      eventId: team.eventId,
+      teamId: team.id,
+      userId: input.userId,
+      createdAtMs: Date.now(),
+    });
   }
 
   async transferEventTeamCaptain(input: {
@@ -1908,56 +1825,19 @@ export class EventsService {
       { scopeType: "event" as const, scopeId: event.id },
       { scopeType: "user" as const, scopeId: actorUserId },
     ]) {
-      const result = this.store.consumeEventTeamRateLimit
-        ? await this.store.consumeEventTeamRateLimit({
-            guildId: event.guildId,
-            eventId: event.id,
-            action,
-            scopeType: scope.scopeType,
-            scopeId: scope.scopeId,
-            limit: policy.maxAttempts,
-            windowMs: policy.windowMs,
-            nowMs,
-          })
-        : this.consumeLocalEventTeamRateLimit(
-            event.guildId,
-            event.id,
-            action,
-            scope.scopeType,
-            scope.scopeId,
-            policy,
-            nowMs,
-          );
+      const result = await this.store.consumeEventTeamRateLimit({
+        guildId: event.guildId,
+        eventId: event.id,
+        action,
+        scopeType: scope.scopeType,
+        scopeId: scope.scopeId,
+        limit: policy.maxAttempts,
+        windowMs: policy.windowMs,
+        nowMs,
+      });
       if (!result.allowed)
         throw new EventTeamRateLimitError(action, result.retryAfterMs, scope.scopeType);
     }
-  }
-
-  private consumeLocalEventTeamRateLimit(
-    guildId: string,
-    eventId: string,
-    action: EventTeamRateLimitAction,
-    scopeType: EventTeamRateLimitScope,
-    scopeId: string,
-    policy: EventTeamRateLimitPolicy,
-    nowMs: number,
-  ) {
-    const key = `${guildId}:${eventId}:${action}:${scopeType}:${scopeId}`;
-    const previous = this.localEventTeamRateLimits.get(key);
-    const current =
-      !previous || nowMs - previous.windowStartedAtMs >= policy.windowMs
-        ? { windowStartedAtMs: nowMs, attemptCount: 1 }
-        : {
-            ...previous,
-            attemptCount: Math.min(policy.maxAttempts + 1, previous.attemptCount + 1),
-          };
-    this.localEventTeamRateLimits.set(key, current);
-    const allowed = current.attemptCount <= policy.maxAttempts;
-    return {
-      allowed,
-      remaining: Math.max(0, policy.maxAttempts - current.attemptCount),
-      retryAfterMs: Math.max(0, current.windowStartedAtMs + policy.windowMs - nowMs),
-    };
   }
 
   private async readEntitlement(guildId: string) {
@@ -2013,8 +1893,6 @@ export class EventsService {
   }
 
   private async persistProposal(proposal: EventTeamProposal): Promise<void> {
-    if (!this.store.createEventTeamProposal)
-      throw new EventConfigError("Event Team proposals are unavailable.");
     const event = await this.requireEvent(proposal.guildId, proposal.eventId);
     await this.commitEventTeamMutation({
       mutation: { kind: "create_proposal", proposal },
@@ -2039,12 +1917,6 @@ export class EventsService {
     });
   }
 
-  private async updateProposal(proposal: EventTeamProposal): Promise<void> {
-    if (!this.store.updateEventTeamProposal)
-      throw new EventConfigError("Event Team proposals are unavailable.");
-    await this.store.updateEventTeamProposal(proposal);
-  }
-
   private async listProposals(input: {
     guildId: string;
     eventId: string;
@@ -2052,8 +1924,6 @@ export class EventsService {
     status?: EventTeamProposal["status"];
     targetUserId?: string;
   }): Promise<EventTeamProposal[]> {
-    if (!this.store.listEventTeamProposals)
-      throw new EventConfigError("Event Team proposals are unavailable.");
     const [event, stored] = await Promise.all([
       this.requireEvent(input.guildId, input.eventId),
       this.store.listEventTeamProposals({
@@ -2082,8 +1952,6 @@ export class EventsService {
     eventId: string;
     proposalId: string;
   }): Promise<EventTeamProposal> {
-    if (!this.store.readEventTeamProposal)
-      throw new EventConfigError("Event Team proposals are unavailable.");
     const proposal = await this.store.readEventTeamProposal(
       input.guildId,
       input.eventId,
@@ -2128,17 +1996,7 @@ export class EventsService {
     teamId: string,
     userId: string,
   ): Promise<boolean> {
-    return this.store.hasEventTeamInvitationBlock
-      ? this.store.hasEventTeamInvitationBlock(guildId, eventId, teamId, userId)
-      : false;
-  }
-
-  private async updateEventTeam(team: EventTeam): Promise<void> {
-    if (this.store.updateEventTeam) {
-      await this.store.updateEventTeam(team);
-      return;
-    }
-    throw new EventConfigError("Event Team updates are unavailable.");
+    return this.store.hasEventTeamInvitationBlock(guildId, eventId, teamId, userId);
   }
 
   private async isPaidPlan(guildId: string): Promise<boolean> {
@@ -2188,32 +2046,21 @@ export class EventsService {
       occurredAtMs: nowMs,
       retentionExpiresAtMs: nowMs + 365 * 24 * 60 * 60 * 1000,
     };
-    const expectedStateVersion = this.store.readEventTeamStateVersion
-      ? await this.store.readEventTeamStateVersion(event.guildId, event.id)
-      : 0;
+    const expectedStateVersion = await this.store.readEventTeamStateVersion(
+      event.guildId,
+      event.id,
+    );
     const snapshots =
       event.status === "scheduled" && status === "live"
         ? await this.buildEventTeamRosterSnapshots(nextEvent, nowMs)
         : [];
-    if (this.store.commitEventLifecycleTransition) {
-      await this.store.commitEventLifecycleTransition({
-        event: nextEvent,
-        history,
-        snapshots,
-        expectedStatus: event.status,
-        expectedStateVersion,
-      });
-    } else {
-      await this.store.upsertEvent(nextEvent);
-      if (this.store.appendEventLifecycleHistory) {
-        await this.store.appendEventLifecycleHistory(history);
-      }
-      if (this.store.captureEventTeamRosterSnapshot) {
-        for (const snapshot of snapshots) {
-          await this.store.captureEventTeamRosterSnapshot(snapshot);
-        }
-      }
-    }
+    await this.store.commitEventLifecycleTransition({
+      event: nextEvent,
+      history,
+      snapshots,
+      expectedStatus: event.status,
+      expectedStateVersion,
+    });
     await this.refreshEventMessage(nextEvent);
     if (auditEventId) {
       await this.postAudit(auditEventId, nextEvent, { status });

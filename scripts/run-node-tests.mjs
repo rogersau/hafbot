@@ -16,7 +16,7 @@ if (tests.length === 0) {
 
 const result = spawnSync(
   process.execPath,
-  ["--require", "./test/support/cloudflare-workers-shim.cjs", "--test", ...tests],
+  ["--require", "./test/support/dom-globals.cjs", "--test", ...tests],
   { stdio: "inherit" },
 );
 

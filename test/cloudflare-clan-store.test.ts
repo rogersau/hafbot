@@ -80,8 +80,8 @@ test("Clan entitlements are complete on Free and equal per Guild on paid plans",
 });
 
 test("Clan store round-trips configuration and uses optimistic request revisions", async () => {
-  const { createCloudflareClanStore } = await import("../src/runtime/cloudflare-clan-store");
-  const store = createCloudflareClanStore(new SqliteD1Database() as unknown as D1Database);
+  const { createSqliteClanStore } = await import("./support/sqlite/runtime/sqlite-clan-store");
+  const store = createSqliteClanStore(new SqliteD1Database() as unknown as D1Database);
   const config = {
     ...defaultClanManagementConfig("guild-1", 100),
     reviewerRoleIds: ["reviewer"],
@@ -104,8 +104,8 @@ test("Clan store round-trips configuration and uses optimistic request revisions
 });
 
 test("Clan schema enforces one pending request and one active Guild membership", async () => {
-  const { createCloudflareClanStore } = await import("../src/runtime/cloudflare-clan-store");
-  const store = createCloudflareClanStore(new SqliteD1Database() as unknown as D1Database);
+  const { createSqliteClanStore } = await import("./support/sqlite/runtime/sqlite-clan-store");
+  const store = createSqliteClanStore(new SqliteD1Database() as unknown as D1Database);
   await store.createRequest(request("request-1", "member-1"));
   await assert.rejects(store.createRequest(request("request-2", "member-1")));
 
@@ -134,8 +134,8 @@ test("Clan schema enforces one pending request and one active Guild membership",
 });
 
 test("Clan schema enforces case-normalized name and tag uniqueness", async () => {
-  const { createCloudflareClanStore } = await import("../src/runtime/cloudflare-clan-store");
-  const store = createCloudflareClanStore(new SqliteD1Database() as unknown as D1Database);
+  const { createSqliteClanStore } = await import("./support/sqlite/runtime/sqlite-clan-store");
+  const store = createSqliteClanStore(new SqliteD1Database() as unknown as D1Database);
   await store.createRequest(request("request-1"));
   await store.createClan(clan("a", "request-1"));
   await store.createRequest({ ...request("request-2"), normalizedName: "clan a" });

@@ -58,7 +58,7 @@ import {
   handleBanCaseComponentInteraction,
   isBanCaseComponentInteraction,
 } from "./ban-case-interaction-handler";
-import { createServiceFactory } from "./service-factory";
+import type { InteractionServices } from "./handler-services";
 import {
   buildMemberVerificationCustomId,
   parseMemberVerificationCustomId,
@@ -86,35 +86,15 @@ import {
 
 const DISCORD_INTERACTION_MAX_AGE_SECONDS = 5 * 60;
 
+export type InteractionHandlerOptions = Omit<RuntimeAppOptions, "services"> & {
+  services: InteractionServices;
+};
+
 export async function handleInteractionRequest(
   request: Request,
-  options: RuntimeAppOptions,
+  options: InteractionHandlerOptions,
 ): Promise<Response> {
   const features = options.features ?? ALL_FEATURES_ENABLED;
-  const services = {
-    ...createServiceFactory({
-      stores: options.stores,
-      discordBotToken: options.discordBotToken,
-      discordCacheKv: options.discordCacheKv,
-      steamWebApiKey: options.steamWebApiKey,
-      wardogs: options.wardogs,
-      banEnforcementStore: options.banEnforcementStore,
-      banIncidentStore: options.banIncidentStore,
-      banCasesEnabled: features.banCases,
-      wardogsPlayerCountEnabled: options.wardogsPlayerCountEnabled,
-      playerCountEnabled: features.playerCount,
-      webhookProxyLogPersistenceEnabled: options.webhookProxyLogPersistenceEnabled,
-      ticketRecoveryQueue: options.ticketRecoveryQueue,
-      evidenceVaultBlobs: options.evidenceVaultBlobs,
-      origin: new URL(request.url).origin,
-      publicUrl: new URL(request.url).origin,
-      waitUntil: options.waitUntil,
-      whiteLabelBotStore: options.stores.whiteLabelBots,
-      steamLinkAvailable: features.steamLink,
-      componentIdSigner: options.componentIdSigner,
-    }),
-    ...options.services,
-  };
   const signature = request.headers.get("x-signature-ed25519");
   const timestamp = request.headers.get("x-signature-timestamp");
   const body = await request.text();
@@ -135,17 +115,17 @@ export async function handleInteractionRequest(
     return new Response("Unauthorized", { status: 401 });
   }
 
+  const services = options.services;
   let interaction = JSON.parse(body) as DiscordInteraction;
   if (interaction?.type === DISCORD_PING_INTERACTION) {
     return Response.json({ type: DISCORD_PONG_RESPONSE });
   }
 
   if (interaction?.type === DISCORD_APPLICATION_COMMAND_AUTOCOMPLETE_INTERACTION) {
-    return handleTicketReplyAutocompleteInteraction(
-      interaction,
-      options.stores,
-      services.ticketLifecycle,
-    );
+    return handleTicketReplyAutocompleteInteraction(interaction, {
+      stores: options.stores,
+      ticketLifecycle: services.ticketLifecycle,
+    });
   }
 
   if (interaction?.type === DISCORD_APPLICATION_COMMAND_INTERACTION) {
@@ -184,19 +164,6 @@ export async function handleInteractionRequest(
       });
       if (verification.kind === "invalid") {
         return Response.json(buildEphemeralMessage("This action is no longer available."));
-      }
-      if (verification.kind === "legacy") {
-        const legacyUntilMs =
-          verification.purpose === "member-verification-panel"
-            ? (options.memberVerificationPanelLegacyUntilMs ?? options.componentIdLegacyUntilMs)
-            : options.componentIdLegacyUntilMs;
-        if (!legacyUntilMs || Date.now() > legacyUntilMs) {
-          return Response.json(buildEphemeralMessage("This action is no longer available."));
-        }
-        console.info("Legacy sensitive component ID accepted", { purpose: verification.purpose });
-        if (verification.customId) {
-          interaction = replaceInteractionCustomId(interaction, verification.customId);
-        }
       }
       if (verification.kind === "valid") {
         interaction = replaceInteractionCustomId(interaction, verification.customId);
@@ -274,8 +241,7 @@ export async function handleInteractionRequest(
       return handleMarketplaceComponentInteraction(
         interaction,
         options.stores,
-        options.discordBotToken,
-        services,
+        services.marketplaceService,
       );
     }
 
@@ -294,7 +260,7 @@ export async function handleInteractionRequest(
         interaction,
         options.stores,
         options.discordBotToken,
-        services,
+        services.lfgService,
         options.componentIdSigner,
       );
     }
@@ -366,18 +332,17 @@ export async function handleInteractionRequest(
     }
 
     if (features.tickets) {
-      return handleMessageComponentInteraction(
-        interaction,
-        options.stores,
-        options.discordBotToken,
-        new URL(request.url).origin,
-        options.ticketTranscriptBlobs,
-        options.waitUntil,
-        options.aiTranscriptSummarizerEnv,
-        services.ticketLifecycle,
-        options.ticketTranscriptCapabilities,
-        options.componentIdSigner,
-      );
+      return handleMessageComponentInteraction(interaction, {
+        stores: options.stores,
+        ticketLifecycle: services.ticketLifecycle,
+        discordBotToken: options.discordBotToken,
+        requestOrigin: new URL(request.url).origin,
+        ticketTranscriptBlobs: options.ticketTranscriptBlobs,
+        waitUntil: options.waitUntil,
+        aiTranscriptSummarizerEnv: options.aiTranscriptSummarizerEnv,
+        ticketTranscriptCapabilities: options.ticketTranscriptCapabilities,
+        componentIdSigner: options.componentIdSigner,
+      });
     }
 
     return Response.json(buildEphemeralMessage("This feature is currently disabled."));
@@ -393,12 +358,7 @@ export async function handleInteractionRequest(
     }
 
     if (features.marketplace && isMarketplaceInteraction(interaction)) {
-      return handleMarketplaceModalSubmitInteraction(
-        interaction,
-        options.stores,
-        options.discordBotToken,
-        services,
-      );
+      return handleMarketplaceModalSubmitInteraction(interaction, services.marketplaceService);
     }
 
     if (features.clans !== false && services.clanService && isClanInteraction(interaction)) {
@@ -414,8 +374,7 @@ export async function handleInteractionRequest(
       return handleLfgModalSubmitInteraction(
         interaction,
         options.stores,
-        options.discordBotToken,
-        services,
+        services.lfgService,
         options.waitUntil,
       );
     }
@@ -437,14 +396,13 @@ export async function handleInteractionRequest(
     }
 
     if (features.tickets) {
-      return handleTicketModalSubmitInteraction(
-        interaction,
-        options.stores,
-        options.discordBotToken,
-        options.waitUntil,
-        services.ticketLifecycle,
-        options.componentIdSigner,
-      );
+      return handleTicketModalSubmitInteraction(interaction, {
+        stores: options.stores,
+        ticketLifecycle: services.ticketLifecycle,
+        discordBotToken: options.discordBotToken,
+        waitUntil: options.waitUntil,
+        componentIdSigner: options.componentIdSigner,
+      });
     }
 
     return Response.json(buildEphemeralMessage("This feature is currently disabled."));

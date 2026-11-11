@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -10,11 +11,7 @@ import { JSDOM } from "jsdom";
 
 import "./support/admin-page-test-loader";
 
-import App, {
-  combineDashboardErrors,
-  getDiscordSignInCallbackUrl,
-  shouldEnableGuildDirectory,
-} from "../src/admin/App";
+import App, { combineDashboardErrors, getDiscordSignInCallbackUrl } from "../src/admin/App";
 import * as AdminAppModule from "../src/admin/App";
 import { getAdminLoginLocation } from "../src/runtime/admin-shell";
 import { AdminBottomActionBar } from "../src/admin/components/admin-bottom-action-bar";
@@ -100,14 +97,6 @@ test("unauthenticated admin App renders the Discord sign-in prompt", () => {
   assert.match(html, /Continue with Discord/);
 });
 
-test("Guild directory waits for automatic workspace selection", () => {
-  assert.equal(shouldEnableGuildDirectory(true, "", true, 0), false);
-  assert.equal(shouldEnableGuildDirectory(true, "", false, 1), false);
-  assert.equal(shouldEnableGuildDirectory(true, "workspace-1", true, 1), true);
-  assert.equal(shouldEnableGuildDirectory(true, "", false, 0), true);
-  assert.equal(shouldEnableGuildDirectory(false, "workspace-1", false, 1), false);
-});
-
 test("checkout-aware sign in explains that the selected plan will continue after Discord", () => {
   const html = renderToString(
     <App
@@ -165,7 +154,7 @@ test("Ops Workshop shell opens a deep-linked feature beside pinned Overview", ()
 test("workspace route identity ignores page-local query state", () => {
   assert.equal(getAdminWorkspaceRouteId("/admin/guild-1", "guild-1"), "overview");
   assert.equal(getAdminWorkspaceRouteId("/admin/guild-1/tickets", "guild-1"), "tickets");
-  assert.equal(getAdminWorkspaceRouteId("/admin/guild-1/steam-link", "guild-1"), "player-link");
+  assert.equal(getAdminWorkspaceRouteId("/admin/guild-1/player-link", "guild-1"), "player-link");
   assert.equal(getAdminWorkspaceRouteId("/admin/profile", "guild-1"), "profile");
 });
 
@@ -1016,7 +1005,6 @@ test("Troubleshooting page renders diagnostics from raw loader data", () => {
       marketplace: [],
       lfg: [],
       "player-count": [],
-      "steam-link": [],
       "evidence-vault": [],
       "mention-protection": [],
     },
@@ -1174,80 +1162,6 @@ test("timed role DM preview renders supported placeholders", () => {
     renderTimedRoleDmPreview("", { duration: "1h", roleName: "Member" }),
     "No assignment DM will be sent.",
   );
-});
-
-test("getDashboardPageDataPolicy scopes loads to the active page", () => {
-  const helper = (AdminAppModule as Record<string, unknown>).getDashboardPageDataPolicy;
-
-  assert.equal(typeof helper, "function");
-  const getDashboardPageDataPolicy = helper as (path: string) => {
-    loadOverview: boolean;
-    loadGuildDirectory: boolean;
-    monitorGateway: boolean;
-    refreshOverviewAfterGatewayStart: boolean;
-  };
-
-  assert.deepEqual(getDashboardPageDataPolicy("/admin"), {
-    loadOverview: true,
-    loadGuildDirectory: true,
-    monitorGateway: true,
-    refreshOverviewAfterGatewayStart: true,
-  });
-  assert.deepEqual(getDashboardPageDataPolicy("/admin/guild-1/blocklist"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-  assert.deepEqual(getDashboardPageDataPolicy("/admin/guild-1/timed-roles"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-  assert.deepEqual(getDashboardPageDataPolicy("/admin/guild-1/tickets"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-  assert.deepEqual(getDashboardPageDataPolicy("/admin/guild-1/troubleshooting"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-  assert.deepEqual(getDashboardPageDataPolicy("/admin/guild-1/webhooks"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-});
-
-test("getEffectiveDashboardPageDataPolicy keeps customer guild directory available on overview", () => {
-  const helper = (AdminAppModule as Record<string, unknown>).getEffectiveDashboardPageDataPolicy;
-
-  assert.equal(typeof helper, "function");
-  const getEffectiveDashboardPageDataPolicy = helper as (path: string) => {
-    loadOverview: boolean;
-    loadGuildDirectory: boolean;
-    monitorGateway: boolean;
-    refreshOverviewAfterGatewayStart: boolean;
-  };
-
-  assert.deepEqual(getEffectiveDashboardPageDataPolicy("/admin"), {
-    loadOverview: true,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-  assert.deepEqual(getEffectiveDashboardPageDataPolicy("/admin/guild-1/tickets"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
 });
 
 test("getSelectedGuildIdFromPath reads the guild from the dashboard path", () => {
@@ -1476,14 +1390,9 @@ test("describeError collapses HTML worker failures into a friendly dashboard mes
 test("readJsonOrThrow shows friendly Discord rate limit JSON errors", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        code: "discord_rate_limited",
-        error: "Discord is rate limiting server discovery. Try again shortly.",
-        retryAfterMs: 1000,
-      }),
-      { status: 429, headers: { "content-type": "application/json" } },
-    );
+    adminErrorResponse("Discord is rate limiting server discovery. Try again shortly.", 429, {
+      code: "discord_rate_limited",
+    });
 
   try {
     await assert.rejects(readJsonOrThrow("/admin/api/guilds"), {
@@ -1725,8 +1634,6 @@ test("ticket panel editor renders types and questions on the Types tab", () => {
             supportRoleId: "role-1",
             allowedCreatorRoleIds: ["role-2"],
             channelNamePrefix: "appeal",
-            autoReplyEnabled: true,
-            autoReplyMessage: null,
             responseRules: [
               {
                 id: "rule-1",
@@ -1734,7 +1641,8 @@ test("ticket panel editor renders types and questions on the Types tab", () => {
                 message: "Please run /steamlink.",
               },
             ],
-            anonymousEnabled: false,
+            anonymousSupportEnabled: false,
+            staffDiscussionThreadEnabled: false,
             limitExclusion: true,
             mentionSupportRole: true,
             questions: [
@@ -1815,9 +1723,8 @@ function renderTicketQuestionEditor(
             supportRoleId: "role-1",
             channelNamePrefix: "support",
             questions: [question],
-            autoReplyEnabled: false,
-            autoReplyMessage: null,
             limitExclusion: false,
+            responseRules: [],
           },
         ],
       }}
@@ -1936,9 +1843,8 @@ function createTicketPanelWithQuestion(question: TicketQuestion): TicketPanelCon
         supportRoleId: "role-1",
         channelNamePrefix: "support",
         questions: [question],
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
         limitExclusion: false,
+        responseRules: [],
       },
     ],
   };
@@ -2057,8 +1963,6 @@ test("ticket panel editor warns when a response-rule role no longer exists", () 
             buttonStyle: "primary",
             supportRoleId: "role-1",
             channelNamePrefix: "appeal",
-            autoReplyEnabled: false,
-            autoReplyMessage: null,
             responseRules: [
               {
                 id: "rule-1",
@@ -2066,7 +1970,8 @@ test("ticket panel editor warns when a response-rule role no longer exists", () 
                 message: "Please verify your account.",
               },
             ],
-            anonymousEnabled: false,
+            anonymousSupportEnabled: false,
+            staffDiscussionThreadEnabled: false,
             limitExclusion: false,
             questions: [],
           },
@@ -2125,10 +2030,9 @@ test("ticket panel editor hides rule and condition add buttons at response-rule 
             buttonStyle: "primary",
             supportRoleId: "role-1",
             channelNamePrefix: "appeal",
-            autoReplyEnabled: false,
-            autoReplyMessage: null,
             responseRules: cappedRules,
-            anonymousEnabled: false,
+            anonymousSupportEnabled: false,
+            staffDiscussionThreadEnabled: false,
             limitExclusion: false,
             questions: [],
           },
@@ -2159,12 +2063,8 @@ function createTestAdminRouterContext(
     defaultRedirectTarget: null,
     guildDirectory: null,
     guildLookupError: null,
-    workspaces: [],
-    workspacesLoading: false,
-    workspaceLookupError: null,
     guildResourcesRefreshVersion: 0,
     onSelectedGuildChange: () => {},
-    onSelectedWorkspaceChange: () => {},
     refreshGuildDirectory: async () => {},
     onRefresh: async () => {},
     playstationLinkEnabled: true,

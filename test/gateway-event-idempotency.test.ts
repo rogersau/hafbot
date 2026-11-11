@@ -1,3 +1,4 @@
+import { gatewayEnvelope } from "./support/gateway-envelope";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -7,10 +8,10 @@ import test from "node:test";
 
 import {
   createGatewayEventOperationRunner,
-  createGatewayEventOperationStore,
   deriveGatewayEventKey,
   deriveGatewayOperationNonce,
 } from "../src/runtime/gateway-event-idempotency";
+import { createGatewayEventOperationStore } from "./support/sqlite-gateway-operation-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("Gateway Event operations allow one concurrent lease and suppress completed duplicates", async () => {
@@ -149,30 +150,36 @@ test("Gateway Event cleanup removes old reaction results before their completed 
 });
 
 test("Gateway Event fallback keys are deterministic and identity-scoped", () => {
-  const first = deriveGatewayEventKey({
-    type: "MESSAGE_CREATE",
-    data: { id: "message-1", guild_id: "guild-1" },
-    botIdentityId: "standard",
-  });
+  const first = deriveGatewayEventKey(
+    gatewayEnvelope({
+      type: "MESSAGE_CREATE",
+      data: { id: "message-1", guild_id: "guild-1" },
+      botIdentityId: "standard",
+    }),
+  );
   assert.equal(
     first,
-    deriveGatewayEventKey({
-      botIdentityId: "standard",
-      data: { guild_id: "guild-1", id: "message-1" },
-      type: "MESSAGE_CREATE",
-    }),
+    deriveGatewayEventKey(
+      gatewayEnvelope({
+        botIdentityId: "standard",
+        data: { guild_id: "guild-1", id: "message-1" },
+        type: "MESSAGE_CREATE",
+      }),
+    ),
   );
   assert.notEqual(
     first,
-    deriveGatewayEventKey({
-      type: "MESSAGE_CREATE",
-      data: { id: "message-1", guild_id: "guild-1" },
-      botIdentityId: "white-label:guild-1",
-    }),
+    deriveGatewayEventKey(
+      gatewayEnvelope({
+        type: "MESSAGE_CREATE",
+        data: { id: "message-1", guild_id: "guild-1" },
+        botIdentityId: "white-label:guild-1",
+      }),
+    ),
   );
   assert.equal(
     deriveGatewayEventKey({}),
-    "legacy:standard:unknown:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "v2:standard:unknown:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
   );
 });
 

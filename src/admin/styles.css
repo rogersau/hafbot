@@ -304,7 +304,7 @@
   background: var(--ops-bg);
 }
 
-/* Shared production treatment for legacy page-local panels. */
+/* Shared production treatment for page-local panels. */
 .admin-operations-shell .admin-shell-main .rounded-lg,
 .admin-operations-shell .admin-shell-main .rounded-xl,
 .admin-operations-shell .admin-shell-main .rounded-2xl,

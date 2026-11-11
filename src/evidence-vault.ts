@@ -218,7 +218,6 @@ export class EvidenceVaultService {
           contentType,
           sizeBytes: attachment.size ?? data.byteLength,
           r2Key,
-          url: buildEvidenceVaultImagePath(recordId, imageId),
         });
       }
 

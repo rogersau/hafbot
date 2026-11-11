@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
-import { CloudflareBillingSyncStore } from "../src/runtime/billing/cloudflare-billing-sync-store";
+import { PostgresBillingSyncStore } from "../src/runtime/postgres/postgres-billing-sync-store";
 import {
   createBillingOwnerSync,
   reconcileAllBillingOwners,
@@ -13,17 +12,13 @@ import type {
   StripeSubscriptionState,
 } from "../src/runtime/billing/types";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 const NOW = 1_800_000_000_000;
 
 test(
-  "PostgreSQL Billing owner synchronization commits nullable Founder and quarantine state",
+  "PostgreSQL Billing owner synchronization commits nullable subscription and quarantine state",
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async (t) => {
     assert.ok(postgresUrl);
@@ -38,24 +33,19 @@ test(
     });
     try {
       await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-      await applyPostgresMigrations(
-        database,
-        await readPostgresMigrations(resolve("migrations/postgres")),
-      );
-      const d1 = createPostgresD1CompatibilityDatabase(database);
-      const store = new CloudflareBillingSyncStore(d1);
-      const catalog = new Map<string, BillingCatalogEntry>(
-        (["standard", "founder"] as const).map((cohort) => [
-          `price_${cohort}`,
+      await initializePostgresSchema(database);
+      const store = new PostgresBillingSyncStore(database);
+      const catalog = new Map<string, BillingCatalogEntry>([
+        [
+          "price_standard",
           {
-            priceId: `price_${cohort}`,
+            priceId: "price_standard",
             productId: "prod_1",
             plan: "premium",
             frequency: "monthly",
-            cohort,
           },
-        ]),
-      );
+        ],
+      ]);
       let nowMs = NOW;
       let nextId = 0;
       const subscriptions = new Map<string, StripeSubscriptionState[]>();
@@ -78,12 +68,12 @@ test(
       });
       const assertCompleted = async (ownerId: string, generation: number) => {
         assert.deepEqual(
-          await d1
-            .prepare(
-              "SELECT generation, completed_generation, lease_until_ms, updated_at_ms FROM billing_owner_sync_state WHERE owner_id = ?",
+          await database
+            .query(
+              "SELECT generation, completed_generation, lease_until_ms, updated_at_ms FROM billing_owner_sync_state WHERE owner_id = $1",
+              [ownerId],
             )
-            .bind(ownerId)
-            .first(),
+            .then((rows) => rows[0] ?? null),
           {
             generation,
             completed_generation: generation,
@@ -95,107 +85,78 @@ test(
       };
       const assertOperations = async (ownerId: string, expected: number) => {
         for (const sql of [
-          "SELECT COUNT(*) AS count FROM billing_operations_ledger WHERE owner_id = ?",
-          "SELECT COUNT(*) AS count FROM billing_operation_delivery d JOIN billing_operations_ledger l ON l.id = d.operation_id WHERE l.owner_id = ?",
-          "SELECT COUNT(*) AS count FROM billing_delivery_outbox d JOIN billing_operations_ledger l ON l.id = d.operation_id WHERE l.owner_id = ?",
+          "SELECT COUNT(*) AS count FROM billing_operations_ledger WHERE owner_id = $1",
+          "SELECT COUNT(*) AS count FROM billing_operation_delivery d JOIN billing_operations_ledger l ON l.id = d.operation_id WHERE l.owner_id = $1",
+          "SELECT COUNT(*) AS count FROM billing_delivery_outbox d JOIN billing_operations_ledger l ON l.id = d.operation_id WHERE l.owner_id = $1",
         ]) {
-          assert.equal(await d1.prepare(sql).bind(ownerId).first("count"), expected);
+          assert.equal(
+            await database.query(sql, [ownerId]).then((rows) => rows[0]?.["count"] ?? null),
+            expected,
+          );
         }
       };
 
-      await t.test(
-        "scheduled refresh preserves NULLs, awards Founders once and completes every lease",
-        async () => {
-          const fixtures = [
-            { ownerId: "missing", subscription: null, founder: false },
-            { ownerId: "standard", subscription: subscription("standard"), founder: false },
-            {
-              ownerId: "founder-unpaid",
-              subscription: subscription("founder-unpaid", { priceId: "price_founder" }),
-              founder: false,
-            },
-            {
-              ownerId: "founder-paid",
-              subscription: subscription("founder-paid", {
-                priceId: "price_founder",
-                livemode: true,
-                latestInvoicePaid: true,
-                latestInvoiceAmountPaid: 100,
-                latestInvoiceBillingReason: "subscription_create",
-              }),
-              founder: true,
-            },
-          ];
-          for (const fixture of fixtures) {
-            const customerId = `cus_${fixture.ownerId}`;
-            subscriptions.set(customerId, fixture.subscription ? [fixture.subscription] : []);
-            await syncOwner({ ownerId: fixture.ownerId, customerId, source: "operator" });
-            await assertCompleted(fixture.ownerId, 1);
-          }
+      await t.test("scheduled refresh preserves NULLs and completes every lease", async () => {
+        const fixtures = [
+          { ownerId: "missing", subscription: null },
+          { ownerId: "standard", subscription: subscription("standard") },
+        ];
+        for (const fixture of fixtures) {
+          const customerId = `cus_${fixture.ownerId}`;
+          subscriptions.set(customerId, fixture.subscription ? [fixture.subscription] : []);
+          await syncOwner({ ownerId: fixture.ownerId, customerId, source: "operator" });
+          await assertCompleted(fixture.ownerId, 1);
+        }
 
-          nowMs += 5 * 60_000;
-          assert.equal(
-            await reconcileAllBillingOwners({
-              listOwnerIds: () => store.listBoundOwnerIds(),
-              syncOwner,
-              now: () => nowMs,
-            }),
-            fixtures.length,
-          );
-          for (const fixture of fixtures) {
-            const projection = await store.readProjection(fixture.ownerId);
-            assert.ok(projection);
-            assert.equal(projection.subscriptionId, fixture.subscription?.id ?? null);
-            assert.equal(projection.founderAwardedAtMs, fixture.founder ? NOW : null);
-            assert.equal(projection.quarantineReason, null);
-            assert.equal(projection.cancelledAtMs, null);
-            assert.equal(projection.scheduleId, null);
-            assert.equal(projection.plan, fixture.subscription ? "premium" : "free");
-            await assertCompleted(fixture.ownerId, 2);
-            await assertOperations(fixture.ownerId, fixture.subscription ? 1 : 0);
-            // Both an expired generation and a repeated completed generation remain fenced.
-            for (const generation of [1, 2]) {
-              assert.equal(
-                await store.commitOwnerSync({
+        nowMs += 5 * 60_000;
+        assert.equal(
+          await reconcileAllBillingOwners({
+            listOwnerIds: () => store.listBoundOwnerIds(),
+            syncOwner,
+            now: () => nowMs,
+          }),
+          fixtures.length,
+        );
+        for (const fixture of fixtures) {
+          const projection = await store.readProjection(fixture.ownerId);
+          assert.ok(projection);
+          assert.equal(projection.subscriptionId, fixture.subscription?.id ?? null);
+          assert.equal(projection.quarantineReason, null);
+          assert.equal(projection.cancelledAtMs, null);
+          assert.equal(projection.scheduleId, null);
+          assert.equal(projection.plan, fixture.subscription ? "premium" : "free");
+          await assertCompleted(fixture.ownerId, 2);
+          await assertOperations(fixture.ownerId, fixture.subscription ? 1 : 0);
+          // Both an expired generation and a repeated completed generation remain fenced.
+          for (const generation of [1, 2]) {
+            assert.equal(
+              await store.commitOwnerSync({
+                ownerId: fixture.ownerId,
+                generation,
+                projection: { ...projection, observedAtMs: nowMs + 1, quarantineReason: "stale" },
+                operation: {
+                  id: `stale_${fixture.ownerId}_${generation}`,
                   ownerId: fixture.ownerId,
-                  generation,
-                  projection: { ...projection, observedAtMs: nowMs + 1, quarantineReason: "stale" },
-                  operation: {
-                    id: `stale_${fixture.ownerId}_${generation}`,
-                    ownerId: fixture.ownerId,
-                    kind: "subscription_quarantined",
-                    source: "scheduled",
-                    correlationId: null,
-                    summaryJson: "{}",
-                    createdAtMs: nowMs + 1,
-                  },
-                }),
-                generation === 2,
-              );
-              assert.deepEqual(await store.readProjection(fixture.ownerId), projection);
-              await assertOperations(fixture.ownerId, fixture.subscription ? 1 : 0);
-            }
+                  kind: "subscription_quarantined",
+                  source: "scheduled",
+                  correlationId: null,
+                  summaryJson: "{}",
+                  createdAtMs: nowMs + 1,
+                },
+              }),
+              generation === 2,
+            );
+            assert.deepEqual(await store.readProjection(fixture.ownerId), projection);
+            await assertOperations(fixture.ownerId, fixture.subscription ? 1 : 0);
           }
-          assert.equal(await store.countFounderPlaces(), 1);
-          assert.deepEqual(
-            await d1
-              .prepare("SELECT * FROM billing_founder_places")
-              .all()
-              .then((result) => result.results),
-            [
-              {
-                stripe_subscription_id: "sub_founder-paid",
-                owner_id: "founder-paid",
-                awarded_at_ms: NOW,
-              },
-            ],
-          );
-          assert.equal(
-            await d1.prepare("SELECT COUNT(*) AS count FROM billing_support_cases").first("count"),
-            0,
-          );
-        },
-      );
+        }
+        assert.equal(
+          await database
+            .query("SELECT COUNT(*) AS count FROM billing_support_cases", [])
+            .then((rows) => rows[0]?.["count"] ?? null),
+          0,
+        );
+      });
 
       await t.test(
         "quarantine opens, resolves and reopens without duplicate lifecycle delivery",
@@ -233,14 +194,13 @@ test(
               const projection = await store.readProjection(ownerId);
               assert.equal(projection?.quarantineReason, reason);
               assert.equal(projection?.status, reason ? "quarantined" : "active");
-              assert.equal(projection?.founderAwardedAtMs, null);
               assert.deepEqual(
-                await d1
-                  .prepare(
-                    "SELECT status, resolved_at_ms, updated_at_ms FROM billing_support_cases WHERE id = ?",
+                await database
+                  .query(
+                    "SELECT status, resolved_at_ms, updated_at_ms FROM billing_support_cases WHERE id = $1",
+                    [`quarantine:${ownerId}`],
                   )
-                  .bind(`quarantine:${ownerId}`)
-                  .first(),
+                  .then((rows) => rows[0] ?? null),
                 {
                   status: reason ? "open" : "resolved",
                   resolved_at_ms: reason ? null : nowMs,
@@ -252,63 +212,6 @@ test(
               nowMs = changedAtMs + 1;
             }
           }
-          assert.equal(await store.countFounderPlaces(), 1);
-        },
-      );
-
-      await t.test(
-        "permanent standard pricing preserves existing Founder records without awarding new places",
-        async () => {
-          const currentCatalog = new Map(catalog);
-          currentCatalog.set("price_founder", {
-            ...catalog.get("price_founder")!,
-            cohort: "standard",
-          });
-          currentCatalog.set("price_standard", { ...catalog.get("price_standard")!, legacy: true });
-          const currentSync = createBillingOwnerSync({
-            store,
-            catalog: currentCatalog,
-            now: () => nowMs,
-            createId: () => `op_${++nextId}`,
-            stripe: {
-              async readOwnerState(customerId) {
-                const values = subscriptions.get(customerId);
-                assert.ok(values);
-                return {
-                  customer: { id: customerId, email: null },
-                  subscriptions: values,
-                  observedAtMs: nowMs,
-                };
-              },
-            },
-          });
-          nowMs++;
-          const preserved = await currentSync({ ownerId: "founder-paid", source: "scheduled" });
-          assert.equal(preserved.status, "active");
-          assert.equal(preserved.plan, "premium");
-          assert.equal(preserved.quarantineReason, null);
-          assert.equal(preserved.pricingCohort, "founder");
-          assert.equal(preserved.founderAwardedAtMs, NOW);
-          const ownerId = "permanent-standard";
-          subscriptions.set(`cus_${ownerId}`, [
-            subscription(ownerId, {
-              priceId: "price_founder",
-              livemode: true,
-              latestInvoicePaid: true,
-              latestInvoiceAmountPaid: 499,
-              latestInvoiceBillingReason: "subscription_create",
-            }),
-          ]);
-          const created = await currentSync({
-            ownerId,
-            customerId: `cus_${ownerId}`,
-            source: "checkout",
-          });
-          assert.equal(created.status, "active");
-          assert.equal(created.plan, "premium");
-          assert.equal(created.pricingCohort, "standard");
-          assert.equal(created.founderAwardedAtMs, null);
-          assert.equal(await store.countFounderPlaces(), 1);
         },
       );
     } finally {

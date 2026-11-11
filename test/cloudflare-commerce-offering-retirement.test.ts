@@ -2,22 +2,8 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { CloudflareCommerceOfferingStore } from "../src/runtime/commerce/cloudflare-offering-store";
+import { SqliteCommerceOfferingStore } from "./support/sqlite/runtime/commerce/sqlite-offering-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
-
-const OFFERING = {
-  id: "off-1",
-  connectedAccountId: "acct-1",
-  guildId: "guild-1",
-  discordRoleId: "role-1",
-  name: "Gold",
-  description: null,
-  purchaseType: "subscription" as const,
-  status: "active" as const,
-  archivedAtMs: null,
-  createdAtMs: 1,
-  updatedAtMs: 1,
-};
 
 test("offering retirement is atomic, deterministic, and preserves the first parent action", async () => {
   const database = await createTestDatabase();
@@ -25,22 +11,19 @@ test("offering retirement is atomic, deterministic, and preserves the first pare
     database.execRaw(`
       INSERT INTO commerce_connected_accounts(id,guild_id,stripe_account_id,status,charges_enabled,payouts_enabled,details_submitted,created_at_ms,updated_at_ms)
         VALUES ('acct-1','guild-1','acct-1','active',1,1,1,1,1);
-      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms)
-        VALUES ('off-1','acct-1','guild-1','role-1','Gold','subscription','active',1,1);
-      INSERT INTO commerce_offering_lifecycles(offering_id,connected_account_id,guild_id,state,included_benefits_json,support_contact,role_manageable,created_at_ms,updated_at_ms)
-        VALUES ('off-1','acct-1','guild-1','published','["Access"]','seller@example.test',1,1,1);
+      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,terms_version,included_benefits_json,support_contact,role_manageable,published_at_ms,created_at_ms,updated_at_ms)
+        VALUES ('off-1','acct-1','guild-1','role-1','Gold','subscription','published','v1','["Access"]','seller@example.test',1,1,1,1);
       INSERT INTO commerce_subscriptions(id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,cancel_at_period_end,current_period_end_ms,created_at_ms,updated_at_ms)
         VALUES ('sub-1','acct-1','customer-1','buyer-1','off-1','price-1','sub_stripe_1','active',0,2000,1,1);
       INSERT INTO commerce_subscriptions(id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,cancel_at_period_end,current_period_end_ms,created_at_ms,updated_at_ms)
         VALUES ('sub-ended','acct-1','customer-2','buyer-2','off-1','price-1','sub_stripe_ended','ended',0,3000,1,1);
     `);
-    const store = new CloudflareCommerceOfferingStore(database.d1);
-    const lifecycle = await store.readLifecycle(OFFERING.id);
-    assert.ok(lifecycle);
+    const store = new SqliteCommerceOfferingStore(database.d1);
+    const offering = await store.readOffering("off-1");
+    assert.ok(offering);
 
     await store.beginRetirement({
-      offering: OFFERING,
-      lifecycle,
+      offering,
       actorUserId: "seller-1",
       reasonCode: "seller_requested",
       actionId: "retire-1",
@@ -48,8 +31,7 @@ test("offering retirement is atomic, deterministic, and preserves the first pare
       nowMs: 1,
     });
     await store.beginRetirement({
-      offering: OFFERING,
-      lifecycle: (await store.readLifecycle(OFFERING.id))!,
+      offering: (await store.readOffering("off-1"))!,
       actorUserId: "seller-2",
       reasonCode: "different_reason",
       actionId: "retire-2",
@@ -96,8 +78,7 @@ test("offering retirement is atomic, deterministic, and preserves the first pare
         guild_id: "guild-1",
       },
     );
-    assert.equal((await store.readOffering(OFFERING.id))?.status, "draft");
-    assert.equal((await store.readLifecycle(OFFERING.id))?.state, "retiring");
+    assert.equal((await store.readOffering("off-1"))?.state, "retiring");
 
     database.execRaw(
       "UPDATE commerce_financial_provider_actions SET status='failed' WHERE workflow_id='off-1'; UPDATE commerce_subscriptions SET cancel_at_period_end=1 WHERE id='sub-1'",
@@ -120,25 +101,22 @@ test("offering archive requires complete retirement and no nonterminal subscript
   const database = await createTestDatabase();
   try {
     database.execRaw(`
-      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms)
-        VALUES ('off-1','acct-1','guild-1','role-1','Gold','subscription','draft',1,1);
-      INSERT INTO commerce_offering_lifecycles(offering_id,connected_account_id,guild_id,state,included_benefits_json,support_contact,role_manageable,retire_at_ms,created_at_ms,updated_at_ms)
-        VALUES ('off-1','acct-1','guild-1','retiring','["Access"]','seller@example.test',1,2,1,1);
+      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,included_benefits_json,support_contact,role_manageable,retire_at_ms,created_at_ms,updated_at_ms)
+        VALUES ('off-1','acct-1','guild-1','role-1','Gold','subscription','retiring','["Access"]','seller@example.test',1,2,1,1);
       INSERT INTO commerce_offering_retirements(id,connected_account_id,guild_id,offering_id,requested_by_user_id,reason_code,status,active_subscription_count,scheduled_cancellation_count,failed_cancellation_count,created_at_ms,updated_at_ms)
         VALUES ('retire-1','acct-1','guild-1','off-1','seller-1','seller_requested','complete',1,0,0,1,1);
       INSERT INTO commerce_subscriptions(id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,cancel_at_period_end,current_period_end_ms,created_at_ms,updated_at_ms)
         VALUES ('sub-1','acct-1','customer-1','buyer-1','off-1','price-1','sub_stripe_1','active',1,2000,1,1);
     `);
-    const store = new CloudflareCommerceOfferingStore(database.d1);
+    const store = new SqliteCommerceOfferingStore(database.d1);
     assert.equal(await store.archiveOffering("off-1", 2), false);
-    assert.equal((await store.readLifecycle("off-1"))?.state, "retiring");
+    assert.equal((await store.readOffering("off-1"))?.state, "retiring");
 
     database.execRaw(
       "UPDATE commerce_subscriptions SET status='canceled', ended_at_ms=2 WHERE id='sub-1'",
     );
     assert.equal(await store.archiveOffering("off-1", 3), true);
-    assert.equal((await store.readLifecycle("off-1"))?.state, "archived");
-    assert.equal((await store.readOffering("off-1"))?.status, "archived");
+    assert.equal((await store.readOffering("off-1"))?.state, "archived");
   } finally {
     database.close();
   }

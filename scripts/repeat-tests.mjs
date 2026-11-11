@@ -13,7 +13,7 @@ for (let iteration = 1; iteration <= count; iteration += 1) {
   const order = shuffle([...files], `${seed}:${iteration}`).map(toCompiledPath);
   const result = spawnSync(
     process.execPath,
-    ["--require", "./test/support/cloudflare-workers-shim.cjs", "--test", ...order],
+    ["--require", "./test/support/dom-globals.cjs", "--test", ...order],
     { stdio: "inherit" },
   );
   if (result.status !== 0) {
