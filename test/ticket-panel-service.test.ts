@@ -28,6 +28,7 @@ import { DiscordApiError } from "../src/discord/client";
 import type { ProductAnalyticsEvent, ProductAnalyticsReporter } from "../src/product-analytics";
 
 const ticketFixtures = new WeakMap<TicketPanelConfig[], ProductionRuntimeStoresFixture>();
+const ticketStoreFixtures = new WeakMap<TicketStore, ProductionRuntimeStoresFixture>();
 
 test("Ticket Panel builds the production Discord payload with stable custom IDs", () => {
   const message = buildTicketPanelMessage(createPanel());
@@ -991,13 +992,7 @@ test("Ticket Lifecycle owns effective configuration and creator eligibility", as
     { id: "paid-rule", conditions: [], message: "Premium automation" },
   ];
   const tickets = createStore([panel]);
-  const blocklist = {
-    readConfig: async () => ({ guilds: {}, botUserId: "bot" }),
-    readGuildConfig: async () => ({ guilds: {}, botUserId: "bot" }),
-    applyGuildEmojiMutation: async () => ({ guilds: {}, botUserId: "bot" }),
-    readGuildNotificationChannel: async () => null,
-    upsertGuildNotificationChannel: async () => {},
-  };
+  const blocklist = blocklistFor(tickets);
   const premium = createTicketLifecycle({
     tickets,
     blocklist,
@@ -1486,13 +1481,7 @@ test("Ticket Lifecycle resumes template completion after Discord delivery", asyn
   };
   const lifecycle = createTicketLifecycle({
     tickets: store,
-    blocklist: {
-      readConfig: async () => ({ guilds: {}, botUserId: "bot" }),
-      readGuildConfig: async () => ({ guilds: {}, botUserId: "bot" }),
-      applyGuildEmojiMutation: async () => ({ guilds: {}, botUserId: "bot" }),
-      readGuildNotificationChannel: async () => null,
-      upsertGuildNotificationChannel: async () => {},
-    },
+    blocklist: blocklistFor(store),
     entitlements: premiumEntitlements(),
     messageTemplates: {
       readById: async () => template,
@@ -1534,15 +1523,10 @@ test("Ticket Lifecycle resumes template completion after Discord delivery", asyn
 
 test("Ticket Lifecycle durably defers unresolved recovery", async () => {
   const queued: unknown[] = [];
+  const tickets = createStore([createPanel()]);
   const lifecycle = createTicketLifecycle({
-    tickets: createStore([createPanel()]),
-    blocklist: {
-      readConfig: async () => ({ guilds: {}, botUserId: "bot" }),
-      readGuildConfig: async () => ({ guilds: {}, botUserId: "bot" }),
-      applyGuildEmojiMutation: async () => ({ guilds: {}, botUserId: "bot" }),
-      readGuildNotificationChannel: async () => null,
-      upsertGuildNotificationChannel: async () => {},
-    },
+    tickets,
+    blocklist: blocklistFor(tickets),
     entitlements: premiumEntitlements(),
     recoveryQueue: {
       async send(body) {
@@ -2116,10 +2100,18 @@ function createStore(panels: TicketPanelConfig[]): TicketStore {
   const fixture = createProductionRuntimeStores();
   ticketFixtures.set(panels, fixture);
   const rawStore = fixture.stores.tickets;
-  return afterStoreSeed(
+  const seeded = afterStoreSeed(
     rawStore,
     Promise.all(panels.map((panel) => rawStore.upsertTicketPanelConfig(panel))),
   );
+  ticketStoreFixtures.set(seeded, fixture);
+  return seeded;
+}
+
+function blocklistFor(tickets: TicketStore) {
+  const fixture = ticketStoreFixtures.get(tickets);
+  assert.ok(fixture, "Use the current Ticket store fixture.");
+  return fixture.stores.blocklist;
 }
 
 function createTestConfigurationRevisionStore(panels: TicketPanelConfig[]) {

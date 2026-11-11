@@ -72,10 +72,7 @@ import { ClanService } from "../services/clan-service";
 import { ClanFeatureSetupService } from "../services/clan-feature-setup";
 import { SuggestionService } from "../services/suggestion-service";
 import { createDiscordSuggestionProjection } from "../discord/suggestions";
-import {
-  createMemoryOperationalIncidentStore,
-  OperationalIncidentService,
-} from "../operations/incidents";
+import { OperationalIncidentService } from "../operations/incidents";
 import { FeatureSetupRunner } from "../services/feature-setup-runner";
 import {
   createClanCategory,
@@ -116,7 +113,6 @@ import {
   getCoalescedGuildTicketResources,
 } from "./admin-discord-cache";
 import type { WhiteLabelBotStore } from "./contracts";
-import type { SuggestionStore } from "./contracts";
 import { GuildServicePolicy } from "./guild-service-policy";
 import {
   DISCORD_PERMISSION_FLAGS,
@@ -137,6 +133,7 @@ import type { ComponentIdSigner } from "../security/component-id-signer";
 import type { ProductAnalyticsReporter } from "../product-analytics";
 import { signSensitiveMessageComponentIds } from "../security/sensitive-component-ids";
 import { ServerLevelProcessor } from "../server-levels/processor";
+import { logServerLevelTelemetry } from "../server-levels/telemetry";
 import type { reportOperationalEvent } from "../observability/operational-reporter";
 
 export interface ServiceFactory {
@@ -221,6 +218,7 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
         isCurrentGuildMember: async (guildId, userId) =>
           (await fetchGuildMember(guildId, userId, options.discordBotToken)) !== null,
         isKillSwitchEnabled: () => options.serverLevelsEnabled === false,
+        emitTelemetry: logServerLevelTelemetry,
       })
     : null;
   const evidenceViewCooldownCache = createJsonCache<{ expiresAtMs: number }>(options.discordCache);
@@ -411,10 +409,10 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
       : undefined;
   let suggestionService: SuggestionService;
   const operationalIncidentService = new OperationalIncidentService(
-    options.stores.operationalIncidents ?? createMemoryOperationalIncidentStore(),
+    options.stores.operationalIncidents,
   );
   suggestionService = new SuggestionService(
-    options.stores.suggestions ?? createDisabledSuggestionStore(),
+    options.stores.suggestions,
     createDiscordSuggestionProjection({
       token: options.discordBotToken,
       componentIdSigner: options.componentIdSigner,
@@ -835,52 +833,6 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
         }
       : {}),
   };
-}
-
-function createDisabledSuggestionStore(): SuggestionStore {
-  const unavailable = async () => {
-    throw new Error("Suggestions store is unavailable.");
-  };
-  return new Proxy({} as SuggestionStore, {
-    get(_target, property) {
-      if (
-        property === "readConfig" ||
-        property === "readSuggestion" ||
-        property === "readSuggestionByThread" ||
-        property === "readLatestSuggestionByAuthor" ||
-        property === "readConsideredReplyById" ||
-        property === "readConsideredReply" ||
-        property === "readConsideredReplyByMessage" ||
-        property === "readPendingSubmission"
-      )
-        return async () => null;
-      if (
-        property === "listDigestConfigs" ||
-        property === "listActiveSuggestions" ||
-        property === "listSuggestions" ||
-        property === "listRevisions" ||
-        property === "listStatusEvents" ||
-        property === "listConsideredReplies" ||
-        property === "listVotes" ||
-        property === "listReplyFlagMemberIds"
-      )
-        return async () => [];
-      if (
-        property === "countActiveSuggestionsByAuthor" ||
-        property === "deactivateVotesForMember" ||
-        property === "countReplyFlags"
-      )
-        return async () => 0;
-      if (
-        property === "updateSuggestion" ||
-        property === "updateConsideredReply" ||
-        property === "reserveDigestRun"
-      )
-        return async () => false;
-      if (property === "recountVotes") return async () => ({ support: 0, oppose: 0 });
-      return unavailable;
-    },
-  });
 }
 
 const BAN_CASE_NEW_TAG_NAME = "NEW";

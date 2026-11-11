@@ -65,6 +65,7 @@ export function composeApplicationServices(
     steamBanLookupQueue: input.steamBanLookupQueue,
     webhookCredentialService: input.webhookCredentialService,
     evidenceVaultBlobs: input.evidenceVaultBlobs,
+    evidenceMediaCapability: input.evidenceMediaCapability,
     publicManagedMedia: input.publicManagedMedia,
     publicUrl: input.publicUrl,
     turnstileSiteKey: input.turnstileSiteKey,

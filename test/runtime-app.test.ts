@@ -18,7 +18,8 @@ import { createCustomerAuth } from "./support/sqlite/runtime/auth/auth";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { createSqliteTicketTranscriptCapabilityStore } from "./support/sqlite/runtime/sqlite-ticket-transcript-capability-store";
 import { purgeExpiredTicketTranscripts } from "../src/runtime/ticket-transcript-retention";
-import type { GatewayController, RuntimeStore } from "../src/runtime/contracts";
+import type { GatewayController } from "../src/runtime/contracts";
+import type { RuntimeStore } from "./support/runtime-store-overrides";
 import {
   buildTicketCloseConfirmCustomId,
   buildTicketCloseCustomId,
