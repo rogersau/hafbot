@@ -31,6 +31,9 @@ there are no active deployments, inherited compatibility requirements or upgrade
   canonical metadata and reject incomplete provider metadata.
 - Current game-access transmission markers require their operation identity; 52 focused tests
   and the test type build pass.
+- Steam authorization uses one current `/auth/steam/start` route, including command and
+  verification link producers, as `9dc7190`; test compilation and 97 current Platform Link and
+  Member Verification checks pass. Callback routes retain their current behavior.
 - Accept only distinct remaining task work adapted onto the architecture checkpoint. Verify
   equivalent behavior before marking an overlapping task covered.
 
@@ -53,7 +56,7 @@ still need explicit reconciliation. None is assumed covered merely because nativ
 | Slot                 | Task ID                                                                                                                           | Base      | Owned paths                                                        |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------ |
 | Architecture 1       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A4122985e-4394-4ede-96df-0ba903391392` | `915455f` | Mention Protection native store; new moderation invariant test     |
-| Architecture 2       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A766003cd-614e-4828-ab87-21da714ee538` | `915455f` | S3 adapter; retired R2 metadata reader; object-store tests         |
+| Architecture 2       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A82952271-086d-4b90-98d1-429e285e12df` | `9dc7190` | Residual C13 Admin route/page/diagnostic aliases from `0f656bc`    |
 | Task coordinator 1–3 | Reserved to task coordinator                                                                                                      | `915455f` | C03/C10/C11 adaptations with disjoint paths agreed in coordination |
 
 Mention Protection is running. The R2 metadata task is integrated; its slot will reconcile the
@@ -70,6 +73,16 @@ Task-coordinator implementation IDs on base `915455f`:
 C10 owns the interaction-route fixture; C11 owns the runtime-app fixture and the narrowly granted
 native/SQLite timed-rule whole-set replacement changes. C03 owns a new isolated validation test.
 The C13 UI reconciliation must remain disjoint from those files and all native/schema work.
+
+C23 is queued in the task coordinator's allocation. It may launch only after C11 is terminal
+and integrated into an explicit new architecture base. Its approved exception is the offering
+domain model/service/consumers, offering-only PostgreSQL and test SQLite declarations/baselines,
+and lifecycle SQL/mappings in the six owning Commerce stores. It must consolidate state and
+fields on `commerce_offerings`, retain explicit `repair_previous_state`, remove the lifecycle
+side table and `active` projection, and preserve financial, retirement, ledger and outbox atomicity.
+It must test fresh schema, repair restoration, publication uniqueness/concurrency, checkout gates,
+tenant scope and rollback against real resource-limited PostgreSQL with zero skips. No migrations,
+views or compatibility readers may be added. C06 waits for C13-owned UI paths; C09 stays queued.
 
 ## Checkpoint validation
 
