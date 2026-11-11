@@ -14,10 +14,9 @@ Production contains no Worker entrypoint, Durable Objects, D1 facade or SQL dial
 Process caches use a small cache contract. S3 and Azure object stores are current provider adapters.
 
 Interaction and command handlers now require selected service instances, with behavioral
-regressions proving reuse and no reconstruction. Two composition gaps remain: the HTTP app
-and native jobs still assemble separate feature graphs, and jobs synthesize the former queue
-batch/callback shape. Shared composition and direct native outcomes remain tracked in the
-combined inventory.
+regressions proving reuse and no reconstruction. HTTP and jobs now use direct native payload/outcome delivery without former batch/callback
+settlement. They still assemble separate feature graphs; one selected graph and persistence of
+non-exhausted retry reasons remain tracked in the combined inventory.
 
 SQLite implementations and their current schema fixture live under `test/support` for isolated
 service tests. Production cannot import those fixtures. Architecture tests enforce that boundary,
