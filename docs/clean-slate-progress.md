@@ -66,7 +66,7 @@ limited to one CPU, 256 MB, `shared_buffers=32MB`, `max_connections=20`.
 
 | Reserved allocation  | Assignment                                   | State/base                                                             |
 | -------------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
-| Architecture 1       | R01 shared graph                             | Running on verified `8a0917f`                                          |
+| Architecture 1       | R01 shared graph                             | GLM 5.3 Flash/max fallback running on `751cec8`                        |
 | Architecture 2       | None                                         | Empty; root coordinates native retry reason/schema follow-up after C23 |
 | Task coordinator 1   | C23 offering lifecycle                       | Running restored-access attempt on `d1ff7ad`                           |
 | Task coordinator 2–3 | Required Ticket persistence / one empty slot | Ticket running on verified `8a0917f`                                   |
@@ -79,7 +79,9 @@ Original Ticket task `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0c
 
 Residual Ticket persistence is confirmed open: current adapters implement multi-panel reads/list/delete, scoped open counts, member history and template-reply claims, but contracts/services still allow weaker missing-method paths. A bounded second architecture assignment will require these ports without schema/native/queue work. It excludes C23-owned `guild-overview.ts` and `test/runtime-app.test.ts`; root will update their Ticket-only callsites after integration.
 
-Current R01: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Ab15027f9-41a9-481e-8ffb-64a615df6978`, exact base `8a0917f3ca5636fb88e3f2115eec9db38f9ef7d2`. It owns Node/application composition, required runtime services, shared factory/processor selection and dedicated/shared runtime composition tests. No Ticket domain, Offering/schema, SQL store, Admin contract, queue outcome or Guild summary edits.
+Current R01 GLM fallback: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A336d8da9-27da-4220-a5ee-45211847c1c0`, exact base `751cec87ce08b900735c9d56803da9c2a14ea599` (source equal verified `8a0917f`). It owns Node/application composition, required runtime services, shared factory/processor selection and dedicated/shared runtime composition tests. No Ticket domain, Offering/schema, SQL store, Admin contract, queue outcome or Guild summary edits.
+
+R01 original DeepSeek task `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Ab15027f9-41a9-481e-8ffb-64a615df6978` is terminal failed/cancelled after inference overload, with a clean preserved checkout and no implementation/test result. User-authorized GLM fallback reuses the exact scope/design/acceptance in the same slot; no extra task or provider was substituted.
 
 Current required Ticket: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A085a21eb-9ab5-415a-a64c-05dd83bd8b28`, same verified `8a0917f` base. The task coordinator owns this within its three reserved slots. Scope remains the seven Ticket contract/service/Admin Ticket files and dedicated tests; shared Guild/runtime fixtures and all native/schema/queue/composition files remain excluded. Current allocation: architecture one active, task coordinator two active, global three.
 
