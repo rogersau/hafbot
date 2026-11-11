@@ -28,7 +28,6 @@ export class BlocklistService {
   ) {}
 
   async setEnabled(guildId: string, enabled: boolean): Promise<void> {
-    if (!this.store.setGuildEnabled) throw new Error("Blocklist availability is unavailable.");
     await this.store.setGuildEnabled(guildId, enabled);
   }
 
@@ -72,10 +71,6 @@ export class BlocklistService {
     channelMode: ChannelFilterMode,
     channelIds: string[],
   ): Promise<void> {
-    if (typeof this.store.upsertGuildChannelFilter !== "function") {
-      return;
-    }
-
     await this.store.upsertGuildChannelFilter({ guildId, channelMode, channelIds });
   }
 
@@ -143,7 +138,7 @@ export class BlocklistService {
         }
       }
 
-      if (added.length > 1 && typeof this.store.applyGuildEmojiMutations === "function") {
+      if (added.length > 1) {
         await this.store.applyGuildEmojiMutations({ guildId, emojis: added, action: "add" });
       } else {
         for (const emoji of added) {

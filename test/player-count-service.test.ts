@@ -1651,7 +1651,7 @@ test("disabling Player Count fences an in-flight query and survives a stale conf
         async query() {
           queries++;
           if (queries === 1)
-            await fixture.stores.playerCount.setPlayerCountServerEnabled?.(
+            await fixture.stores.playerCount.setPlayerCountServerEnabled(
               server.guildId,
               server.id,
               false,
@@ -1672,7 +1672,7 @@ test("disabling Player Count fences an in-flight query and survives a stale conf
       (await fixture.stores.playerCount.readPlayerCountServer(server.id))?.enabled,
       false,
     );
-    await fixture.stores.playerCount.setPlayerCountServerEnabled?.(server.guildId, server.id, true);
+    await fixture.stores.playerCount.setPlayerCountServerEnabled(server.guildId, server.id, true);
     await service.refreshAllServers();
     assert.equal(queries, 2);
     assert.equal(

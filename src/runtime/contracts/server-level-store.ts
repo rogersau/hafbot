@@ -65,13 +65,13 @@ export interface ServerLevelStore {
   readEarliestAcceptedProviderEvent(
     configuredGameServerId: string,
   ): Promise<ServerLevelProviderEvent | null>;
-  acquireProcessingLease?(
+  acquireProcessingLease(
     configuredGameServerId: string,
     leaseId: string,
     nowMs: number,
     expiresAtMs: number,
   ): Promise<boolean>;
-  releaseProcessingLease?(configuredGameServerId: string, leaseId: string): Promise<void>;
+  releaseProcessingLease(configuredGameServerId: string, leaseId: string): Promise<void>;
   readProcessingCursor(configuredGameServerId: string): Promise<ServerLevelProcessingCursor | null>;
   upsertProcessingCursor(cursor: ServerLevelProcessingCursor): Promise<void>;
   listCurrentPresence(configuredGameServerId: string): Promise<ServerLevelPresence[]>;

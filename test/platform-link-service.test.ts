@@ -390,6 +390,13 @@ function createConfig(overrides: Partial<PlatformLinkConfig> = {}): PlatformLink
   };
 }
 
+/** The canonical read omits enabled when the stored flag is the default enabled state. */
+function asStored(config: PlatformLinkConfig): PlatformLinkConfig {
+  const copy = { ...config };
+  if (copy.enabled === true) delete copy.enabled;
+  return copy;
+}
+
 function createPlatformLinkFixture(
   links: PlatformLink[] = [],
   configs: PlatformLinkConfig[] = [],
@@ -410,8 +417,83 @@ function createPlatformLinkFixture(
   return {
     store: afterStoreSeed(rawStore, ready),
     entitlements: afterStoreSeed(fixture.stores.guildEntitlements, ready),
+    database: fixture.database,
   };
 }
+
+test("PlatformLinkService.saveConfig writes metadata and enabled in one atomic upsert", async () => {
+  const fixture = createPlatformLinkFixture();
+  fixture.database.execRaw(`CREATE TRIGGER reject_platform_link_enabled_change
+    BEFORE UPDATE OF enabled ON platform_link_configs
+    WHEN OLD.enabled <> NEW.enabled
+    BEGIN SELECT RAISE(ABORT, 'enabled changes are rejected'); END`);
+  const service = createPlatformLinkService({
+    platformLinkStore: fixture.store,
+    discordBotToken: "token",
+  });
+  const previous = createConfig({ enabled: false, panelColor: 123 });
+
+  await service.saveConfig(previous);
+  await assert.rejects(
+    service.saveConfig(
+      createConfig({ enabled: true, panelColor: 123, panelTitle: "Changed title", updatedAtMs: 2 }),
+    ),
+    (error: unknown) => {
+      const cause = (error as { cause?: unknown }).cause;
+      assert.match(String(cause ?? error), /enabled changes are rejected/);
+      return true;
+    },
+  );
+
+  assert.deepEqual(await service.readConfig("guild-1", "steam"), previous);
+  assert.deepEqual(await fixture.store.readPlatformLinkConfig("guild-1", "steam"), previous);
+});
+
+test("PlatformLinkService.saveConfig preserves omitted flags and other Guild/platform rows", async () => {
+  const xbox = createConfig({
+    platform: "xbox",
+    enabled: false,
+    panelColor: 123,
+    panelTitle: "Xbox disabled",
+  });
+  const otherGuild = createConfig({
+    guildId: "guild-2",
+    enabled: false,
+    panelColor: 123,
+    panelTitle: "Other Guild disabled",
+  });
+  const fixture = createPlatformLinkFixture([], [xbox, otherGuild]);
+  const service = createPlatformLinkService({
+    platformLinkStore: fixture.store,
+    discordBotToken: "token",
+  });
+
+  await service.saveConfig(
+    createConfig({ enabled: false, panelColor: 123, panelTitle: "Steam disabled" }),
+  );
+  const metadataOnly = createConfig({
+    panelColor: 123,
+    panelTitle: "Metadata only",
+    updatedAtMs: 2,
+  });
+  await service.saveConfig(metadataOnly);
+  assert.deepEqual(await service.readConfig("guild-1", "steam"), {
+    ...metadataOnly,
+    enabled: false,
+  });
+
+  const enabled = createConfig({
+    enabled: true,
+    panelColor: 123,
+    panelTitle: "Steam enabled",
+    updatedAtMs: 3,
+  });
+  await service.saveConfig(enabled);
+  assert.deepEqual(await service.readConfig("guild-1", "steam"), asStored(enabled));
+
+  assert.deepEqual(await service.readConfig("guild-1", "xbox"), xbox);
+  assert.deepEqual(await service.readConfig("guild-2", "steam"), otherGuild);
+});
 
 test("PlatformLinkService replaces a link at the pooled plan cap and finalizes only after commit", async () => {
   const fixture = createPlatformLinkFixture(createPlatformLinks(100), [createConfig()]);
@@ -555,7 +637,7 @@ test("a link disabled during provider enrichment is rejected before persistence"
       steam: {
         ...createSteamIdentityAdapter({ steamWebApiKey: "test" }),
         async enrichMetadata() {
-          await fixture.store.setPlatformLinkEnabled?.("guild-1", "steam", false);
+          await fixture.store.setPlatformLinkEnabled("guild-1", "steam", false);
           return null;
         },
       },

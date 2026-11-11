@@ -1,4 +1,3 @@
-import type { GuildNotificationChannelStore } from "../src/runtime/contracts";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -12,14 +11,7 @@ import { BlocklistService } from "../src/services/blocklist-service";
 
 import { afterStoreSeed, createProductionRuntimeStores } from "./support/production-runtime-stores";
 
-type TestBlocklistStore = BlocklistStore &
-  GuildNotificationChannelStore & {
-    upsertGuildChannelFilter(body: {
-      guildId: string;
-      channelMode: "include" | "exclude";
-      channelIds: string[];
-    }): Promise<unknown>;
-  };
+type TestBlocklistStore = BlocklistStore;
 
 test("BlocklistService.addEmoji persists the emoji and posts a moderation update", async () => {
   const { store } = createBlocklistFixture([], "log-channel-1");
@@ -204,6 +196,37 @@ test("BlocklistService.addEmojis persists a batch that fits the free limit", asy
   assert.equal((await service.getGuildBlocklist("guild-1")).emojis.length, 10);
 });
 
+test("BlocklistService toggles Guild enforcement without dropping its rules", async () => {
+  const { store } = createBlocklistFixture(["✅"]);
+  const service = new BlocklistService(store);
+
+  await service.setEnabled("guild-1", false);
+  assert.deepEqual(await service.getGuildBlocklist("guild-1"), {
+    enabled: false,
+    emojis: ["✅"],
+    channelMode: "include",
+    channelIds: [],
+  });
+
+  await service.setEnabled("guild-1", true);
+  assert.equal((await service.getGuildBlocklist("guild-1")).enabled, true);
+});
+
+test("BlocklistService rolls back a multi-emoji batch when one write fails", async () => {
+  const { store, database } = createBlocklistFixture();
+  database.execRaw(`CREATE TRIGGER reject_second_blocked_emoji
+    BEFORE INSERT ON guild_blocked_emojis
+    WHEN NEW.normalized_emoji = 'emoji-2'
+    BEGIN SELECT RAISE(ABORT, 'injected batch failure'); END`);
+  const service = new BlocklistService(store);
+
+  await assert.rejects(
+    service.addEmojis("guild-1", ["emoji-1", "emoji-2"]),
+    /injected batch failure/,
+  );
+  assert.deepEqual((await service.getGuildBlocklist("guild-1")).emojis, []);
+});
+
 test("BlocklistService updates and reads the Guild channel filter through production storage", async () => {
   const { store } = createBlocklistFixture();
   const service = new BlocklistService(store);
@@ -222,7 +245,11 @@ function createBlocklistFixture(
   emojis: string[] = [],
   notificationChannelId: string | null = null,
   tier: "free" | "premium" = "free",
-): { store: TestBlocklistStore; entitlements: GuildEntitlementStore } {
+): {
+  store: TestBlocklistStore;
+  entitlements: GuildEntitlementStore;
+  database: ReturnType<typeof createProductionRuntimeStores>["database"];
+} {
   const fixture = createProductionRuntimeStores({ botUserId: "bot-1" });
   if (tier === "premium") {
     fixture.database.execRaw(
@@ -245,5 +272,6 @@ function createBlocklistFixture(
   return {
     store: afterStoreSeed(rawStore, ready),
     entitlements: fixture.stores.guildEntitlements,
+    database: fixture.database,
   };
 }

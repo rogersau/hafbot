@@ -57,6 +57,7 @@ export function createPostgresPlatformLinkStore(
         .onConflictDoUpdate({
           target: [platformLinkConfigs.guildId, platformLinkConfigs.platform],
           set: {
+            ...(config.enabled === undefined ? {} : { enabled: config.enabled ? 1 : 0 }),
             linkedRoleId: values.linkedRoleId,
             logChannelId: values.logChannelId,
             gameAppIdsJson: values.gameAppIdsJson,

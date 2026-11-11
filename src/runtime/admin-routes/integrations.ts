@@ -497,10 +497,13 @@ export function createIntegrationsAdminRoutes(
         const config = await options.stores.playerCount.readPlayerCountServer(body.id);
         if (!config || config.guildId !== body.guildId)
           return Response.json({ error: "Configuration not found." }, { status: 404 });
-        const update = options.stores.playerCount.setPlayerCountServerEnabled;
-        if (!update)
-          return Response.json({ error: "Availability changes are unavailable." }, { status: 503 });
-        if (!(await update(body.guildId, body.id, body.enabled)))
+        if (
+          !(await options.stores.playerCount.setPlayerCountServerEnabled(
+            body.guildId,
+            body.id,
+            body.enabled,
+          ))
+        )
           return Response.json({ error: "Configuration not found." }, { status: 404 });
         return Response.json({ ok: true });
       },
@@ -520,10 +523,13 @@ export function createIntegrationsAdminRoutes(
           body.platform,
         );
         if (!config) return Response.json({ error: "Configuration not found." }, { status: 404 });
-        const update = options.stores.platformLink.setPlatformLinkEnabled;
-        if (!update)
-          return Response.json({ error: "Availability changes are unavailable." }, { status: 503 });
-        if (!(await update(body.guildId, body.platform, body.enabled)))
+        if (
+          !(await options.stores.platformLink.setPlatformLinkEnabled(
+            body.guildId,
+            body.platform,
+            body.enabled,
+          ))
+        )
           return Response.json({ error: "Configuration not found." }, { status: 404 });
         return Response.json({ ok: true });
       },

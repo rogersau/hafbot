@@ -51,7 +51,7 @@ export interface PlatformLink {
 }
 
 export interface PlatformLinkStore {
-  setPlatformLinkEnabled?(
+  setPlatformLinkEnabled(
     guildId: string,
     platform: PlatformLinkPlatform,
     enabled: boolean,

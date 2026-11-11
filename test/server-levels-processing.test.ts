@@ -473,7 +473,7 @@ test("cross-server awards serialize by Guild member before overlap and cap decis
         nowMs: number,
         expiresAtMs: number,
       ) {
-        const acquired = await store.acquireProcessingLease!(key, leaseId, nowMs, expiresAtMs);
+        const acquired = await store.acquireProcessingLease(key, leaseId, nowMs, expiresAtMs);
         if (key.startsWith("member:")) {
           memberLeaseAttempts += 1;
           if (memberLeaseAttempts === 2) releaseFirstMemberAttempt();
@@ -488,7 +488,7 @@ test("cross-server awards serialize by Guild member before overlap and cap decis
         return acquired;
       },
       async releaseProcessingLease(key: string, leaseId: string) {
-        await store.releaseProcessingLease!(key, leaseId);
+        await store.releaseProcessingLease(key, leaseId);
       },
     };
     const processors = ["server-1", "server-2"].map(
@@ -512,6 +512,94 @@ test("cross-server awards serialize by Guild member before overlap and cap decis
     await processors[0]!.processAvailableForServer("server-1");
     await processors[1]!.processAvailableForServer("server-2");
     assert.equal((await store.readProfile("guild-1", "user-1"))?.totalXpUnits, 240);
+  } finally {
+    database.close();
+  }
+});
+
+test("a held processing lease blocks processing and a failing run releases its own lease", async () => {
+  const database = new SqliteD1Database();
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
+  try {
+    await seedServer(store, "server-1", "endpoint-1", 4);
+    await links.upsertPlatformLink({
+      guildId: "guild-1",
+      userId: "user-1",
+      platform: "steam",
+      platformId: "76561198000000001",
+      linkedAtMs: 500,
+      manual: false,
+      actionedByUserId: null,
+      metadataJson: null,
+      active: true,
+    });
+    await accept(store, {
+      inboxId: "join",
+      deliveryId: "delivery-join",
+      eventType: "player.join",
+      occurredAtMs: 1_000,
+      steamId64: "76561198000000001",
+      population: 1,
+    });
+    await accept(store, {
+      inboxId: "leave",
+      deliveryId: "delivery-leave",
+      eventType: "player.leave",
+      occurredAtMs: 16_000,
+      steamId64: "76561198000000001",
+      population: 0,
+    });
+
+    assert.equal(
+      await store.acquireProcessingLease("server-1", "other-worker", 700_000, 1_000_000),
+      true,
+    );
+    const processor = new ServerLevelProcessor({
+      store,
+      platformLinks: links,
+      readEntitlementTier: async () => "premium",
+      isCurrentGuildMember: async () => true,
+      now: () => 700_000,
+      createId: ids(),
+    });
+    assert.deepEqual(await processor.processAvailableForServer("server-1"), {
+      processed: 0,
+      late: 0,
+      rejected: 0,
+    });
+    assert.equal(await store.readProfile("guild-1", "user-1"), null);
+    await store.releaseProcessingLease("server-1", "other-worker");
+
+    let failNextRead = true;
+    const flakyStore = {
+      ...store,
+      async listAcceptedProviderEvents(configuredGameServerId: string, safeThroughMs: number) {
+        if (failNextRead) {
+          failNextRead = false;
+          throw new Error("injected processing failure");
+        }
+        return store.listAcceptedProviderEvents(configuredGameServerId, safeThroughMs);
+      },
+    };
+    const flakyProcessor = new ServerLevelProcessor({
+      store: flakyStore,
+      platformLinks: links,
+      readEntitlementTier: async () => "premium",
+      isCurrentGuildMember: async () => true,
+      now: () => 700_000,
+      createId: ids(),
+    });
+    await assert.rejects(
+      flakyProcessor.processAvailableForServer("server-1"),
+      /injected processing failure/,
+    );
+    assert.deepEqual(await flakyProcessor.processAvailableForServer("server-1"), {
+      processed: 2,
+      late: 0,
+      rejected: 0,
+    });
+    assert.equal((await store.readProfile("guild-1", "user-1"))?.totalXpUnits, 60);
   } finally {
     database.close();
   }

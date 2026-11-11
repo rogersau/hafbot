@@ -56,6 +56,7 @@ export function createSqlitePlatformLinkStore(database: D1Database): PlatformLin
         .onConflictDoUpdate({
           target: [platformLinkConfigs.guildId, platformLinkConfigs.platform],
           set: {
+            ...(config.enabled === undefined ? {} : { enabled: config.enabled ? 1 : 0 }),
             linkedRoleId: values.linkedRoleId,
             logChannelId: values.logChannelId,
             gameAppIdsJson: values.gameAppIdsJson,
