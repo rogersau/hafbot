@@ -72,9 +72,6 @@ export interface CommerceSyncQueueSender {
   send(message: CommerceSyncQueueMessage): Promise<unknown>;
 }
 
-/** Alias retained for callers that describe the handler as a Connect webhook. */
-export const createCommerceConnectWebhookHandler = createCommerceStripeWebhookHandler;
-
 export function createCommerceStripeWebhookHandler(options: {
   secret: string;
   store: CommerceWebhookStore;

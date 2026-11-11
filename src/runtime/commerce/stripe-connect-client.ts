@@ -43,18 +43,17 @@ export interface StripeConnectAccount {
 
 export type CreateConnectedAccountInput = {
   guildId: string;
+  sellerUserId: string;
   idempotencyKey: string;
   environment?: string;
   sellerEmail?: string;
   businessProfileUrl?: string;
-} & ({ sellerUserId: string; sellerId?: string } | { sellerId: string; sellerUserId?: string });
+};
 
 export type AccountLinkInput = {
+  connectedAccountId: string;
   idempotencyKey: string;
-} & (
-  | { connectedAccountId: string; accountId?: string }
-  | { accountId: string; connectedAccountId?: string }
-);
+};
 
 export interface StripeConnectAccountState {
   capabilities: Record<string, StripeCapabilityState>;
@@ -84,9 +83,7 @@ export interface StripeConnectLink {
   expiresAtMs: number | null;
 }
 
-export interface ConnectedAccountRequest {
-  accountId: string;
-  path: string;
+export interface ConnectedAccountRequestOptions {
   method?: "GET" | "POST" | "DELETE";
   body?: URLSearchParams;
   idempotencyKey?: string;
@@ -124,9 +121,7 @@ export class StripeConnectClient {
   /** Create a seller account in platform scope (never Stripe-Account scoped). */
   async createConnectedAccount(input: CreateConnectedAccountInput): Promise<StripeConnectAccount> {
     opaqueId(input.guildId, "guild ID");
-    const sellerUserId = input.sellerUserId ?? input.sellerId;
-    opaqueId(sellerUserId, "seller ID");
-    if (!sellerUserId) throw new Error("seller ID must be an opaque identifier.");
+    opaqueId(input.sellerUserId, "seller ID");
     requiredIdempotencyKey(input.idempotencyKey);
     const body = new URLSearchParams({
       country: "AU",
@@ -137,7 +132,7 @@ export class StripeConnectClient {
       "capabilities[card_payments][requested]": "true",
       "capabilities[transfers][requested]": "true",
       "metadata[haf_guild_id]": input.guildId,
-      "metadata[haf_seller_id]": sellerUserId,
+      "metadata[haf_seller_id]": input.sellerUserId,
     });
     if (input.environment) opaqueId(input.environment, "environment");
     if (input.environment) body.set("metadata[haf_environment]", input.environment);
@@ -147,11 +142,6 @@ export class StripeConnectClient {
     }
     const value = await this.platformRequest("/v1/accounts", "POST", body, input.idempotencyKey);
     return parseConnectedAccount(value);
-  }
-
-  /** Short alias for callers modelling the Stripe Account resource directly. */
-  async createAccount(input: CreateConnectedAccountInput): Promise<StripeConnectAccount> {
-    return this.createConnectedAccount(input);
   }
 
   /** Read an Account from platform scope (never Stripe-Account scoped). */
@@ -164,32 +154,19 @@ export class StripeConnectClient {
     return parseConnectedAccount(value);
   }
 
-  async readAccount(accountId: string): Promise<StripeConnectAccount> {
-    return this.readConnectedAccount(accountId);
-  }
-
-  async readAccountState(accountId: string): Promise<StripeConnectAccountState> {
-    return (await this.readConnectedAccount(accountId)).state;
-  }
-
-  async readConnectedAccountState(accountId: string): Promise<StripeConnectAccountState> {
-    return this.readAccountState(accountId);
-  }
-
   async createOnboardingLink(
     input: AccountLinkInput & {
       returnUrl: string;
       refreshUrl: string;
     },
   ): Promise<StripeConnectLink> {
-    const accountId = input.connectedAccountId ?? input.accountId;
-    requireAccountId(accountId);
+    requireAccountId(input.connectedAccountId);
     requiredIdempotencyKey(input.idempotencyKey);
     const value = await this.platformRequest(
       "/v1/account_links",
       "POST",
       new URLSearchParams({
-        account: accountId,
+        account: input.connectedAccountId,
         type: "account_onboarding",
         return_url: input.returnUrl,
         refresh_url: input.refreshUrl,
@@ -201,23 +178,12 @@ export class StripeConnectClient {
     return parseLink(value, "onboarding");
   }
 
-  async createAccountLink(
-    input: AccountLinkInput & { returnUrl: string; refreshUrl: string },
-  ): Promise<StripeConnectLink> {
-    return this.createOnboardingLink(input);
-  }
-
   async createAccountManagementLink(input: AccountLinkInput): Promise<StripeConnectLink> {
-    const accountId = input.connectedAccountId ?? input.accountId;
-    requireAccountId(accountId);
+    requireAccountId(input.connectedAccountId);
     requiredIdempotencyKey(input.idempotencyKey);
     // Full-Dashboard connected accounts sign in through Stripe directly. The
     // login-links endpoint is only compatible with Express accounts.
     return { url: "https://dashboard.stripe.com/", expiresAtMs: null };
-  }
-
-  async createLoginLink(input: AccountLinkInput): Promise<StripeConnectLink> {
-    return this.createAccountManagementLink(input);
   }
 
   /** Permanently disconnect a Standard connected account from the platform. */
@@ -232,38 +198,19 @@ export class StripeConnectClient {
     );
   }
 
-  /** Execute a request against a connected seller. Account ID is mandatory. */
-  async requestConnectedAccount(input: ConnectedAccountRequest): Promise<unknown>;
-  async requestConnectedAccount(
-    accountId: string,
-    path: string,
-    options?: Omit<ConnectedAccountRequest, "accountId" | "path">,
-  ): Promise<unknown>;
-  async requestConnectedAccount(
-    inputOrAccountId: ConnectedAccountRequest | string,
-    path?: string,
-    options: Omit<ConnectedAccountRequest, "accountId" | "path"> = {},
-  ): Promise<unknown> {
-    const input: ConnectedAccountRequest =
-      typeof inputOrAccountId === "string"
-        ? { accountId: inputOrAccountId, path: path ?? "", ...options }
-        : inputOrAccountId;
-    requireAccountId(input.accountId);
-    return this.request(input.path, {
-      accountId: input.accountId,
-      method: input.method ?? "GET",
-      body: input.body,
-      idempotencyKey: input.idempotencyKey,
-    });
-  }
-
-  /** Alias kept explicit at call sites so account scope cannot be accidental. */
+  /** Execute an explicitly account-scoped request against a connected seller. */
   async requestForConnectedAccount(
     accountId: string,
     path: string,
-    options: Omit<ConnectedAccountRequest, "accountId" | "path"> = {},
+    options: ConnectedAccountRequestOptions = {},
   ): Promise<unknown> {
-    return this.requestConnectedAccount({ accountId, path, ...options });
+    requireAccountId(accountId);
+    return this.request(path, {
+      accountId,
+      method: options.method ?? "GET",
+      body: options.body,
+      idempotencyKey: options.idempotencyKey,
+    });
   }
 
   private async platformRequest(
