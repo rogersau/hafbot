@@ -47,6 +47,16 @@ The task coordinator adapts distinct completed shared-validation and service-ato
 offering lifecycle consolidation (C23), retired selector plumbing (C06) and unused aliases (C09)
 still need explicit reconciliation. None is assumed covered merely because native stores exist.
 
+| Slot                 | Task ID                                                                                                                           | Base      | Owned paths                                                        |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------ |
+| Architecture 1       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A4122985e-4394-4ede-96df-0ba903391392` | `915455f` | Mention Protection native store; new moderation invariant test     |
+| Architecture 2       | `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A766003cd-614e-4828-ab87-21da714ee538` | `915455f` | S3 adapter; retired R2 metadata reader; object-store tests         |
+| Task coordinator 1–3 | Reserved to task coordinator                                                                                                      | `915455f` | C03/C10/C11 adaptations with disjoint paths agreed in coordination |
+
+Both architecture tasks are running. Their reports must include commit SHAs, exact focused check
+results and limitations. The coordinator reviews and integrates each returned change before final
+combined validation. Mention Protection must retain the proven RED/GREEN concurrency regression.
+
 ## Checkpoint validation
 
 | Check                                      | Latest result                                                                     |
