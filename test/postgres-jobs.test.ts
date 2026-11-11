@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
 import {
@@ -9,10 +8,7 @@ import {
 import { createPostgresJobQueue } from "../src/runtime/postgres/postgres-job-queue";
 import { createPostgresJobWorker } from "../src/runtime/postgres/postgres-job-worker";
 import { createPostgresLeaseStore } from "../src/runtime/postgres/postgres-lease-store";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresScheduler } from "../src/runtime/postgres/postgres-scheduler";
 import { createPostgresQueueBinding } from "../src/runtime/postgres/postgres-queue-binding";
 
@@ -360,10 +356,7 @@ function createTestDatabase(url: string): PostgresDatabaseCapability {
 
 async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-  await applyPostgresMigrations(
-    database,
-    await readPostgresMigrations(resolve("migrations/postgres")),
-  );
+  await initializePostgresSchema(database);
 }
 
 async function waitFor(

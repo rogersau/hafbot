@@ -32,14 +32,6 @@ export async function handleBotDefenseComponentInteraction(
   if (!parsed) {
     return Response.json(buildEphemeralMessage("Unsupported Bot Defense action."));
   }
-  if (parsed.kind === "legacy") {
-    return Response.json(
-      buildEphemeralMessage(
-        "This Bot Defense control predates generation binding and is no longer available.",
-      ),
-    );
-  }
-
   const { guildId, userId, action, createdAtMs } = parsed;
   if (!isInteractionBoundToGuild(interaction, guildId)) {
     return Response.json(buildEphemeralMessage(GUILD_BOUND_INTERACTION_DENIAL_MESSAGE));

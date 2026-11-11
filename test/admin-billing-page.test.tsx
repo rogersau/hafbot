@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -52,28 +53,24 @@ const billing = (
       productId: "product",
       plan: "premium",
       frequency: "monthly",
-      cohort: "standard",
     },
     {
       priceId: "premium-yearly",
       productId: "product",
       plan: "premium",
       frequency: "yearly",
-      cohort: "standard",
     },
     {
       priceId: "plus-monthly",
       productId: "product",
       plan: "premium_plus",
       frequency: "monthly",
-      cohort: "standard",
     },
     {
       priceId: "plus-yearly",
       productId: "product",
       plan: "premium_plus",
       frequency: "yearly",
-      cohort: "standard",
     },
   ],
   prices: [
@@ -110,7 +107,6 @@ const billing = (
       formattedAmount: "$20.00",
     },
   ],
-  founderAdmission: null,
 });
 
 function createDom(search = ""): Env {
@@ -147,16 +143,12 @@ function response(value: unknown) {
   });
 }
 function errorResponse(message = "Billing unavailable") {
-  return new Response(
-    JSON.stringify({
-      error: message,
-      code: "internal_error",
-      correlationId: "corr-billing",
-      retryable: true,
-      action: "retry",
-    }),
-    { status: 500, headers: { "content-type": "application/json" } },
-  );
+  return adminErrorResponse(message, 500, {
+    code: "internal_error",
+    correlationId: "corr-billing",
+    retryable: true,
+    action: "retry",
+  });
 }
 function installFetch(handler: (input: string) => Promise<Response>): () => void {
   const previous = globalThis.fetch;
@@ -207,56 +199,6 @@ test("Billing explains unavailable current prices without showing retired launch
         (button) => !/Upgrade|Downgrade|Switch to/.test(button.textContent ?? ""),
       ),
     );
-  } finally {
-    restoreFetch();
-    await env.restore();
-  }
-});
-
-test("historical founder metadata does not restore launch badges or place counters", async () => {
-  const data = {
-    ...billing("premium", "monthly"),
-    founderAdmission: { historicalCount: 3, publicCount: 3, limit: 50, open: true },
-    subscription: { ...subscription("premium", "monthly"), pricingCohort: "founder" },
-  };
-  const restoreFetch = installFetch(async (input) => {
-    if (String(input).endsWith("/billing")) return response(data);
-    if (String(input).endsWith("/billing/history")) return response({ events: [] });
-    return response({ assignments: [], eligibleGuilds: [], capacity: 1 });
-  });
-  const env = createDom();
-  try {
-    await render(env);
-    await settle();
-    assert.doesNotMatch(
-      env.container.textContent ?? "",
-      /founder|3 of 50|places claimed|cannot be reclaimed/i,
-    );
-  } finally {
-    restoreFetch();
-    await env.restore();
-  }
-});
-
-test("an existing legacy-price subscriber can choose the current rate for the same plan", async () => {
-  const data = {
-    ...billing("premium", "monthly"),
-    subscription: { ...subscription("premium", "monthly"), priceId: "retired-premium-monthly" },
-  };
-  const restoreFetch = installFetch(async (input) => {
-    if (String(input).endsWith("/billing")) return response(data);
-    if (String(input).endsWith("/billing/history")) return response({ events: [] });
-    return response({ assignments: [], eligibleGuilds: [], capacity: 1 });
-  });
-  const env = createDom();
-  try {
-    await render(env);
-    await settle();
-    const buttons = [...env.container.querySelectorAll("button")].filter((node) =>
-      node.textContent?.includes("Review change"),
-    );
-    assert.equal(buttons.length, 2);
-    assert.equal(buttons[0]?.disabled, false);
   } finally {
     restoreFetch();
     await env.restore();

@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
 import { createPostgresReputationStore } from "../src/reputation/store";
 import { defaultReputationConfig, type ReputationAwardInput } from "../src/reputation/types";
@@ -26,7 +23,7 @@ test(
     });
     try {
       await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-      await applyPostgresMigrations(database, await readPostgresMigrations("migrations/postgres"));
+      await initializePostgresSchema(database);
       const store = createPostgresReputationStore(database);
       assert.equal((await store.getConfig("100")).enabled, false);
       const settings = {
@@ -52,9 +49,9 @@ test(
       assert.equal((await store.pendingRewards(1_000, 20)).length, 1);
       await assert.rejects(() => store.award({ ...input, interactionId: "201" }), /cooldown/);
       assert.equal(
-        (await database.query<{ count: string }>("SELECT COUNT(*) FROM reputation_awards"))[0]!
+        (await database.query<{ count: number }>("SELECT COUNT(*) FROM reputation_awards"))[0]!
           .count,
-        "1",
+        1,
       );
       const concurrent = await Promise.allSettled([
         store.award({ ...input, interactionId: "202", nowMs: 61_000 }),

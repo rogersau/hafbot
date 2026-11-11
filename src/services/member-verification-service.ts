@@ -890,7 +890,7 @@ export class MemberVerificationService {
 
     // A member-facing Steam auth URL is only actionable when this Guild has a
     // persisted Platform Link policy.  Do this check before creating the
-    // pending auth state, so an invalid legacy configuration cannot generate a
+    // pending auth state, so an invalid configuration cannot generate a
     // doomed URL.
     const platformLinkConfig = await platformLinkStore.readPlatformLinkConfig(guildId, "steam");
     if (!platformLinkConfig) {

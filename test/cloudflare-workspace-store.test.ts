@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCloudflareWorkspaceStore } from "../src/runtime/cloudflare-workspace-store";
+import { createSqliteWorkspaceStore } from "./support/sqlite/runtime/sqlite-workspace-store";
 import { WorkspaceGuildAlreadyLinkedError } from "../src/runtime/workspace-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
@@ -12,7 +12,7 @@ test("Cloudflare workspace store atomically records Guild link and unlink audit 
         ('workspace-1', 'Workspace One', 'workspace-one', 1),
         ('workspace-2', 'Workspace Two', 'workspace-two', 1)
     `);
-    const store = createCloudflareWorkspaceStore(database.d1);
+    const store = createSqliteWorkspaceStore(database.d1);
 
     await store.linkGuildToWorkspace({
       workspaceId: "workspace-1",
@@ -92,7 +92,7 @@ test("Cloudflare workspace store records only the unlink that removed the Guild"
       INSERT INTO "Organization" ("id", "name", "slug", "createdAt")
       VALUES ('workspace-1', 'Workspace One', 'workspace-one', 1)
     `);
-    const store = createCloudflareWorkspaceStore(database.d1);
+    const store = createSqliteWorkspaceStore(database.d1);
     await store.linkGuildToWorkspace({
       workspaceId: "workspace-1",
       guildId: "guild-1",

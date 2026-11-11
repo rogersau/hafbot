@@ -136,11 +136,11 @@ export interface TicketStore {
     content: string;
     createdAtMs: number;
   }): Promise<void>;
-  claimStaffMessageDelivery?(body: StaffMessageDeliveryClaim): Promise<boolean>;
-  completeStaffMessageDelivery?(
+  claimStaffMessageDelivery(body: StaffMessageDeliveryClaim): Promise<boolean>;
+  completeStaffMessageDelivery(
     body: StaffMessageDeliveryIdentity & { botMessageId: string; claimedAtMs: number },
   ): Promise<void>;
-  releaseStaffMessageDelivery?(
+  releaseStaffMessageDelivery(
     body: StaffMessageDeliveryIdentity & { claimedAtMs: number },
   ): Promise<void>;
   readStaffMessageMapping(body: {
@@ -183,11 +183,3 @@ export interface TicketStore {
     ticketChannelId: string,
   ): Promise<TicketTemplateReply[]>;
 }
-
-export type AnonymousSupportDeliveryStore = TicketStore &
-  Required<
-    Pick<
-      TicketStore,
-      "claimStaffMessageDelivery" | "completeStaffMessageDelivery" | "releaseStaffMessageDelivery"
-    >
-  >;

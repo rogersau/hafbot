@@ -1,3 +1,4 @@
+import type { Cache } from "../discord-json-cache";
 import { defineRoute, type Route } from "../admin-route-registry";
 import { type AdminAccess } from "../admin-access";
 import { type RuntimeStores } from "../app-types";
@@ -291,7 +292,7 @@ export interface SocialAdminRoutesOptions {
   services?: Partial<ServiceFactory>;
   discordBotToken: string;
   guildResources?: GuildResourceValidator;
-  discordCacheKv?: KVNamespace;
+  discordCache?: Cache<string>;
   productAnalytics?: ProductAnalyticsReporter;
   waitUntil?: (promise: Promise<unknown>) => void;
   webhookIngressGuard?: WebhookIngressGuardNamespace;

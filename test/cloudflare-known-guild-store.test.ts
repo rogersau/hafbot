@@ -5,12 +5,12 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareKnownGuildStore } from "../src/runtime/cloudflare-known-guild-store";
+import { createSqliteKnownGuildStore } from "./support/sqlite/runtime/sqlite-known-guild-store";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
 
 test("KnownGuildStore atomically identifies the first insert", async () => {
   const { database } = createProductionRuntimeStores();
-  const store = createCloudflareKnownGuildStore(database.d1);
+  const store = createSqliteKnownGuildStore(database.d1);
   const record = {
     guildId: "123456789012345678",
     name: "Guild",

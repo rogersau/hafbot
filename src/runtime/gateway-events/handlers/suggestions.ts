@@ -20,7 +20,7 @@ interface SuggestionHandlerCapabilities {
     suggestion: SuggestionStore;
     audit: GuildAuditLogStore;
     webhookCredential: WebhookCredentialStore;
-  } | null;
+  };
 }
 
 export const suggestionGatewayHandler = defineGatewayEventHandler(
@@ -37,7 +37,7 @@ export const suggestionGatewayHandler = defineGatewayEventHandler(
     order: 85,
     isEnabled: ({ features }) => features.suggestions === true,
     async handle(capabilities, envelope) {
-      if (!capabilities.stores || !isRecord(envelope.data)) return;
+      if (!isRecord(envelope.data)) return;
       const store = capabilities.stores.suggestion;
       const credentialKey = capabilities.botEnv.WEBHOOK_CREDENTIAL_KEY_V1;
       const componentIdSigner = capabilities.botEnv.COMPONENT_ID_SIGNING_SECRET
@@ -81,7 +81,7 @@ export const suggestionGatewayHandler = defineGatewayEventHandler(
         (event) =>
           postSuggestionAuditEvent(
             event,
-            capabilities.stores!.audit,
+            capabilities.stores.audit,
             capabilities.botEnv.DISCORD_BOT_TOKEN,
           ),
       );
@@ -118,7 +118,7 @@ async function handleFlag(
   const userId = stringValue(data, "user_id");
   const emoji = recordValue(data, "emoji");
   if (!guildId || !messageId || !userId || stringValue(emoji ?? {}, "name") !== "🚩") return;
-  const reply = await capabilities.stores?.suggestion.readConsideredReplyByMessage(
+  const reply = await capabilities.stores.suggestion.readConsideredReplyByMessage(
     guildId,
     messageId,
   );
@@ -161,12 +161,12 @@ async function enforceStructuredReplies(
     stringValue(data, "webhook_id")
   )
     return;
-  const suggestion = await capabilities.stores?.suggestion.readSuggestionByThread(
+  const suggestion = await capabilities.stores.suggestion.readSuggestionByThread(
     guildId,
     channelId,
   );
   if (!suggestion || suggestion.authorId === authorId) return;
-  const config = await capabilities.stores?.suggestion.readConfig(guildId);
+  const config = await capabilities.stores.suggestion.readConfig(guildId);
   const member = recordValue(data, "member");
   const roles = arrayStrings(member?.roles);
   const permissions = typeof member?.permissions === "string" ? member.permissions : "0";

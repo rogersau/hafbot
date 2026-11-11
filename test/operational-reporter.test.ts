@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createGatewayBotController } from "../src/runtime/gateway-bot-orchestration";
+import { createGatewayBotController } from "./support/sqlite/runtime/gateway-bot-orchestration";
 import { SafeDiagnosticError } from "../src/observability/safe-diagnostic-error";
 import {
   __testing,

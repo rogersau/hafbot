@@ -125,10 +125,6 @@ const DASHBOARD_MUTATIONS: Readonly<Record<string, DashboardMutation>> = {
     feature: "player_link",
     action: "configuration_saved",
   },
-  "POST /admin/api/steam-link/config": {
-    feature: "player_link",
-    action: "configuration_saved",
-  },
   "POST /admin/api/server-levels/config": {
     feature: "server_levels",
     action: "configuration_saved",

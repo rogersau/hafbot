@@ -156,7 +156,7 @@ export function createTicketLifecycle(options: {
   return {
     async deferRecovery(recovery: TicketRecoveryEnvelope): Promise<boolean> {
       if (!options.recoveryQueue) return false;
-      await options.recoveryQueue.send(recovery, { contentType: "json" });
+      await options.recoveryQueue.send(recovery);
       return true;
     },
     async prepareOpen(command: {
@@ -1063,11 +1063,8 @@ async function resolveEffectiveTicketConfiguration(
     ticketType: {
       ...ticketType,
       allowedCreatorRoleIds: [],
-      autoReplyEnabled: false,
-      autoReplyMessage: null,
       responseRules: [],
       defaultTicketLinkPlatform: null,
-      anonymousEnabled: false,
       anonymousSupportEnabled: false,
       staffDiscussionThreadEnabled: false,
       ticketHistoryPromptVisibility: "off",

@@ -11,8 +11,8 @@ import {
   type BotDefenseMessageFilterDependencies,
 } from "../src/services/bot-defense/message-filter";
 import type { BotDefenseConfig, DiscordMessageCreate } from "../src/types";
-import type { Env } from "../src/env";
-import { createCloudflareBotDefenseStore } from "../src/runtime/cloudflare-bot-defense-store";
+import type { Env } from "./support/test-env";
+import { createSqliteBotDefenseStore } from "./support/sqlite/runtime/sqlite-bot-defense-store";
 import { fingerprintImageAttachments } from "../src/services/bot-defense/attachment-fingerprint";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 import { fixtureFetch, imageFixture } from "./support/bot-defense-image-fixtures";
@@ -263,14 +263,14 @@ function createDependencies(
   };
 }
 
-test("moderateBotDefenseMessageCreate does nothing when HAF_DB is missing", async () => {
-  const dependencies = createDependencies();
+test("moderateBotDefenseMessageCreate uses injected storage without database bindings", async () => {
+  const dependencies = createDependencies({ readConfig: async () => null });
   await moderateBotDefenseMessageCreate(
     createMessage(),
     createEnv({ HAF_DB: undefined }),
     dependencies,
   );
-  assert.deepEqual(dependencies.readConfigCalls, []);
+  assert.deepEqual(dependencies.readConfigCalls, ["guild-1"]);
 });
 
 test("moderateBotDefenseMessageCreate does nothing for non-guild messages", async () => {
@@ -678,7 +678,7 @@ test("rate detector ignores messages without text content", async () => {
 
 function imageReplay(config: Partial<BotDefenseConfig> = {}) {
   const database = new SqliteD1Database();
-  const store = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const store = createSqliteBotDefenseStore(database as unknown as D1Database);
   const fixtures = Array.from({ length: 8 }, (_, upload) =>
     Array.from({ length: 4 }, (_, index) => imageFixture(index, upload + 1)),
   ).flat();
@@ -1028,7 +1028,7 @@ for (const contentKind of ["image", "text"] as const) {
         modQueueChannelId: "staff-queue",
       });
       t.after(() => replay.database.close());
-      const store = createCloudflareBotDefenseStore(replay.database.d1);
+      const store = createSqliteBotDefenseStore(replay.database.d1);
       const timestamp = 1791234000000;
       const messageAt = (channel: number) =>
         replay.message(channel, 1, {

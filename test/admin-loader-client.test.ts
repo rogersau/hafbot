@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -81,11 +82,7 @@ test("admin loader client POSTs JSON with workspace/guild threading and parses e
 
 test("admin loader client reports POST error body via readResponseError", async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(JSON.stringify({ error: "bad request" }), {
-      status: 400,
-      statusText: "Bad Request",
-    });
+  globalThis.fetch = async () => adminErrorResponse("bad request", 400);
 
   try {
     const client = createAdminLoaderClient();
@@ -107,7 +104,7 @@ test("admin loader client reports friendly non-JSON failures", async () => {
   try {
     const client = createAdminLoaderClient();
     await assert.rejects(client.getJson("/admin/api/guilds"), {
-      message: "Discord lookup failed right now.",
+      message: "The dashboard request failed. Please try again.",
     });
   } finally {
     globalThis.fetch = originalFetch;
@@ -252,7 +249,7 @@ test("loadRoute freeTierFallback does not swallow premium GET failures", async (
 
     await assert.rejects(
       client.loadRoute(row, ctx, async () => entitlement),
-      { message: "error" },
+      { message: "The dashboard request failed. Please try again." },
     );
   } finally {
     globalThis.fetch = originalFetch;

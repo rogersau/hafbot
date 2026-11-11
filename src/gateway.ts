@@ -50,7 +50,7 @@ interface GatewayDispatchEnvelope {
   d?: unknown;
 }
 
-export function buildIdentifyPayload(token: string, os = "cloudflare"): GatewayFrame<IdentifyData> {
+export function buildIdentifyPayload(token: string, os = "node"): GatewayFrame<IdentifyData> {
   return {
     op: GATEWAY_OP_IDENTIFY,
     d: {

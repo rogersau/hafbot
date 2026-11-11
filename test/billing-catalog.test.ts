@@ -1,43 +1,38 @@
-/// <reference types="node/assert" />
-/// <reference types="node/assert/strict" />
-
 import assert from "node:assert/strict";
-// @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { createBillingCatalog } from "../src/runtime/billing/catalog";
+import { createBillingCatalog, type BillingCatalogConfig } from "../src/runtime/billing/catalog";
 
-test("legacy annual Prices remain valid Founder catalog identities", () => {
-  const catalog = createBillingCatalog({
-    founderPremiumMonthlyPriceId: "price_fpm",
-    founderPremiumYearlyPriceId: "price_fpy",
-    legacyFounderPremiumYearlyPriceId: "price_legacy_fpy",
-    founderPremiumPlusMonthlyPriceId: "price_fppm",
-    founderPremiumPlusYearlyPriceId: "price_fppy",
-    legacyFounderPremiumPlusYearlyPriceId: "price_legacy_fppy",
-    premiumMonthlyPriceId: "price_pm",
-    premiumMonthlyProductId: "prod_p",
-    premiumYearlyPriceId: "price_py",
-    premiumYearlyProductId: "prod_p",
-    premiumPlusMonthlyPriceId: "price_ppm",
-    premiumPlusMonthlyProductId: "prod_pp",
-    premiumPlusYearlyPriceId: "price_ppy",
-    premiumPlusYearlyProductId: "prod_pp",
-  });
+const config: BillingCatalogConfig = {
+  premiumMonthlyPriceId: "price_pm",
+  premiumMonthlyProductId: "prod_p",
+  premiumYearlyPriceId: "price_py",
+  premiumYearlyProductId: "prod_p",
+  premiumPlusMonthlyPriceId: "price_ppm",
+  premiumPlusMonthlyProductId: "prod_pp",
+  premiumPlusYearlyPriceId: "price_ppy",
+  premiumPlusYearlyProductId: "prod_pp",
+};
 
-  assert.deepEqual(catalog.get("price_legacy_fpy"), {
-    priceId: "price_legacy_fpy",
-    productId: "prod_p",
-    plan: "premium",
-    frequency: "yearly",
-    cohort: "founder",
-    legacy: true,
-  });
-  assert.deepEqual(catalog.get("price_legacy_fppy"), {
-    priceId: "price_legacy_fppy",
-    productId: "prod_pp",
-    plan: "premium_plus",
-    frequency: "yearly",
-    cohort: "founder",
-    legacy: true,
-  });
+test("the public Billing catalogue contains only four configured plan prices", () => {
+  const catalog = createBillingCatalog(config);
+  assert.deepEqual(
+    [...catalog.values()],
+    [
+      { priceId: "price_pm", productId: "prod_p", plan: "premium", frequency: "monthly" },
+      { priceId: "price_py", productId: "prod_p", plan: "premium", frequency: "yearly" },
+      { priceId: "price_ppm", productId: "prod_pp", plan: "premium_plus", frequency: "monthly" },
+      { priceId: "price_ppy", productId: "prod_pp", plan: "premium_plus", frequency: "yearly" },
+    ],
+  );
+  assert.equal(catalog.has("price_legacy_fpy"), false);
+});
+
+test("the public Billing catalogue rejects missing and duplicate identities", () => {
+  for (const key of Object.keys(config) as Array<keyof BillingCatalogConfig>) {
+    assert.throws(() => createBillingCatalog({ ...config, [key]: " " }), /required/);
+  }
+  assert.throws(
+    () => createBillingCatalog({ ...config, premiumYearlyPriceId: "price_pm" }),
+    /unique/,
+  );
 });

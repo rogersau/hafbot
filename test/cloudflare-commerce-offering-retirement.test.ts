@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { CloudflareCommerceOfferingStore } from "../src/runtime/commerce/cloudflare-offering-store";
+import { SqliteCommerceOfferingStore } from "./support/sqlite/runtime/commerce/sqlite-offering-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 const OFFERING = {
@@ -34,7 +34,7 @@ test("offering retirement is atomic, deterministic, and preserves the first pare
       INSERT INTO commerce_subscriptions(id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,cancel_at_period_end,current_period_end_ms,created_at_ms,updated_at_ms)
         VALUES ('sub-ended','acct-1','customer-2','buyer-2','off-1','price-1','sub_stripe_ended','ended',0,3000,1,1);
     `);
-    const store = new CloudflareCommerceOfferingStore(database.d1);
+    const store = new SqliteCommerceOfferingStore(database.d1);
     const lifecycle = await store.readLifecycle(OFFERING.id);
     assert.ok(lifecycle);
 
@@ -129,7 +129,7 @@ test("offering archive requires complete retirement and no nonterminal subscript
       INSERT INTO commerce_subscriptions(id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,cancel_at_period_end,current_period_end_ms,created_at_ms,updated_at_ms)
         VALUES ('sub-1','acct-1','customer-1','buyer-1','off-1','price-1','sub_stripe_1','active',1,2000,1,1);
     `);
-    const store = new CloudflareCommerceOfferingStore(database.d1);
+    const store = new SqliteCommerceOfferingStore(database.d1);
     assert.equal(await store.archiveOffering("off-1", 2), false);
     assert.equal((await store.readLifecycle("off-1"))?.state, "retiring");
 

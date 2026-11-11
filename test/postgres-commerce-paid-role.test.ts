@@ -1,14 +1,10 @@
+import type { PostgresDatabaseCapability } from "../src/runtime/postgres/postgres-capability";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
-import { CloudflarePaidRoleStore } from "../src/runtime/commerce/cloudflare-paid-role-store";
+import { PostgresPaidRoleStore } from "../src/runtime/postgres/postgres-commerce-paid-role-store";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 const NOW = 1_800_000_000_000;
@@ -36,7 +32,7 @@ for (const fixture of [
     async () => {
       await withPostgres(async (database) => {
         await seedAssignments(database);
-        const store = new CloudflarePaidRoleStore(database);
+        const store = new PostgresPaidRoleStore(database);
         const assignments = await store.listManagedAssignments({
           guildId: "guild-one",
           discordRoleId: "role-shared",
@@ -51,7 +47,7 @@ for (const fixture of [
   );
 }
 
-async function withPostgres(operation: (database: D1Database) => Promise<void>) {
+async function withPostgres(operation: (database: PostgresDatabaseCapability) => Promise<void>) {
   assert.ok(postgresUrl);
   const url = new URL(postgresUrl);
   assert.ok(["postgres:", "postgresql:"].includes(url.protocol));
@@ -64,23 +60,19 @@ async function withPostgres(operation: (database: D1Database) => Promise<void>) 
   });
   try {
     await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-    await applyPostgresMigrations(
-      database,
-      await readPostgresMigrations(resolve("migrations/postgres")),
-    );
-    await operation(createPostgresD1CompatibilityDatabase(database));
+    await initializePostgresSchema(database);
+    await operation(database);
   } finally {
     await database.close();
   }
 }
 
-async function seedAssignments(database: D1Database) {
+async function seedAssignments(database: PostgresDatabaseCapability) {
   for (const guild of ["guild-one", "guild-two"]) {
-    await database
-      .prepare(`INSERT INTO commerce_connected_accounts(id, guild_id, stripe_account_id, status, created_at_ms, updated_at_ms)
-        VALUES (?, ?, ?, 'active', ?, ?)`)
-      .bind(`seller-${guild}`, guild, `acct-${guild}`, NOW, NOW)
-      .run();
+    await database.queryResult(
+      "INSERT INTO commerce_connected_accounts(id, guild_id, stripe_account_id, status, created_at_ms, updated_at_ms)\n        VALUES ($1, $2, $3, 'active', $4, $5)",
+      [`seller-${guild}`, guild, `acct-${guild}`, NOW, NOW],
+    );
   }
   for (const offering of [
     { id: "offering-one", guild: "guild-one", role: "role-shared" },
@@ -90,10 +82,9 @@ async function seedAssignments(database: D1Database) {
   ]) {
     // A replacement and its archived predecessor can share a Guild/role pair.
     const archived = offering.id === "offering-two";
-    await database
-      .prepare(`INSERT INTO commerce_offerings(id, connected_account_id, guild_id, discord_role_id, name, purchase_type, status, archived_at_ms, created_at_ms, updated_at_ms)
-      VALUES (?, ?, ?, ?, 'Fixture Offering', 'subscription', ?, ?, ?, ?)`)
-      .bind(
+    await database.queryResult(
+      "INSERT INTO commerce_offerings(id, connected_account_id, guild_id, discord_role_id, name, purchase_type, status, archived_at_ms, created_at_ms, updated_at_ms)\n      VALUES ($1, $2, $3, $4, 'Fixture Offering', 'subscription', $5, $6, $7, $8)",
+      [
         offering.id,
         `seller-${offering.guild}`,
         offering.guild,
@@ -102,8 +93,8 @@ async function seedAssignments(database: D1Database) {
         archived ? NOW : null,
         NOW,
         NOW,
-      )
-      .run();
+      ],
+    );
   }
   for (const fixture of [
     {
@@ -179,17 +170,14 @@ async function seedAssignments(database: D1Database) {
       offset: 0,
     },
   ]) {
-    await database
-      .prepare(
-        "INSERT INTO commerce_buyers(id, discord_user_id, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?)",
-      )
-      .bind(`buyer-${fixture.id}`, `user-${fixture.id}`, NOW, NOW)
-      .run();
+    await database.queryResult(
+      "INSERT INTO commerce_buyers(id, discord_user_id, created_at_ms, updated_at_ms) VALUES ($1, $2, $3, $4)",
+      [`buyer-${fixture.id}`, `user-${fixture.id}`, NOW, NOW],
+    );
     if (fixture.offering !== null) {
-      await database
-        .prepare(`INSERT INTO commerce_entitlements(id, connected_account_id, buyer_id, offering_id, source_type, source_id, status, effective_at_ms, created_at_ms, updated_at_ms)
-        VALUES (?, ?, ?, ?, 'subscription', ?, 'active', ?, ?, ?)`)
-        .bind(
+      await database.queryResult(
+        "INSERT INTO commerce_entitlements(id, connected_account_id, buyer_id, offering_id, source_type, source_id, status, effective_at_ms, created_at_ms, updated_at_ms)\n        VALUES ($1, $2, $3, $4, 'subscription', $5, 'active', $6, $7, $8)",
+        [
           `entitlement-${fixture.id}`,
           `seller-${fixture.guild}`,
           `buyer-${fixture.id}`,
@@ -198,13 +186,12 @@ async function seedAssignments(database: D1Database) {
           NOW,
           NOW,
           NOW,
-        )
-        .run();
+        ],
+      );
     }
-    await database
-      .prepare(`INSERT INTO commerce_role_assignments(id, entitlement_id, guild_id, discord_user_id, discord_role_id, status, withheld_reason, created_at_ms, updated_at_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(
+    await database.queryResult(
+      "INSERT INTO commerce_role_assignments(id, entitlement_id, guild_id, discord_user_id, discord_role_id, status, withheld_reason, created_at_ms, updated_at_ms)\n      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+      [
         fixture.id,
         `entitlement-${fixture.id}`,
         fixture.guild,
@@ -214,7 +201,7 @@ async function seedAssignments(database: D1Database) {
         fixture.status === "withheld" ? "member_absent" : null,
         NOW,
         NOW + fixture.offset,
-      )
-      .run();
+      ],
+    );
   }
 }

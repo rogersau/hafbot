@@ -84,7 +84,7 @@ export function createAdminLoaderClient(signal?: AbortSignal): AdminLoaderClient
       });
 
       if (!response.ok) {
-        throw await parseAdminApiError(response, `${response.status} ${response.statusText}`);
+        throw await parseAdminApiError(response, "The dashboard request failed. Please try again.");
       }
 
       return response.json() as Promise<T>;

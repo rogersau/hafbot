@@ -128,6 +128,8 @@ test("getGuildBlocklist falls back to an enabled empty state for unknown guilds"
     readConfig: async () => ({ botUserId: "bot", guilds: {} }),
     readGuildConfig: async () => ({ botUserId: "bot", guilds: {} }),
     applyGuildEmojiMutation: async () => ({ botUserId: "bot", guilds: {} }),
+    readGuildNotificationChannel: async () => null,
+    upsertGuildNotificationChannel: async () => {},
   });
 
   const result = await service.getGuildBlocklist("missing-guild");

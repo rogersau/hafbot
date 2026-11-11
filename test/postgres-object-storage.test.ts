@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
 import { reconcilePortableObjectsPage } from "../src/node/portable-object-reconciliation";
@@ -10,10 +9,7 @@ import {
 } from "../src/runtime/postgres/postgres-capability";
 import { createPostgresGuildEntitlementStore } from "../src/runtime/postgres/postgres-guild-entitlement-store";
 import { createPostgresGuildObjectStore } from "../src/runtime/postgres/postgres-guild-object-store";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresPlayerCountStreakReportedStore } from "../src/runtime/postgres/postgres-player-count-streak-store";
 import { createPostgresSteamBanLookupStore } from "../src/runtime/postgres/postgres-steam-ban-lookup-store";
 import { InMemoryObjectStore } from "./support/in-memory-object-store";
@@ -120,8 +116,8 @@ test(
           ORDER BY guild_id`,
       );
       assert.deepEqual(rows, [
-        { guild_id: "guild-concurrent", status: "committed", size_bytes: "7" },
-        { guild_id: "guild-stale", status: "deleted", size_bytes: "0" },
+        { guild_id: "guild-concurrent", status: "committed", size_bytes: 7 },
+        { guild_id: "guild-stale", status: "deleted", size_bytes: 0 },
       ]);
       const state = await database.query<{
         cursor: string | null;
@@ -136,9 +132,9 @@ test(
       assert.deepEqual(state, [
         {
           cursor: null,
-          generation: "2",
+          generation: 2,
           started_at_ms: null,
-          last_reconciled_at_ms: String(nowMs),
+          last_reconciled_at_ms: nowMs,
         },
       ]);
     } finally {
@@ -174,8 +170,8 @@ async function verifyEntitlements(database: PostgresDatabaseCapability): Promise
   const store = createPostgresGuildEntitlementStore(database);
   assert.equal((await store.readGuildEntitlement("missing")).tier, "free");
   await database.execute(
-    `INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms)
-     VALUES ('premium-guild', 'premium', 'premium', 123)`,
+    `INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms)
+     VALUES ('premium-guild', 'premium', 123)`,
   );
   assert.deepEqual(await store.readGuildEntitlement("premium-guild"), {
     guildId: "premium-guild",
@@ -354,10 +350,7 @@ async function verifyTtlCaches(database: PostgresDatabaseCapability): Promise<vo
 
 async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-  await applyPostgresMigrations(
-    database,
-    await readPostgresMigrations(resolve("migrations/postgres")),
-  );
+  await initializePostgresSchema(database);
 }
 
 function assertSafeTestDatabase(value: string): void {

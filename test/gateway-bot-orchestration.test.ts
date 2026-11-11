@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { createGatewayBotController } from "../src/runtime/gateway-bot-orchestration";
+import { createGatewayBotController } from "./support/sqlite/runtime/gateway-bot-orchestration";
 import type { WhiteLabelBot, WhiteLabelBotStatus } from "../src/types";
 
 type GatewayRequest = {

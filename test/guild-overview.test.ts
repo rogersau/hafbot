@@ -1,3 +1,4 @@
+import { testWebhookCredential } from "./support/webhook-credentials";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -307,9 +308,15 @@ function configuredWebhooks(): WebhookProxyConfig[] {
       name: "Main proxy",
       enabled: true,
       banLookupEnabled: false,
-      banLookupNotificationUrl: null,
+      banLookupCredentialId: null,
       banLookupAppIds: [],
-      destinations: [{ id: "dest-1", label: "Discord", url: "https://example.com/webhook" }],
+      destinations: [
+        {
+          id: "dest-1",
+          label: "Discord",
+          credentialId: testWebhookCredential("https://example.com/webhook"),
+        },
+      ],
       defaultDestinationIds: ["dest-1"],
       routingRules: [],
       createdAtMs: Date.now(),

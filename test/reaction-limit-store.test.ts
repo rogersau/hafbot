@@ -5,13 +5,13 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareReactionLimitStore } from "../src/runtime/cloudflare-reaction-limit-store";
+import { createSqliteReactionLimitStore } from "./support/sqlite/runtime/sqlite-reaction-limit-store";
 import type { ReactionLimitConfig } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("createCloudflareReactionLimitStore reads and upserts limit config", async () => {
+test("createSqliteReactionLimitStore reads and upserts limit config", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareReactionLimitStore(database as unknown as D1Database);
+  const store = createSqliteReactionLimitStore(database as unknown as D1Database);
   const config: ReactionLimitConfig = {
     guildId: "guild-1",
     limitsEnabled: true,
@@ -37,7 +37,7 @@ test("createCloudflareReactionLimitStore reads and upserts limit config", async 
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareReactionLimitStore defaults legacy config rows to all channels", async () => {
+test("createSqliteReactionLimitStore defaults legacy config rows to all channels", async () => {
   const database = new SqliteD1Database();
   await database
     .prepare(
@@ -45,7 +45,7 @@ test("createCloudflareReactionLimitStore defaults legacy config rows to all chan
     )
     .bind("guild-legacy", 1, 10)
     .run();
-  const store = createCloudflareReactionLimitStore(database as unknown as D1Database);
+  const store = createSqliteReactionLimitStore(database as unknown as D1Database);
 
   assert.deepEqual(await store.readReactionLimitConfig("guild-legacy"), {
     guildId: "guild-legacy",
@@ -61,9 +61,9 @@ test("createCloudflareReactionLimitStore defaults legacy config rows to all chan
   });
 });
 
-test("createCloudflareReactionLimitStore increments and clears guild breach counters", async () => {
+test("createSqliteReactionLimitStore increments and clears guild breach counters", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareReactionLimitStore(database as unknown as D1Database);
+  const store = createSqliteReactionLimitStore(database as unknown as D1Database);
 
   assert.equal(await store.incrementBreachCounter("guild-1", "user-1"), 1);
   assert.equal(await store.incrementBreachCounter("guild-1", "user-1"), 2);
@@ -89,9 +89,9 @@ test("createCloudflareReactionLimitStore increments and clears guild breach coun
   ]);
 });
 
-test("createCloudflareReactionLimitStore increments message reaction counters", async () => {
+test("createSqliteReactionLimitStore increments message reaction counters", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareReactionLimitStore(database as unknown as D1Database);
+  const store = createSqliteReactionLimitStore(database as unknown as D1Database);
   const oldestFreshTimestamp = Date.now();
 
   assert.equal(await store.incrementMessageReactionCount("guild-1", "channel-1", "message-1"), 1);
@@ -107,9 +107,9 @@ test("createCloudflareReactionLimitStore increments message reaction counters", 
   assert.equal(await store.purgeExpiredCounters(oldestFreshTimestamp), 0);
 });
 
-test("createCloudflareReactionLimitStore deletes counters not touched since the cutoff", async () => {
+test("createSqliteReactionLimitStore deletes counters not touched since the cutoff", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareReactionLimitStore(database as unknown as D1Database);
+  const store = createSqliteReactionLimitStore(database as unknown as D1Database);
 
   await database
     .prepare(

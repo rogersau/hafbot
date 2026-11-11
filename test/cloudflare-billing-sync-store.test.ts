@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { CloudflareBillingSyncStore } from "../src/runtime/billing/cloudflare-billing-sync-store";
+import { SqliteBillingSyncStore } from "./support/sqlite/runtime/billing/sqlite-billing-sync-store";
 import type { BillingSubscriptionProjection } from "../src/runtime/billing/types";
 import {
   BillingOwnerSyncBusyError,
@@ -12,11 +12,11 @@ import {
   reconcileAllBillingOwners,
 } from "../src/runtime/billing/owner-sync";
 import { processBillingSyncMessage } from "../src/runtime/billing/sync-queue";
-import { CloudflareBillingWebhookStore } from "../src/runtime/billing/cloudflare-webhook-store";
+import { SqliteBillingWebhookStore } from "./support/sqlite/runtime/billing/sqlite-webhook-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("D1 Billing sync store binds Customer identity in both directions", async () => {
-  const store = new CloudflareBillingSyncStore(new SqliteD1Database() as unknown as D1Database);
+  const store = new SqliteBillingSyncStore(new SqliteD1Database() as unknown as D1Database);
   await store.bindCustomer("owner-1", "cus_1", 1);
   assert.equal(await store.readCustomerId("owner-1"), "cus_1");
   await assert.rejects(() => store.bindCustomer("owner-2", "cus_1", 2), /already bound/);
@@ -25,7 +25,7 @@ test("D1 Billing sync store binds Customer identity in both directions", async (
 
 test("D1 Billing sync store commits projection and ledger together only for the current generation", async () => {
   const database = new SqliteD1Database();
-  const store = new CloudflareBillingSyncStore(database as unknown as D1Database);
+  const store = new SqliteBillingSyncStore(database as unknown as D1Database);
   await store.bindCustomer("owner-1", "cus_1", 1);
   const generation = await store.acquireOwnerSync("owner-1", 10, 100);
   assert.equal(generation, 1);
@@ -87,7 +87,7 @@ test("D1 Billing sync store commits projection and ledger together only for the 
 
 test("D1 Billing sync store projects assigned Guilds free when a Subscription is cancelled", async () => {
   const database = new SqliteD1Database();
-  const store = new CloudflareBillingSyncStore(database as unknown as D1Database);
+  const store = new SqliteBillingSyncStore(database as unknown as D1Database);
   await store.bindCustomer("owner-1", "cus_1", 1);
   const firstGeneration = await store.acquireOwnerSync("owner-1", 10, 100);
   assert.equal(firstGeneration, 1);
@@ -107,10 +107,8 @@ test("D1 Billing sync store projects assigned Guilds free when a Subscription is
     .bind("guild-1", "owner-1", "sub_1", 20)
     .run();
   await database
-    .prepare(
-      "INSERT INTO guild_entitlements(guild_id, tier, plan, updated_at_ms) VALUES (?, ?, ?, ?)",
-    )
-    .bind("guild-1", "premium", "premium", 20)
+    .prepare("INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES (?, ?, ?)")
+    .bind("guild-1", "premium", 20)
     .run();
 
   const secondGeneration = await store.acquireOwnerSync("owner-1", 30, 100);
@@ -152,7 +150,7 @@ test("D1 Billing sync store projects assigned Guilds free when a Subscription is
 
 test("D1 Billing sync keeps quarantine cases consistent when expired syncs finish late", async () => {
   const database = new SqliteD1Database();
-  const store = new CloudflareBillingSyncStore(database as unknown as D1Database);
+  const store = new SqliteBillingSyncStore(database as unknown as D1Database);
   await store.bindCustomer("owner-1", "cus_1", 1);
   const commit = (generation: number, quarantined: boolean, observedAtMs: number) =>
     store.commitOwnerSync({
@@ -203,40 +201,6 @@ test("D1 Billing sync keeps quarantine cases consistent when expired syncs finis
   });
 });
 
-test("D1 Billing sync store awards each Founder Subscription once and never reopens it", async () => {
-  const database = new SqliteD1Database();
-  const store = new CloudflareBillingSyncStore(database as unknown as D1Database);
-  await store.bindCustomer("owner-1", "cus_1", 1);
-  await store.acquireOwnerSync("owner-1", 10, 1);
-  const founderProjection = {
-    ...projection(),
-    pricingCohort: "founder" as const,
-    founderAwardedAtMs: 10,
-  };
-  assert.equal(
-    await store.commitOwnerSync({
-      ownerId: "owner-1",
-      generation: 1,
-      projection: founderProjection,
-      operation: null,
-    }),
-    true,
-  );
-  assert.equal(await store.countFounderPlaces(), 1);
-
-  await store.acquireOwnerSync("owner-1", 20, 1);
-  assert.equal(
-    await store.commitOwnerSync({
-      ownerId: "owner-1",
-      generation: 2,
-      projection: { ...founderProjection, status: "cancelled", founderAwardedAtMs: null },
-      operation: null,
-    }),
-    true,
-  );
-  assert.equal(await store.countFounderPlaces(), 1);
-});
-
 test("D1 Billing sync releases failures for immediate recovery without duplicate lifecycle delivery", async () => {
   for (const failurePoint of [
     "projection",
@@ -247,7 +211,7 @@ test("D1 Billing sync releases failures for immediate recovery without duplicate
   ] as const) {
     const database = new SqliteD1Database();
     try {
-      const store = new CloudflareBillingSyncStore(database.d1);
+      const store = new SqliteBillingSyncStore(database.d1);
       const failure = new Error(`simulated ${failurePoint} failure`);
       const readProjection = store.readProjection.bind(store);
       const commit = store.commitOwnerSync.bind(store);
@@ -309,7 +273,7 @@ test("D1 Billing sync releases failures for immediate recovery without duplicate
 test("D1 Billing lease expiry and failed stale executions cannot clear or commit over a successor", async () => {
   const database = new SqliteD1Database();
   try {
-    const store = new CloudflareBillingSyncStore(database.d1);
+    const store = new SqliteBillingSyncStore(database.d1);
     await store.bindCustomer("owner-1", "cus_1", 1);
     assert.equal(await store.acquireOwnerSync("owner-1", 10, 100), 1);
     assert.equal(await store.acquireOwnerSync("owner-1", 109, 100), null);
@@ -343,7 +307,7 @@ test("concurrent webhook and scheduled Billing sync defer safely and later conve
     finishRead = resolve;
   });
   try {
-    const store = new CloudflareBillingSyncStore(database.d1);
+    const store = new SqliteBillingSyncStore(database.d1);
     let nowMs = 1_000;
     let block = false;
     let readStarted!: () => void;
@@ -413,8 +377,8 @@ test("concurrent webhook and scheduled Billing sync defer safely and later conve
 test("webhook contention retains retry and terminal semantics, then recovers after release", async () => {
   const database = new SqliteD1Database();
   try {
-    const store = new CloudflareBillingSyncStore(database.d1);
-    const webhookStore = new CloudflareBillingWebhookStore(database.d1);
+    const store = new SqliteBillingSyncStore(database.d1);
+    const webhookStore = new SqliteBillingWebhookStore(database.d1);
     await store.bindCustomer("owner-1", "cus_1", 1);
     await webhookStore.accept({
       eventId: "evt_1",
@@ -467,7 +431,6 @@ function syncCatalog() {
         productId: "prod_1",
         plan: "premium" as const,
         frequency: "monthly" as const,
-        cohort: "standard" as const,
       },
     ],
   ]);

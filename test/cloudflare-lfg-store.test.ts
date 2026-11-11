@@ -5,13 +5,13 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareLfgStore } from "../src/runtime/cloudflare-lfg-store";
+import { createSqliteLfgStore } from "./support/sqlite/runtime/sqlite-lfg-store";
 import type { LfgConfig, LfgPost } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("createCloudflareLfgStore uses the migrated unified database without runtime DDL", async () => {
+test("createSqliteLfgStore uses the migrated unified database without runtime DDL", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareLfgStore(database.d1);
+  const store = createSqliteLfgStore(database.d1);
   const config: LfgConfig = {
     guildId: "guild-1",
     noticeChannelId: "notice-channel-1",

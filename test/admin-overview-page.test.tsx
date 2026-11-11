@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -502,16 +503,12 @@ test("Operations inbox reports remediation errors and restores the selected acti
     document: env.dom.window.document,
     fetch: async () => {
       calls += 1;
-      return Response.json(
-        {
-          error: "The incident changed; refresh and try again.",
-          code: "conflict",
-          correlationId: "ops-ref-123",
-          retryable: false,
-          action: "contact_support",
-        },
-        { status: 409 },
-      );
+      return adminErrorResponse("The incident changed; refresh and try again.", 409, {
+        code: "conflict",
+        correlationId: "ops-ref-123",
+        retryable: false,
+        action: "contact_support",
+      });
     },
   });
   try {

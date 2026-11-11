@@ -1,3 +1,4 @@
+import type { Cache } from "./discord-json-cache";
 import type { QueueProducer } from "./queue-types";
 import type { OperationalIncidentStore as BanIncidentStore } from "../operations/incidents";
 import { createBanCaseEnforcementRuntime } from "./ban-case-enforcement-runtime";
@@ -106,13 +107,13 @@ import {
   postPlayerCountAuditEvent,
   postSuggestionAuditEvent,
 } from "../services/guild-audit-log-service";
-import type { GuildNotificationChannelStore } from "../services/activity-log";
+
 import type { EvidenceVaultBlobStore, RuntimeStores } from "./app-types";
 import type { EvidenceMediaCapability } from "../security/evidence-media-capability";
 import type { WebhookCredentialService } from "../security/webhook-credentials/store";
 import { parseDiscordWebhookCredential } from "../security/webhook-credentials";
 import { createGuildBrandingResolver } from "./guild-branding";
-import { createJsonKvCache } from "./discord-json-cache";
+import { createJsonCache } from "./discord-json-cache";
 import {
   getCachedGuildTicketResources,
   getCoalescedGuildTicketResources,
@@ -180,7 +181,7 @@ export interface ServiceFactoryOptions {
   discordBotToken: string;
   discordBotUserId?: string;
   guildResources?: GuildResourceValidator;
-  discordCacheKv?: KVNamespace;
+  discordCache?: Cache<string>;
   steamWebApiKey?: string;
   webhookProxyLogPersistenceEnabled?: boolean;
   webhookProxyDeliveryQueue?: QueueProducer<unknown>;
@@ -225,9 +226,7 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
         isKillSwitchEnabled: () => options.serverLevelsEnabled === false,
       })
     : null;
-  const evidenceViewCooldownCache = createJsonKvCache<{ expiresAtMs: number }>(
-    options.discordCacheKv,
-  );
+  const evidenceViewCooldownCache = createJsonCache<{ expiresAtMs: number }>(options.discordCache);
   const brandingResolver = createGuildBrandingResolver(options.whiteLabelBotStore);
   const discordMessages = {
     createChannelMessage: (channelId: string, body: Parameters<typeof createChannelMessage>[1]) =>
@@ -507,7 +506,7 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
         addGuildMemberRole(guildId, userId, roleId, options.discordBotToken),
       (guildId, userId, roleId) =>
         removeGuildMemberRole(guildId, userId, roleId, options.discordBotToken),
-      options.stores.blocklist as Partial<GuildNotificationChannelStore>,
+      options.stores.blocklist,
       (channelId, body) =>
         createChannelMessage(channelId, body, options.discordBotToken).then(() => undefined),
       (userId, body) =>

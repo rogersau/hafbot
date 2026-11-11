@@ -14,7 +14,14 @@ import {
   logServerLevelTelemetry,
   type ServerLevelTelemetryEmitter,
 } from "../server-levels/telemetry";
-import { createCloudflareContext } from "./cloudflare-context";
+import type { RuntimeAppContext } from "./app-context";
+
+type ServerLevelRuntimeContext = Pick<
+  RuntimeAppContext,
+  "features" | "serverLevelCredentialService"
+> & {
+  stores: Pick<RuntimeAppContext["stores"], "serverLevels" | "platformLink" | "guildEntitlements">;
+};
 import type { ServerLevelStore } from "./contracts/server-level-store";
 import {
   DEFAULT_QUEUE_MAX_ATTEMPTS,
@@ -35,11 +42,11 @@ export interface ServerLevelQueueLogger {
 export async function handleServerLevelQueueBatch(
   batch: QueueBatch<unknown>,
   env: Env,
+  context: ServerLevelRuntimeContext,
   logger: ServerLevelQueueLogger = console,
   now: () => number = Date.now,
 ): Promise<void> {
-  const context = createCloudflareContext(env);
-  const processor = createServerLevelProcessor(env, now, logServerLevelTelemetry);
+  const processor = createServerLevelProcessor(env, context, now, logServerLevelTelemetry);
   await deliverQueueBatch(batch, {
     maxAttempts: DEFAULT_QUEUE_MAX_ATTEMPTS,
     parse(body) {
@@ -73,10 +80,10 @@ export async function handleServerLevelQueueBatch(
 
 export async function maintainServerLevels(
   env: Env,
+  context: ServerLevelRuntimeContext,
   now: () => number = Date.now,
   emitTelemetry: ServerLevelTelemetryEmitter = logServerLevelTelemetry,
 ): Promise<{ published: number; servers: number }> {
-  const context = createCloudflareContext(env);
   const published = env.SERVER_LEVELS_QUEUE
     ? await sweepServerLevelIngressOutbox({
         store: context.stores.serverLevels,
@@ -84,7 +91,7 @@ export async function maintainServerLevels(
         now,
       })
     : 0;
-  const processor = createServerLevelProcessor(env, now, emitTelemetry);
+  const processor = createServerLevelProcessor(env, context, now, emitTelemetry);
   const dataApi = context.serverLevelCredentialService
     ? new CftoolsDataApiClient({ credentials: context.serverLevelCredentialService, now })
     : null;
@@ -216,10 +223,10 @@ async function serverLevelAnnouncementNonce(announcementId: string): Promise<str
 
 function createServerLevelProcessor(
   env: Env,
+  context: ServerLevelRuntimeContext,
   now: () => number,
   emitTelemetry: ServerLevelTelemetryEmitter,
 ): ServerLevelProcessor {
-  const context = createCloudflareContext(env);
   return new ServerLevelProcessor({
     store: context.stores.serverLevels,
     platformLinks: context.stores.platformLink,

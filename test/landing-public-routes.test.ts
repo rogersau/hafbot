@@ -41,12 +41,6 @@ test("home response renders the same Stripe catalogue values into plans and stru
   const routes = createPublicRoutes({
     features: ALL_FEATURES_ENABLED,
     landingPriceCatalog: {
-      readFounderAdmission: async () => ({
-        historicalCount: 12,
-        publicCount: 12,
-        limit: 50,
-        open: true,
-      }),
       read: async () => [
         {
           plan: "premium",

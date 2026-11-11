@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { CommerceFinancialAction } from "../src/commerce/financial-operations";
-import { CloudflareCommerceFinancialOperationsStore } from "../src/runtime/commerce/cloudflare-financial-operations-store";
-import { processCommerceFinancialProviderActions } from "../src/runtime/commerce/financial-provider-actions";
+import { SqliteCommerceFinancialOperationsStore } from "./support/sqlite/runtime/commerce/sqlite-financial-operations-store";
+import { processCommerceFinancialProviderActions } from "./support/sqlite/runtime/commerce/financial-provider-actions";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 for (const stage of ["initial", "final"] as const) {
@@ -354,7 +354,7 @@ test("provider actions quarantine after bounded retries and open an incident", a
 test("parent financial actions quarantine after bounded retries and cannot be reclaimed", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceFinancialOperationsStore(database.d1);
+    const store = new SqliteCommerceFinancialOperationsStore(database.d1);
     const action: CommerceFinancialAction = {
       id: "refund-1",
       connectedAccountId: "acct-1",
@@ -422,7 +422,7 @@ test("expired parent leases cannot mutate seller state", async () => {
       INSERT INTO commerce_offering_lifecycles(offering_id,connected_account_id,guild_id,state,included_benefits_json,support_contact,role_manageable,created_at_ms,updated_at_ms)
         VALUES ('off-1','acct-1','guild-1','published','["Access"]','seller@example.test',1,1,1);
     `);
-    const store = new CloudflareCommerceFinancialOperationsStore(database.d1);
+    const store = new SqliteCommerceFinancialOperationsStore(database.d1);
     const action = parentSellerAction();
     assert.equal(
       await store.claimAction(action, { leaseToken: "expired", nowMs: 100, leaseMs: 100 }),

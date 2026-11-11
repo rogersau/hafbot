@@ -1,26 +1,22 @@
+import { gatewayEnvelope } from "./support/gateway-envelope";
+import { __testing as runtimeTesting } from "../src/node/postgres-runtime";
+import { InMemoryObjectStore } from "./support/in-memory-object-store";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
-import type { Env } from "../src/env";
-import { createCloudflareGuildAuditLogStore } from "../src/runtime/cloudflare-guild-audit-log-store";
+import type { Env } from "./support/test-env";
+import { createPostgresGuildAuditLogStore } from "../src/runtime/postgres/postgres-guild-audit-log-store";
 import { createPostgresBlocklistStore } from "../src/runtime/postgres/postgres-blocklist-store";
 import {
   createPostgresDatabaseCapabilityFromEnvironment,
   type PostgresDatabaseCapability,
 } from "../src/runtime/postgres/postgres-capability";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
 import { createPostgresJobQueue } from "../src/runtime/postgres/postgres-job-queue";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresReactionLimitStore } from "../src/runtime/postgres/postgres-reaction-limit-store";
 import { deliverGatewayEventQueueBatch } from "../src/runtime/gateway-event-queue-consumer";
-import {
-  createGatewayEventOperationStore,
-  deriveGatewayEventKey,
-} from "../src/runtime/gateway-event-idempotency";
+import { deriveGatewayEventKey } from "../src/runtime/gateway-event-idempotency";
+import { createPostgresGatewayEventOperationStore } from "../src/runtime/postgres/postgres-gateway-event-operation-store";
 import type { QueueDeliveryOutcome } from "../src/runtime/queue-delivery";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
@@ -31,11 +27,10 @@ test(
   postgresOnly,
   async (t) => {
     const database = await createTestDatabase();
-    const d1 = createPostgresD1CompatibilityDatabase(database);
     const reactions = createPostgresReactionLimitStore(database);
-    const receipts = createGatewayEventOperationStore(d1);
+    const receipts = createPostgresGatewayEventOperationStore(database);
     const queue = createPostgresJobQueue(database);
-    const env = createEnv(d1);
+    const env = createEnv();
     let now = new Date("2026-11-05T00:00:00.000Z");
     t.mock.method(Date, "now", () => now.getTime());
     t.mock.timers.enable({ apis: ["setInterval"] });
@@ -77,7 +72,7 @@ test(
         channelIds: [],
       });
       await database.execute(
-        "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ($1, 'premium', 'premium', 0)",
+        "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ($1, 'premium', 0)",
         ["guild-test"],
       );
       const blocklist = createPostgresBlocklistStore(database, "bot-test");
@@ -87,7 +82,7 @@ test(
         action: "add",
       });
       for (const sequence of [1, 2]) {
-        const payload = {
+        const payload = gatewayEnvelope({
           type: "MESSAGE_REACTION_ADD",
           sequence,
           data: {
@@ -97,7 +92,7 @@ test(
             user_id: "user-test",
             emoji: { id: null, name: "🚫", animated: false },
           },
-        };
+        });
         // A v2 sequence identifies distinct events with the same reaction payload.
         const envelope = { ...payload, version: 2, sessionId: "session-test" };
         const body = { ...envelope, eventKey: deriveGatewayEventKey(envelope) };
@@ -108,7 +103,7 @@ test(
         });
         const reasons: string[] = [];
         for (let attempt = 1; attempt <= 4; attempt += 1) {
-          const result = await deliverNext(queue, env, now);
+          const result = await deliverNext(queue, env, now, database);
           reasons.push(...result.reasons);
           const metadata = await queue.inspect(job.id);
           assert.ok(metadata);
@@ -133,7 +128,7 @@ test(
         });
         // Duplicate delivery retains all completed mutations and Discord effects.
         await queue.enqueue({ queueName: "gateway-events", payload: body, availableAt: now });
-        assert.equal((await deliverNext(queue, env, now)).state, "completed");
+        assert.equal((await deliverNext(queue, env, now, database)).state, "completed");
       }
       assert.deepEqual(await reactions.readBreachCounters("guild-test"), [
         { guildId: "guild-test", userId: "user-test", breachCount: 2 },
@@ -151,9 +146,8 @@ test(
   postgresOnly,
   async (t) => {
     const database = await createTestDatabase();
-    const d1 = createPostgresD1CompatibilityDatabase(database);
     const queue = createPostgresJobQueue(database);
-    const env = createEnv(d1);
+    const env = createEnv();
     let now = new Date("2026-11-05T00:00:00.000Z");
     t.mock.method(Date, "now", () => now.getTime());
     t.mock.method(console, "error", () => {});
@@ -171,7 +165,7 @@ test(
       },
     );
     try {
-      await createCloudflareGuildAuditLogStore(d1).upsertConfig({
+      await createPostgresGuildAuditLogStore(database).upsertConfig({
         guildId: "guild-test",
         auditChannelId: "audit-test",
         groupChannelIds: {},
@@ -181,7 +175,7 @@ test(
         },
         updatedAtMs: now.getTime(),
       });
-      const body = {
+      const body = gatewayEnvelope({
         type: "GUILD_MEMBER_UPDATE",
         previousRoleIds: ["role-old"],
         data: {
@@ -189,7 +183,7 @@ test(
           user: { id: "user-test", username: "Test" },
           roles: ["role-new"],
         },
-      };
+      });
       const eventKey = deriveGatewayEventKey(body);
       const job = await queue.enqueue({
         queueName: "gateway-events",
@@ -198,7 +192,7 @@ test(
       });
       const reasons: string[] = [];
       for (let attempt = 1; attempt <= 4; attempt += 1) {
-        const result = await deliverNext(queue, env, now);
+        const result = await deliverNext(queue, env, now, database);
         reasons.push(...result.reasons);
         const metadata = await queue.inspect(job.id);
         assert.ok(metadata);
@@ -208,7 +202,7 @@ test(
       assert.equal((await queue.inspect(job.id))?.state, "completed", reasons.join(","));
       assert.equal((await queue.inspect(job.id))?.attempts, 3);
       assert.deepEqual(reasons, ["provider_rate_limited", "provider_rate_limited"]);
-      const receipt = await createGatewayEventOperationStore(d1).read(
+      const receipt = await createPostgresGatewayEventOperationStore(database).read(
         eventKey,
         "member-update:audit-role-assign",
       );
@@ -218,7 +212,7 @@ test(
       assert.equal(new Set(posts.slice(0, 3).map((post) => post.nonce)).size, 1);
       assert.ok(posts.every((post) => post.enforce_nonce));
       await queue.enqueue({ queueName: "gateway-events", payload: body, availableAt: now });
-      assert.equal((await deliverNext(queue, env, now)).state, "completed");
+      assert.equal((await deliverNext(queue, env, now, database)).state, "completed");
       assert.equal(posts.length, 4);
     } finally {
       await database.close();
@@ -226,7 +220,12 @@ test(
   },
 );
 
-async function deliverNext(queue: ReturnType<typeof createPostgresJobQueue>, env: Env, now: Date) {
+async function deliverNext(
+  queue: ReturnType<typeof createPostgresJobQueue>,
+  env: Env,
+  now: Date,
+  database: PostgresDatabaseCapability,
+) {
   const [job] = await queue.claim({
     ownerId: "test-worker",
     queueNames: ["gateway-events"],
@@ -263,6 +262,16 @@ async function deliverNext(queue: ReturnType<typeof createPostgresJobQueue>, env
         if (name === "queue_delivery" && event.reasonCode) reasons.push(event.reasonCode);
       },
     },
+    runtimeTesting.createGatewayDependencies(
+      runtimeTesting.createNodeContext({
+        environment: { NODE_ENV: "test", STAGING_MODE: "true" },
+        env: { ...env, STAGING_MODE: "true" },
+        database,
+        objects: new InMemoryObjectStore(),
+      }).app,
+      env,
+      database,
+    ),
   );
   assert.ok(result.outcome);
   return {
@@ -272,8 +281,12 @@ async function deliverNext(queue: ReturnType<typeof createPostgresJobQueue>, env
   };
 }
 
-function createEnv(database: D1Database): Env {
-  return { HAF_DB: database, BOT_USER_ID: "bot-test", DISCORD_BOT_TOKEN: "fake-token" } as Env;
+function createEnv(): Env {
+  return {
+    DISCORD_PUBLIC_KEY: "a".repeat(64),
+    BOT_USER_ID: "bot-test",
+    DISCORD_BOT_TOKEN: "fake-token",
+  } as Env;
 }
 
 async function createTestDatabase(): Promise<PostgresDatabaseCapability> {
@@ -286,9 +299,6 @@ async function createTestDatabase(): Promise<PostgresDatabaseCapability> {
     PG_POOL_MAX: "6",
   });
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-  await applyPostgresMigrations(
-    database,
-    await readPostgresMigrations(resolve("migrations/postgres")),
-  );
+  await initializePostgresSchema(database);
   return database;
 }

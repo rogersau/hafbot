@@ -1,3 +1,4 @@
+import { gatewayEnvelope } from "./support/gateway-envelope";
 import type { QueueBatch } from "../src/runtime/queue-types";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
@@ -9,32 +10,28 @@ import test from "node:test";
 import {
   deliverGatewayEventQueueBatch,
   processGatewayEventQueueMessages as processGatewayEventQueueMessagesRuntime,
-} from "../src/runtime/gateway-event-queue-consumer";
-import { createCloudflareGuildAuditLogStore } from "../src/runtime/cloudflare-guild-audit-log-store";
-import { createCloudflareGuildRbacStore } from "../src/runtime/cloudflare-guild-rbac-store";
-import { createCloudflareGuildPlanProjectionStore } from "../src/runtime/cloudflare-guild-plan-projection-store";
+} from "./support/gateway-event-consumer";
+import { createSqliteGuildAuditLogStore } from "./support/sqlite/runtime/sqlite-guild-audit-log-store";
+import { createSqliteGuildRbacStore } from "./support/sqlite/runtime/sqlite-guild-rbac-store";
+import { createSqliteGuildPlanProjectionStore } from "./support/sqlite/runtime/sqlite-guild-plan-projection-store";
 import { buildMemberVerificationCustomId } from "../src/services/member-verification-service";
-import { createCloudflareMemberVerificationStore } from "../src/runtime/cloudflare-member-verification-store";
-import { createCloudflareMentionProtectionStore } from "../src/runtime/cloudflare-mention-protection-store";
-import { createCloudflareManagedMessageStore } from "../src/runtime/cloudflare-managed-message-store";
-import { createCloudflarePlatformLinkStore } from "../src/runtime/cloudflare-platform-link-store";
-import { createCloudflareServerLevelStore } from "../src/runtime/cloudflare-server-level-store";
-import { createCloudflareSteamLinkStore } from "../src/runtime/cloudflare-steam-link-store";
-import { createCloudflareTimedRoleStore } from "../src/runtime/cloudflare-timed-role-store";
-import { createCloudflareTicketStore } from "../src/runtime/cloudflare-ticket-store";
-import { createCloudflareWhiteLabelBotStore } from "../src/runtime/cloudflare-white-label-bot-store";
+import { createSqliteMemberVerificationStore } from "./support/sqlite/runtime/sqlite-member-verification-store";
+import { createSqliteMentionProtectionStore } from "./support/sqlite/runtime/sqlite-mention-protection-store";
+import { createSqliteManagedMessageStore } from "./support/sqlite/runtime/sqlite-managed-message-store";
+import { createSqlitePlatformLinkStore } from "./support/sqlite/runtime/sqlite-platform-link-store";
+import { createSqliteServerLevelStore } from "./support/sqlite/runtime/sqlite-server-level-store";
+import { createSqliteTimedRoleStore } from "./support/sqlite/runtime/sqlite-timed-role-store";
+import { createSqliteTicketStore } from "./support/sqlite/runtime/sqlite-ticket-store";
+import { createSqliteWhiteLabelBotStore } from "./support/sqlite/runtime/sqlite-white-label-bot-store";
 import type {
   PlatformLink,
   PlatformLinkConfig,
 } from "../src/runtime/contracts/platform-link-store";
-import type { SteamLink, SteamLinkConfig } from "../src/runtime/contracts/steam-link-store";
 import { createLegacyCommunityStoreDatabase } from "./helpers/legacy-community-store-d1";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 import { createDefaultMentionProtectionConfig } from "../src/services/mention-protection/message-handler";
-import {
-  createGatewayEventOperationStore,
-  deriveGatewayEventKey,
-} from "../src/runtime/gateway-event-idempotency";
+import { deriveGatewayEventKey } from "../src/runtime/gateway-event-idempotency";
+import { createGatewayEventOperationStore } from "./support/sqlite-gateway-operation-store";
 import { createPermissiveGuildResourceValidator } from "./helpers/guild-resource-validator";
 
 function processGatewayEventQueueMessages(
@@ -58,7 +55,7 @@ test("processGatewayEventQueueMessages moderates reaction add events", async () 
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "MESSAGE_REACTION_ADD",
           data: {
             channel_id: "channel-1",
@@ -67,7 +64,7 @@ test("processGatewayEventQueueMessages moderates reaction add events", async () 
             emoji: { id: null, name: "✅", animated: false },
             user_id: "user-1",
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         moderationStoreFetch(input) {
@@ -110,7 +107,7 @@ test("processGatewayEventQueueMessages handles message create moderation", async
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "MESSAGE_CREATE",
           data: {
             id: "message-9",
@@ -119,7 +116,7 @@ test("processGatewayEventQueueMessages handles message create moderation", async
             content: "please no ✅ here",
             author: { id: "user-9", username: "member-9" },
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         moderationStoreFetch(input) {
@@ -148,7 +145,7 @@ test("processGatewayEventQueueMessages handles message create moderation", async
 
 test("non-member Gateway events do not construct Member Verification", async () => {
   await processGatewayEventQueueMessages(
-    [{ type: "UNHANDLED_EVENT", data: { guild_id: "guild-1" } }],
+    [gatewayEnvelope({ type: "UNHANDLED_EVENT", data: { guild_id: "guild-1" } })],
     createGatewayConsumerEnv({
       enableMemberVerification: true,
       componentIdSigningSecret: "too-short",
@@ -159,7 +156,7 @@ test("non-member Gateway events do not construct Member Verification", async () 
 test("processGatewayEventQueueMessages lets a configured HAF admin use !send", async () => {
   const database = new SqliteD1Database();
   const d1 = database as unknown as D1Database;
-  const tickets = createCloudflareTicketStore(d1);
+  const tickets = createSqliteTicketStore(d1);
   await tickets.upsertTicketPanelConfig({
     guildId: "guild-1",
     panelId: "main",
@@ -185,10 +182,7 @@ test("processGatewayEventQueueMessages lets a configured HAF admin use !send", a
         supportRoleId: "support-role",
         channelNamePrefix: "support",
         questions: [],
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
         responseRules: [],
-        anonymousEnabled: false,
         anonymousSupportEnabled: true,
         staffDiscussionThreadEnabled: true,
         ticketHistoryPromptVisibility: "off",
@@ -213,7 +207,7 @@ test("processGatewayEventQueueMessages lets a configured HAF admin use !send", a
     transcriptMessageId: null,
     staffThreadId: "staff-thread-1",
   });
-  await createCloudflareGuildRbacStore(d1).upsertGuildAdminRoleId("guild-1", "haf-admin-role");
+  await createSqliteGuildRbacStore(d1).upsertGuildAdminRoleId("guild-1", "haf-admin-role");
 
   const requests: Array<{ url: string; method: string; body: string }> = [];
   const { restore } = interceptDiscordFetch(async (input, init) => {
@@ -236,7 +230,7 @@ test("processGatewayEventQueueMessages lets a configured HAF admin use !send", a
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "MESSAGE_CREATE",
           data: {
             id: "admin-message-1",
@@ -247,7 +241,7 @@ test("processGatewayEventQueueMessages lets a configured HAF admin use !send", a
             author: { id: "admin-1" },
             member: { roles: ["haf-admin-role"] },
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: d1 }),
     );
@@ -276,7 +270,7 @@ test("processGatewayEventQueueMessages lets a configured HAF admin use !send", a
 
 test("Managed Message deletion redelivery marks Missing once, audits once, and suppresses generic deletion", async () => {
   const database = new SqliteD1Database();
-  await createCloudflareManagedMessageStore(database as unknown as D1Database).upsert({
+  await createSqliteManagedMessageStore(database as unknown as D1Database).upsert({
     id: "managed-1",
     guildId: "guild-1",
     internalName: "rules",
@@ -288,7 +282,7 @@ test("Managed Message deletion redelivery marks Missing once, audits once, and s
     createdAtMs: 1,
     updatedAtMs: 1,
   });
-  await createCloudflareGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
+  await createSqliteGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
     guildId: "guild-1",
     auditChannelId: "audit-channel-1",
     groupChannelIds: {},
@@ -300,10 +294,10 @@ test("Managed Message deletion redelivery marks Missing once, audits once, and s
     bodies.push(String(init?.body ?? ""));
     return Response.json({ id: "audit-message-1" });
   });
-  const envelope = {
+  const envelope = gatewayEnvelope({
     type: "MESSAGE_DELETE",
     data: { id: "message-1", guild_id: "guild-1", channel_id: "channel-1" },
-  };
+  });
 
   try {
     await processGatewayEventQueueMessages(
@@ -316,7 +310,7 @@ test("Managed Message deletion redelivery marks Missing once, audits once, and s
     assert.doesNotMatch(bodies[0] ?? "", /Message Deleted"/i);
     assert.equal(
       (
-        await createCloudflareManagedMessageStore(database as unknown as D1Database).readById(
+        await createSqliteManagedMessageStore(database as unknown as D1Database).readById(
           "guild-1",
           "managed-1",
         )
@@ -330,7 +324,7 @@ test("Managed Message deletion redelivery marks Missing once, audits once, and s
 
 test("gateway member updates apply Audit Exclusion Policy roles using post-event membership", async () => {
   const database = new SqliteD1Database();
-  await createCloudflareGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
+  await createSqliteGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
     guildId: "guild-1",
     auditChannelId: "audit-channel-1",
     groupChannelIds: {},
@@ -348,7 +342,7 @@ test("gateway member updates apply Audit Exclusion Policy roles using post-event
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_MEMBER_UPDATE",
           previousRoleIds: [],
           data: {
@@ -356,12 +350,12 @@ test("gateway member updates apply Audit Exclusion Policy roles using post-event
             user: { id: "member-1" },
             roles: ["excluded-role"],
           },
-        },
-        {
+        }),
+        gatewayEnvelope({
           type: "GUILD_MEMBER_UPDATE",
           previousRoleIds: ["excluded-role"],
           data: { guild_id: "guild-1", user: { id: "member-1" }, roles: [] },
-        },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
     );
@@ -376,7 +370,7 @@ test("gateway member updates apply Audit Exclusion Policy roles using post-event
 test("Managed Message deletion retries a failed pending audit after the record is Missing", async () => {
   const clock = mockDateNow(1_000);
   const database = new SqliteD1Database();
-  const managedMessages = createCloudflareManagedMessageStore(database as unknown as D1Database);
+  const managedMessages = createSqliteManagedMessageStore(database as unknown as D1Database);
   await managedMessages.upsert({
     id: "managed-1",
     guildId: "guild-1",
@@ -389,7 +383,7 @@ test("Managed Message deletion retries a failed pending audit after the record i
     createdAtMs: 1,
     updatedAtMs: 1,
   });
-  await createCloudflareGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
+  await createSqliteGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
     guildId: "guild-1",
     auditChannelId: "audit-channel-1",
     groupChannelIds: {},
@@ -403,10 +397,10 @@ test("Managed Message deletion retries a failed pending audit after the record i
       ? new Response("unavailable", { status: 503 })
       : Response.json({ id: "audit-message-1" });
   });
-  const envelope = {
+  const envelope = gatewayEnvelope({
     type: "MESSAGE_DELETE",
     data: { id: "message-1", guild_id: "guild-1", channel_id: "channel-1" },
-  };
+  });
 
   try {
     await assert.rejects(
@@ -446,10 +440,8 @@ test("processGatewayEventQueueMessages routes creates and updates through Mentio
   const config = createDefaultMentionProtectionConfig("guild-1", 100);
   config.spamEnabled = true;
   config.massMentionThreshold = 2;
-  await createCloudflareMentionProtectionStore(database as unknown as D1Database).upsertConfig(
-    config,
-  );
-  await createCloudflareGuildPlanProjectionStore(
+  await createSqliteMentionProtectionStore(database as unknown as D1Database).upsertConfig(config);
+  await createSqliteGuildPlanProjectionStore(
     database as unknown as D1Database,
   ).upsertGuildPlanProjection({ guildId: "guild-1", plan: "premium", updatedAtMs: 100 });
   const calls: Array<{ url: string; method: string }> = [];
@@ -469,7 +461,7 @@ test("processGatewayEventQueueMessages routes creates and updates through Mentio
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "MESSAGE_CREATE",
           data: {
             id: "message-1",
@@ -484,8 +476,8 @@ test("processGatewayEventQueueMessages routes creates and updates through Mentio
             mention_roles: [],
             mention_everyone: false,
           },
-        },
-        {
+        }),
+        gatewayEnvelope({
           type: "MESSAGE_UPDATE",
           data: {
             id: "message-2",
@@ -501,7 +493,7 @@ test("processGatewayEventQueueMessages routes creates and updates through Mentio
             mention_roles: [],
             mention_everyone: false,
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         HAF_DB: database as unknown as D1Database,
@@ -541,7 +533,7 @@ test("processGatewayEventQueueMessages logs guild lifecycle events", async () =>
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_CREATE",
           data: {
             id: "guild-1",
@@ -550,8 +542,8 @@ test("processGatewayEventQueueMessages logs guild lifecycle events", async () =>
             owner_id: "owner-1",
             icon: "icon-hash",
           },
-        },
-        { type: "GUILD_DELETE", data: { id: "guild-2", name: "Guild Two" } },
+        }),
+        gatewayEnvelope({ type: "GUILD_DELETE", data: { id: "guild-2", name: "Guild Two" } }),
       ],
       createGatewayConsumerEnv({
         HAF_DB: database.d1,
@@ -593,7 +585,7 @@ test("processGatewayEventQueueMessages skips GUILD_CREATE for known guild withou
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_CREATE",
           data: {
             id: "guild-1",
@@ -602,7 +594,7 @@ test("processGatewayEventQueueMessages skips GUILD_CREATE for known guild withou
             owner_id: "owner-1",
             icon: "icon-hash",
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         GLOBAL_ADMIN_LOG_CHANNEL_ID: "global-admin-log-channel",
@@ -616,7 +608,7 @@ test("processGatewayEventQueueMessages skips GUILD_CREATE for known guild withou
 
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_CREATE",
           data: {
             id: "guild-1",
@@ -625,7 +617,7 @@ test("processGatewayEventQueueMessages skips GUILD_CREATE for known guild withou
             owner_id: "owner-1",
             icon: "new-icon",
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         GLOBAL_ADMIN_LOG_CHANNEL_ID: "global-admin-log-channel",
@@ -642,7 +634,7 @@ test("processGatewayEventQueueMessages skips GUILD_CREATE for known guild withou
 
 test("processGatewayEventQueueMessages suppresses standard bot events for active White-Label Bot Guilds", async () => {
   const database = new SqliteD1Database();
-  const whiteLabelBots = createCloudflareWhiteLabelBotStore(database as unknown as D1Database);
+  const whiteLabelBots = createSqliteWhiteLabelBotStore(database as unknown as D1Database);
   await whiteLabelBots.upsertWhiteLabelBot({
     guildId: "guild-1",
     applicationId: "app-1",
@@ -663,12 +655,12 @@ test("processGatewayEventQueueMessages suppresses standard bot events for active
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_CREATE",
           botIdentityId: "standard",
           botUserId: "bot-user-id",
           data: { id: "guild-1", name: "Guild One" },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         GLOBAL_ADMIN_LOG_CHANNEL_ID: "global-admin-log-channel",
@@ -684,7 +676,7 @@ test("processGatewayEventQueueMessages suppresses standard bot events for active
 
 test("processGatewayEventQueueMessages allows standard bot events for suspended White-Label Bot Guilds", async () => {
   const database = new SqliteD1Database();
-  const whiteLabelBots = createCloudflareWhiteLabelBotStore(database as unknown as D1Database);
+  const whiteLabelBots = createSqliteWhiteLabelBotStore(database as unknown as D1Database);
   await whiteLabelBots.upsertWhiteLabelBot({
     guildId: "guild-1",
     applicationId: "app-1",
@@ -705,12 +697,12 @@ test("processGatewayEventQueueMessages allows standard bot events for suspended 
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_CREATE",
           botIdentityId: "standard",
           botUserId: "bot-user-id",
           data: { id: "guild-1", name: "Guild One" },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         GLOBAL_ADMIN_LOG_CHANNEL_ID: "global-admin-log-channel",
@@ -726,7 +718,7 @@ test("processGatewayEventQueueMessages allows standard bot events for suspended 
 
 test("processGatewayEventQueueMessages allows White-Label Bot events for active White-Label Bot Guilds", async () => {
   const database = new SqliteD1Database();
-  const whiteLabelBots = createCloudflareWhiteLabelBotStore(database as unknown as D1Database);
+  const whiteLabelBots = createSqliteWhiteLabelBotStore(database as unknown as D1Database);
   await whiteLabelBots.upsertWhiteLabelBot({
     guildId: "guild-1",
     applicationId: "app-1",
@@ -747,12 +739,12 @@ test("processGatewayEventQueueMessages allows White-Label Bot events for active 
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_CREATE",
           botIdentityId: "white-label:guild-1",
           botUserId: "white-label-bot-user",
           data: { id: "guild-1", name: "Guild One" },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         GLOBAL_ADMIN_LOG_CHANNEL_ID: "global-admin-log-channel",
@@ -769,7 +761,7 @@ test("processGatewayEventQueueMessages allows White-Label Bot events for active 
 
 test("processGatewayEventQueueMessages uses the standard bot token for standard Guild REST calls", async () => {
   const database = new SqliteD1Database();
-  await createCloudflareGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
+  await createSqliteGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
     guildId: "guild-1",
     auditChannelId: "audit-channel-1",
     groupChannelIds: {},
@@ -785,7 +777,7 @@ test("processGatewayEventQueueMessages uses the standard bot token for standard 
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "MESSAGE_UPDATE",
           botIdentityId: "standard",
           botUserId: "bot-user-id",
@@ -796,7 +788,7 @@ test("processGatewayEventQueueMessages uses the standard bot token for standard 
             content: "edited",
             author: { id: "user-1", username: "member" },
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
     );
@@ -809,14 +801,14 @@ test("processGatewayEventQueueMessages uses the standard bot token for standard 
 
 test("processGatewayEventQueueMessages uses the White-Label Bot token for active White-Label Guild REST calls", async () => {
   const database = new SqliteD1Database();
-  await createCloudflareGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
+  await createSqliteGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
     guildId: "guild-1",
     auditChannelId: "audit-channel-1",
     groupChannelIds: {},
     eventStates: { groups: {}, overrides: {} },
     updatedAtMs: 100,
   });
-  await createCloudflareWhiteLabelBotStore(database as unknown as D1Database).upsertWhiteLabelBot({
+  await createSqliteWhiteLabelBotStore(database as unknown as D1Database).upsertWhiteLabelBot({
     guildId: "guild-1",
     applicationId: "app-1",
     botUserId: "white-label-bot-user",
@@ -836,7 +828,7 @@ test("processGatewayEventQueueMessages uses the White-Label Bot token for active
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "MESSAGE_UPDATE",
           botIdentityId: "white-label:guild-1",
           botUserId: "white-label-bot-user",
@@ -847,7 +839,7 @@ test("processGatewayEventQueueMessages uses the White-Label Bot token for active
             content: "edited",
             author: { id: "user-1", username: "member" },
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         HAF_DB: database as unknown as D1Database,
@@ -863,14 +855,14 @@ test("processGatewayEventQueueMessages uses the White-Label Bot token for active
 
 test("processGatewayEventQueueMessages rejects missing White-Label Bot token bindings", async () => {
   const database = new SqliteD1Database();
-  await createCloudflareGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
+  await createSqliteGuildAuditLogStore(database as unknown as D1Database).upsertConfig({
     guildId: "guild-1",
     auditChannelId: "audit-channel-1",
     groupChannelIds: {},
     eventStates: { groups: {}, overrides: {} },
     updatedAtMs: 100,
   });
-  await createCloudflareWhiteLabelBotStore(database as unknown as D1Database).upsertWhiteLabelBot({
+  await createSqliteWhiteLabelBotStore(database as unknown as D1Database).upsertWhiteLabelBot({
     guildId: "guild-1",
     applicationId: "app-1",
     botUserId: "white-label-bot-user",
@@ -886,7 +878,7 @@ test("processGatewayEventQueueMessages rejects missing White-Label Bot token bin
     () =>
       processGatewayEventQueueMessages(
         [
-          {
+          gatewayEnvelope({
             type: "MESSAGE_UPDATE",
             botIdentityId: "white-label:guild-1",
             botUserId: "white-label-bot-user",
@@ -897,7 +889,7 @@ test("processGatewayEventQueueMessages rejects missing White-Label Bot token bin
               content: "edited",
               author: { id: "user-1", username: "member" },
             },
-          },
+          }),
         ],
         createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
       ),
@@ -907,7 +899,7 @@ test("processGatewayEventQueueMessages rejects missing White-Label Bot token bin
 
 test("processGatewayEventQueueMessages rejects wrong White-Label Bot gateway contexts", async () => {
   const database = new SqliteD1Database();
-  await createCloudflareWhiteLabelBotStore(database as unknown as D1Database).upsertWhiteLabelBot({
+  await createSqliteWhiteLabelBotStore(database as unknown as D1Database).upsertWhiteLabelBot({
     guildId: "guild-1",
     applicationId: "app-1",
     botUserId: "white-label-bot-user",
@@ -923,7 +915,7 @@ test("processGatewayEventQueueMessages rejects wrong White-Label Bot gateway con
     () =>
       processGatewayEventQueueMessages(
         [
-          {
+          gatewayEnvelope({
             type: "MESSAGE_UPDATE",
             botIdentityId: "white-label:guild-1",
             botUserId: "other-bot-user",
@@ -934,7 +926,7 @@ test("processGatewayEventQueueMessages rejects wrong White-Label Bot gateway con
               content: "edited",
               author: { id: "user-1", username: "member" },
             },
-          },
+          }),
         ],
         createGatewayConsumerEnv({
           HAF_DB: database as unknown as D1Database,
@@ -962,7 +954,7 @@ test("processGatewayEventQueueMessages sends install embed for re-added guild af
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_CREATE",
           data: {
             id: "guild-1",
@@ -971,7 +963,7 @@ test("processGatewayEventQueueMessages sends install embed for re-added guild af
             owner_id: "owner-1",
             icon: "icon-hash",
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         GLOBAL_ADMIN_LOG_CHANNEL_ID: "global-admin-log-channel",
@@ -985,7 +977,7 @@ test("processGatewayEventQueueMessages sends install embed for re-added guild af
     fetchCalls.length = 0;
 
     await processGatewayEventQueueMessages(
-      [{ type: "GUILD_DELETE", data: { id: "guild-1", name: "Guild One" } }],
+      [gatewayEnvelope({ type: "GUILD_DELETE", data: { id: "guild-1", name: "Guild One" } })],
       createGatewayConsumerEnv({
         GLOBAL_ADMIN_LOG_CHANNEL_ID: "global-admin-log-channel",
         HAF_DB: database as unknown as D1Database,
@@ -999,7 +991,7 @@ test("processGatewayEventQueueMessages sends install embed for re-added guild af
 
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_CREATE",
           data: {
             id: "guild-1",
@@ -1008,7 +1000,7 @@ test("processGatewayEventQueueMessages sends install embed for re-added guild af
             owner_id: "owner-1",
             icon: "icon-hash",
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         GLOBAL_ADMIN_LOG_CHANNEL_ID: "global-admin-log-channel",
@@ -1040,7 +1032,12 @@ test("processGatewayEventQueueMessages sends warning for removal of unknown guil
 
   try {
     await processGatewayEventQueueMessages(
-      [{ type: "GUILD_DELETE", data: { id: "guild-unknown", name: "Unknown Guild" } }],
+      [
+        gatewayEnvelope({
+          type: "GUILD_DELETE",
+          data: { id: "guild-unknown", name: "Unknown Guild" },
+        }),
+      ],
       createGatewayConsumerEnv({
         GLOBAL_ADMIN_LOG_CHANNEL_ID: "global-admin-log-channel",
         HAF_DB: database as unknown as D1Database,
@@ -1059,7 +1056,7 @@ test("processGatewayEventQueueMessages sends warning for removal of unknown guil
 test("processGatewayEventQueueMessages creates one manual timed-role assignment from member updates", async () => {
   const clock = mockDateNow(1_700_000_000_000);
   const database = new SqliteD1Database();
-  const timedRoleStore = createCloudflareTimedRoleStore(database as unknown as D1Database);
+  const timedRoleStore = createSqliteTimedRoleStore(database as unknown as D1Database);
   await timedRoleStore.upsertTimedRoleConfigRules?.("guild-1", "manual-assignment", [
     { roleId: "role-timeout", durationInput: "2h" },
   ]);
@@ -1068,7 +1065,7 @@ test("processGatewayEventQueueMessages creates one manual timed-role assignment 
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_MEMBER_UPDATE",
           data: {
             guild_id: "guild-1",
@@ -1076,8 +1073,8 @@ test("processGatewayEventQueueMessages creates one manual timed-role assignment 
             user: { id: "user-1", username: "freshspawn", global_name: "Fresh Spawn" },
             roles: ["role-timeout"],
           },
-        },
-        {
+        }),
+        gatewayEnvelope({
           type: "GUILD_MEMBER_UPDATE",
           data: {
             guild_id: "guild-1",
@@ -1085,7 +1082,7 @@ test("processGatewayEventQueueMessages creates one manual timed-role assignment 
             user: { id: "user-1", username: "freshspawn", global_name: "Fresh Spawn" },
             roles: ["role-timeout"],
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         HAF_DB: database as unknown as D1Database,
@@ -1119,7 +1116,7 @@ test("processGatewayEventQueueMessages creates one manual timed-role assignment 
 test("processGatewayEventQueueMessages creates a timed role for new members with a display name snapshot", async () => {
   const clock = mockDateNow(1_700_000_000_000);
   const database = new SqliteD1Database();
-  const timedRoleStore = createCloudflareTimedRoleStore(database as unknown as D1Database);
+  const timedRoleStore = createSqliteTimedRoleStore(database as unknown as D1Database);
   await timedRoleStore.upsertTimedRoleConfigRules?.("guild-1", "new-member", [
     { roleId: "role-newbie", durationInput: "2h" },
   ]);
@@ -1128,14 +1125,14 @@ test("processGatewayEventQueueMessages creates a timed role for new members with
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_MEMBER_ADD",
           data: {
             guild_id: "guild-1",
             nick: "Fresh Spawn",
             user: { id: "user-1", username: "freshspawn", global_name: "Fresh Spawn" },
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         HAF_DB: database as unknown as D1Database,
@@ -1169,7 +1166,7 @@ test("processGatewayEventQueueMessages creates a timed role for new members with
 test("processGatewayEventQueueMessages restores active timed roles for a rejoining member", async () => {
   const clock = mockDateNow(1_700_000_000_000);
   const database = new SqliteD1Database();
-  const timedRoleStore = createCloudflareTimedRoleStore(database as unknown as D1Database);
+  const timedRoleStore = createSqliteTimedRoleStore(database as unknown as D1Database);
   await timedRoleStore.upsertTimedRole({
     guildId: "guild-1",
     userId: "user-1",
@@ -1195,13 +1192,13 @@ test("processGatewayEventQueueMessages restores active timed roles for a rejoini
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_MEMBER_ADD",
           data: {
             guild_id: "guild-1",
             user: { id: "user-1", username: "returningmember" },
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
     );
@@ -1226,7 +1223,7 @@ test("processGatewayEventQueueMessages restores active timed roles for a rejoini
 test("processGatewayEventQueueMessages does not refresh a restored timed role from new-member automation", async () => {
   const clock = mockDateNow(1_700_000_000_000);
   const database = new SqliteD1Database();
-  const timedRoleStore = createCloudflareTimedRoleStore(database as unknown as D1Database);
+  const timedRoleStore = createSqliteTimedRoleStore(database as unknown as D1Database);
   await timedRoleStore.upsertTimedRoleConfigRules?.("guild-1", "new-member", [
     { roleId: "role-newbie", durationInput: "2h" },
   ]);
@@ -1248,10 +1245,10 @@ test("processGatewayEventQueueMessages does not refresh a restored timed role fr
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_MEMBER_ADD",
           data: { guild_id: "guild-1", user: { id: "user-1", username: "returningmember" } },
-        },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
     );
@@ -1271,16 +1268,16 @@ test("processGatewayEventQueueMessages does not refresh a restored timed role fr
 
 test("processGatewayEventQueueMessages restores unique linked roles for a rejoining member", async () => {
   const database = new SqliteD1Database();
-  const platformLinkStore = createCloudflarePlatformLinkStore(database as unknown as D1Database);
-  const steamLinkStore = createCloudflareSteamLinkStore(database as unknown as D1Database);
+  const platformLinkStore = createSqlitePlatformLinkStore(database as unknown as D1Database);
+  const steamLinkStore = createSqlitePlatformLinkStore(database as unknown as D1Database);
   await platformLinkStore.upsertPlatformLinkConfig(
     createPlatformLinkConfig({ platform: "steam", linkedRoleId: "role-linked" }),
   );
   await platformLinkStore.upsertPlatformLinkConfig(
     createPlatformLinkConfig({ platform: "xbox", linkedRoleId: "role-xbox" }),
   );
-  await steamLinkStore.upsertSteamLinkConfig(
-    createSteamLinkConfig({ steamLinkedRoleId: "role-linked" }),
+  await steamLinkStore.upsertPlatformLinkConfig(
+    createCurrentSteamConfig({ linkedRoleId: "role-linked" }),
   );
   await platformLinkStore.upsertPlatformLink(
     createPlatformLink({ platform: "steam", platformId: "steam-modern" }),
@@ -1288,8 +1285,8 @@ test("processGatewayEventQueueMessages restores unique linked roles for a rejoin
   await platformLinkStore.upsertPlatformLink(
     createPlatformLink({ platform: "xbox", platformId: "xbox-1", linkedAtMs: 200 }),
   );
-  await steamLinkStore.upsertSteamLink(
-    createSteamLink({ steamId64: "steam-legacy", linkedAtMs: 300 }),
+  await steamLinkStore.upsertPlatformLink(
+    createCurrentSteamLink({ platformId: "steam-legacy", linkedAtMs: 300 }),
   );
   const assignedRoles: string[] = [];
   const { restore } = interceptDiscordFetch(async (input, init) => {
@@ -1302,13 +1299,13 @@ test("processGatewayEventQueueMessages restores unique linked roles for a rejoin
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_MEMBER_ADD",
           data: {
             guild_id: "guild-1",
             user: { id: "user-1", username: "linkedmember" },
           },
-        },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
     );
@@ -1321,7 +1318,7 @@ test("processGatewayEventQueueMessages restores unique linked roles for a rejoin
 
 test("processGatewayEventQueueMessages requires a configured link to be relinked after rejoin", async () => {
   const database = new SqliteD1Database();
-  const platformLinkStore = createCloudflarePlatformLinkStore(database as unknown as D1Database);
+  const platformLinkStore = createSqlitePlatformLinkStore(database as unknown as D1Database);
   await platformLinkStore.upsertPlatformLinkConfig(
     createPlatformLinkConfig({
       platform: "steam",
@@ -1339,8 +1336,14 @@ test("processGatewayEventQueueMessages requires a configured link to be relinked
   try {
     await processGatewayEventQueueMessages(
       [
-        { type: "GUILD_MEMBER_REMOVE", data: { guild_id: "guild-1", user: { id: "user-1" } } },
-        { type: "GUILD_MEMBER_ADD", data: { guild_id: "guild-1", user: { id: "user-1" } } },
+        gatewayEnvelope({
+          type: "GUILD_MEMBER_REMOVE",
+          data: { guild_id: "guild-1", user: { id: "user-1" } },
+        }),
+        gatewayEnvelope({
+          type: "GUILD_MEMBER_ADD",
+          data: { guild_id: "guild-1", user: { id: "user-1" } },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
     );
@@ -1358,9 +1361,9 @@ test("processGatewayEventQueueMessages requires a configured link to be relinked
 test("member departure checkpoints Server XP at the Gateway boundary", async () => {
   const database = new SqliteD1Database();
   const d1 = database as unknown as D1Database;
-  const platformLinks = createCloudflarePlatformLinkStore(d1);
-  const serverLevels = createCloudflareServerLevelStore(d1);
-  const plans = createCloudflareGuildPlanProjectionStore(d1);
+  const platformLinks = createSqlitePlatformLinkStore(d1);
+  const serverLevels = createSqliteServerLevelStore(d1);
+  const plans = createSqliteGuildPlanProjectionStore(d1);
   await plans.upsertGuildPlanProjection({ guildId: "guild-1", plan: "premium", updatedAtMs: 1 });
   await serverLevels.upsertConfig({
     guildId: "guild-1",
@@ -1426,11 +1429,11 @@ test("member departure checkpoints Server XP at the Gateway boundary", async () 
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_MEMBER_REMOVE",
           receivedAtMs: 61_000,
           data: { guild_id: "guild-1", user: { id: "user-1" } },
-        },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: d1 }),
     );
@@ -1446,11 +1449,11 @@ test("member departure checkpoints Server XP at the Gateway boundary", async () 
 
 test("processGatewayEventQueueMessages retains legacy Steam fallback during verification", async () => {
   const database = new SqliteD1Database();
-  const steamLinkStore = createCloudflareSteamLinkStore(database as unknown as D1Database);
-  await steamLinkStore.upsertSteamLinkConfig(
-    createSteamLinkConfig({ steamLinkedRoleId: "role-legacy-steam" }),
+  const steamLinkStore = createSqlitePlatformLinkStore(database as unknown as D1Database);
+  await steamLinkStore.upsertPlatformLinkConfig(
+    createCurrentSteamConfig({ linkedRoleId: "role-legacy-steam" }),
   );
-  await steamLinkStore.upsertSteamLink(createSteamLink({ userId: "user-legacy" }));
+  await steamLinkStore.upsertPlatformLink(createCurrentSteamLink({ userId: "user-legacy" }));
   const assignedRoles: string[] = [];
   const { restore } = interceptDiscordFetch(async (input, init) => {
     if (init?.method === "PUT") {
@@ -1462,10 +1465,10 @@ test("processGatewayEventQueueMessages retains legacy Steam fallback during veri
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "GUILD_MEMBER_ADD",
           data: { guild_id: "guild-1", user: { id: "user-legacy", username: "legacy" } },
-        },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
     );
@@ -1478,14 +1481,14 @@ test("processGatewayEventQueueMessages retains legacy Steam fallback during veri
 
 test("processGatewayEventQueueMessages skips linked-role restore when no linked role applies", async () => {
   const database = new SqliteD1Database();
-  const platformLinkStore = createCloudflarePlatformLinkStore(database as unknown as D1Database);
-  const steamLinkStore = createCloudflareSteamLinkStore(database as unknown as D1Database);
+  const platformLinkStore = createSqlitePlatformLinkStore(database as unknown as D1Database);
+  const steamLinkStore = createSqlitePlatformLinkStore(database as unknown as D1Database);
   await platformLinkStore.upsertPlatformLinkConfig(
     createPlatformLinkConfig({ platform: "steam", linkedRoleId: null }),
   );
-  await steamLinkStore.upsertSteamLinkConfig(createSteamLinkConfig({ steamLinkedRoleId: null }));
+  await steamLinkStore.upsertPlatformLinkConfig(createCurrentSteamConfig({ linkedRoleId: null }));
   await platformLinkStore.upsertPlatformLink(createPlatformLink({ userId: "user-no-role" }));
-  await steamLinkStore.upsertSteamLink(createSteamLink({ userId: "user-no-role" }));
+  await steamLinkStore.upsertPlatformLink(createCurrentSteamLink({ userId: "user-no-role" }));
   const assignedRoles: string[] = [];
   const { restore } = interceptDiscordFetch(async (input, init) => {
     if (init?.method === "PUT") {
@@ -1497,8 +1500,14 @@ test("processGatewayEventQueueMessages skips linked-role restore when no linked 
   try {
     await processGatewayEventQueueMessages(
       [
-        { type: "GUILD_MEMBER_ADD", data: { guild_id: "guild-1", user: { id: "user-no-role" } } },
-        { type: "GUILD_MEMBER_ADD", data: { guild_id: "guild-1", user: { id: "user-no-links" } } },
+        gatewayEnvelope({
+          type: "GUILD_MEMBER_ADD",
+          data: { guild_id: "guild-1", user: { id: "user-no-role" } },
+        }),
+        gatewayEnvelope({
+          type: "GUILD_MEMBER_ADD",
+          data: { guild_id: "guild-1", user: { id: "user-no-links" } },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
     );
@@ -1511,7 +1520,7 @@ test("processGatewayEventQueueMessages skips linked-role restore when no linked 
 
 test("processGatewayEventQueueMessages skips missing linked roles without blocking other restores", async () => {
   const database = new SqliteD1Database();
-  const platformLinkStore = createCloudflarePlatformLinkStore(database as unknown as D1Database);
+  const platformLinkStore = createSqlitePlatformLinkStore(database as unknown as D1Database);
   await platformLinkStore.upsertPlatformLinkConfig(
     createPlatformLinkConfig({ platform: "xbox", linkedRoleId: "role-missing" }),
   );
@@ -1537,10 +1546,10 @@ test("processGatewayEventQueueMessages skips missing linked roles without blocki
     await assert.doesNotReject(() =>
       processGatewayEventQueueMessages(
         [
-          {
+          gatewayEnvelope({
             type: "GUILD_MEMBER_ADD",
             data: { guild_id: "guild-1", user: { id: "user-1", username: "linkedmember" } },
-          },
+          }),
         ],
         createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
       ),
@@ -1554,7 +1563,7 @@ test("processGatewayEventQueueMessages skips missing linked roles without blocki
 
 test("processGatewayEventQueueMessages deduplicates linked roles per rejoining member", async () => {
   const database = new SqliteD1Database();
-  const platformLinkStore = createCloudflarePlatformLinkStore(database as unknown as D1Database);
+  const platformLinkStore = createSqlitePlatformLinkStore(database as unknown as D1Database);
   await platformLinkStore.upsertPlatformLinkConfig(
     createPlatformLinkConfig({ platform: "steam", linkedRoleId: "role-linked" }),
   );
@@ -1582,8 +1591,14 @@ test("processGatewayEventQueueMessages deduplicates linked roles per rejoining m
   try {
     await processGatewayEventQueueMessages(
       [
-        { type: "GUILD_MEMBER_ADD", data: { guild_id: "guild-1", user: { id: "user-a" } } },
-        { type: "GUILD_MEMBER_ADD", data: { guild_id: "guild-1", user: { id: "user-b" } } },
+        gatewayEnvelope({
+          type: "GUILD_MEMBER_ADD",
+          data: { guild_id: "guild-1", user: { id: "user-a" } },
+        }),
+        gatewayEnvelope({
+          type: "GUILD_MEMBER_ADD",
+          data: { guild_id: "guild-1", user: { id: "user-b" } },
+        }),
       ],
       createGatewayConsumerEnv({ HAF_DB: database as unknown as D1Database }),
     );
@@ -1596,12 +1611,10 @@ test("processGatewayEventQueueMessages deduplicates linked roles per rejoining m
 
 test("processGatewayEventQueueMessages sends a welcome DM to unverified new members", async () => {
   const database = new SqliteD1Database();
-  const memberVerificationStore = createCloudflareMemberVerificationStore(
+  const memberVerificationStore = createSqliteMemberVerificationStore(
     database as unknown as D1Database,
   );
-  const entitlementStore = createCloudflareGuildPlanProjectionStore(
-    database as unknown as D1Database,
-  );
+  const entitlementStore = createSqliteGuildPlanProjectionStore(database as unknown as D1Database);
   await entitlementStore.upsertGuildPlanProjection({
     guildId: "guild-1",
     plan: "premium",
@@ -1648,7 +1661,12 @@ test("processGatewayEventQueueMessages sends a welcome DM to unverified new memb
 
   try {
     await processGatewayEventQueueMessages(
-      [{ type: "GUILD_MEMBER_ADD", data: { guild_id: "guild-1", user: { id: "user-1" } } }],
+      [
+        gatewayEnvelope({
+          type: "GUILD_MEMBER_ADD",
+          data: { guild_id: "guild-1", user: { id: "user-1" } },
+        }),
+      ],
       createGatewayConsumerEnv({
         HAF_DB: database as unknown as D1Database,
         enableMemberVerification: true,
@@ -1671,12 +1689,10 @@ test("processGatewayEventQueueMessages sends a welcome DM to unverified new memb
 
 test("replaying a member-add Gateway Event does not repeat its verified role grant", async () => {
   const database = new SqliteD1Database();
-  const memberVerificationStore = createCloudflareMemberVerificationStore(
+  const memberVerificationStore = createSqliteMemberVerificationStore(
     database as unknown as D1Database,
   );
-  const entitlementStore = createCloudflareGuildPlanProjectionStore(
-    database as unknown as D1Database,
-  );
+  const entitlementStore = createSqliteGuildPlanProjectionStore(database as unknown as D1Database);
   await entitlementStore.upsertGuildPlanProjection({
     guildId: "guild-1",
     plan: "premium",
@@ -1722,8 +1738,14 @@ test("replaying a member-add Gateway Event does not repeat its verified role gra
   try {
     await processGatewayEventQueueMessages(
       [
-        { type: "GUILD_MEMBER_ADD", data: { guild_id: "guild-1", user: { id: "user-1" } } },
-        { type: "GUILD_MEMBER_ADD", data: { guild_id: "guild-1", user: { id: "user-1" } } },
+        gatewayEnvelope({
+          type: "GUILD_MEMBER_ADD",
+          data: { guild_id: "guild-1", user: { id: "user-1" } },
+        }),
+        gatewayEnvelope({
+          type: "GUILD_MEMBER_ADD",
+          data: { guild_id: "guild-1", user: { id: "user-1" } },
+        }),
       ],
       createGatewayConsumerEnv({
         HAF_DB: database as unknown as D1Database,
@@ -1760,11 +1782,11 @@ test("processGatewayEventQueueMessages deletes mapped LFG voice channels when th
   try {
     await processGatewayEventQueueMessages(
       [
-        {
+        gatewayEnvelope({
           type: "VOICE_STATE_UPDATE",
           data: { guild_id: "guild-1", user_id: "user-1", channel_id: null },
           emptiedVoiceChannelId: "voice-channel-1",
-        },
+        }),
       ],
       createGatewayConsumerEnv({
         moderationStoreFetch(input: Request | string | URL, init?: RequestInit) {
@@ -1808,7 +1830,10 @@ test("processGatewayEventQueueMessages skips malformed messages and continues", 
   try {
     await assert.doesNotReject(() =>
       processGatewayEventQueueMessages(
-        [null, { type: "GUILD_CREATE", data: { id: "guild-1", name: "Guild One" } }],
+        [
+          null,
+          gatewayEnvelope({ type: "GUILD_CREATE", data: { id: "guild-1", name: "Guild One" } }),
+        ],
         createGatewayConsumerEnv({ GLOBAL_ADMIN_LOG_CHANNEL_ID: "global-admin-log-channel" }),
         { error: (...args: unknown[]) => errors.push(args) },
       ),
@@ -1828,7 +1853,7 @@ test("processGatewayEventQueueMessages rejects processing failures so queues ret
       return { count: 0, duration: 0 } as never;
     },
     prepare() {
-      throw new Error("D1_ERROR: store unavailable");
+      throw Object.assign(new Error("store unavailable"), { code: "ECONNREFUSED" });
     },
   } as unknown as D1Database;
 
@@ -1836,7 +1861,7 @@ test("processGatewayEventQueueMessages rejects processing failures so queues ret
     () =>
       processGatewayEventQueueMessages(
         [
-          {
+          gatewayEnvelope({
             type: "MESSAGE_UPDATE",
             data: {
               id: "message-9",
@@ -1844,7 +1869,7 @@ test("processGatewayEventQueueMessages rejects processing failures so queues ret
               guild_id: "guild-1",
               content: "updated ticket reply",
             },
-          },
+          }),
         ],
         createGatewayConsumerEnv({ HAF_DB: appDb }),
         { error: (...args: unknown[]) => errors.push(args) },
@@ -1855,25 +1880,31 @@ test("processGatewayEventQueueMessages rejects processing failures so queues ret
   assert.equal(errors.length, 1);
 });
 
-test("Gateway Event consumer settles successful and malformed siblings before retrying a D1 failure", async () => {
+test("Gateway Event consumer settles successful and malformed siblings before retrying a database failure", async () => {
   const appDb = {
     async exec() {
       return { count: 0, duration: 0 } as never;
     },
     prepare() {
-      throw new Error("D1_ERROR: store unavailable");
+      throw Object.assign(new Error("store unavailable"), { code: "ECONNREFUSED" });
     },
   } as unknown as D1Database;
-  const complete = fakeQueueMessage("complete", { type: "UNHANDLED_EVENT", data: {} });
-  const retry = fakeQueueMessage("retry", {
-    type: "MESSAGE_UPDATE",
-    data: {
-      id: "message-9",
-      channel_id: "channel-9",
-      guild_id: "guild-1",
-      content: "updated ticket reply",
-    },
-  });
+  const complete = fakeQueueMessage(
+    "complete",
+    gatewayEnvelope({ type: "UNHANDLED_EVENT", data: {} }),
+  );
+  const retry = fakeQueueMessage(
+    "retry",
+    gatewayEnvelope({
+      type: "MESSAGE_UPDATE",
+      data: {
+        id: "message-9",
+        channel_id: "channel-9",
+        guild_id: "guild-1",
+        content: "updated ticket reply",
+      },
+    }),
+  );
   const malformed = fakeQueueMessage("malformed", null);
   const events: Array<{ reasonCode?: string }> = [];
 
@@ -1892,8 +1923,8 @@ test("Gateway Event consumer settles successful and malformed siblings before re
   assert.deepEqual(retry.actions, ["retry"]);
   assert.deepEqual(malformed.actions, ["ack"]);
   assert.equal(
-    events.find((event) => event.reasonCode === "d1_unavailable")?.reasonCode,
-    "d1_unavailable",
+    events.find((event) => event.reasonCode === "database_unavailable")?.reasonCode,
+    "database_unavailable",
   );
 });
 
@@ -1928,7 +1959,7 @@ for (const audit of [
       const database = new SqliteD1Database();
       const clock = mockDateNow(1_800_000_000_000);
       const env = createGatewayConsumerEnv({ HAF_DB: database.d1 });
-      const envelope = {
+      const envelope = gatewayEnvelope({
         type: audit.type,
         data: {
           id: "message-1",
@@ -1940,7 +1971,7 @@ for (const audit of [
           name: "general",
           type: 0,
         },
-      };
+      });
       const eventKey = deriveGatewayEventKey(envelope);
       const receipts = createGatewayEventOperationStore(database.d1);
       const posts: Array<{ nonce?: string; enforce_nonce?: boolean }> = [];
@@ -1968,7 +1999,7 @@ for (const audit of [
         return Response.json({ id: "audit-message-1", channel_id: "audit-channel-1" });
       });
       try {
-        await createCloudflareGuildAuditLogStore(database.d1).upsertConfig({
+        await createSqliteGuildAuditLogStore(database.d1).upsertConfig({
           guildId: "guild-1",
           auditChannelId: "audit-channel-1",
           groupChannelIds: {},
@@ -2068,7 +2099,7 @@ test("Gateway Event consumer rejects unverified or unsafe v2 event keys", async 
 
 test("Gateway Event consumer preserves a terminal inner operation on replay", async () => {
   const database = new SqliteD1Database();
-  const envelope = {
+  const envelope = gatewayEnvelope({
     type: "MESSAGE_UPDATE",
     data: {
       id: "message-terminal",
@@ -2076,7 +2107,7 @@ test("Gateway Event consumer preserves a terminal inner operation on replay", as
       guild_id: "guild-1",
       content: "updated",
     },
-  };
+  });
   const eventKey = deriveGatewayEventKey(envelope);
   const store = createGatewayEventOperationStore(database as unknown as D1Database);
   const claim = await store.claim(eventKey, "message-update:audit-post", 1_000, 100);
@@ -2214,10 +2245,11 @@ function createPlatformLink(overrides: Partial<PlatformLink> = {}): PlatformLink
   };
 }
 
-function createSteamLinkConfig(overrides: Partial<SteamLinkConfig> = {}): SteamLinkConfig {
+function createCurrentSteamConfig(overrides: Partial<PlatformLinkConfig> = {}): PlatformLinkConfig {
   return {
     guildId: "guild-1",
-    steamLinkedRoleId: null,
+    platform: "steam",
+    linkedRoleId: null,
     logChannelId: null,
     gameAppIds: [],
     panelTitle: "Link your Steam account",
@@ -2227,6 +2259,7 @@ function createSteamLinkConfig(overrides: Partial<SteamLinkConfig> = {}): SteamL
     panelButtonStyle: "Primary",
     allowRelink: true,
     allowMultipleLinks: false,
+    requireRelinkOnRejoin: false,
     whoisFields: [],
     customLinks: [],
     panelChannelId: null,
@@ -2236,15 +2269,17 @@ function createSteamLinkConfig(overrides: Partial<SteamLinkConfig> = {}): SteamL
   };
 }
 
-function createSteamLink(overrides: Partial<SteamLink> = {}): SteamLink {
+function createCurrentSteamLink(overrides: Partial<PlatformLink> = {}): PlatformLink {
   return {
     guildId: "guild-1",
+    platform: "steam",
     userId: "user-1",
-    steamId64: "76561198000000000",
+    platformId: "76561198000000000",
     linkedAtMs: 100,
     manual: false,
     actionedByUserId: null,
-    gameOwnership: [],
+    metadataJson: "[]",
+    active: true,
     ...overrides,
   };
 }

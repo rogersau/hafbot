@@ -194,9 +194,7 @@ test("Player Count and Player Link runtime routes bind every static contract", (
     discordBotToken: "token",
   }).filter(
     ({ path }) =>
-      path.startsWith("/admin/api/player-count") ||
-      path.startsWith("/admin/api/player-link") ||
-      path.startsWith("/admin/api/steam-link"),
+      path.startsWith("/admin/api/player-count") || path.startsWith("/admin/api/player-link"),
   );
   const contracts = [...Object.values(playerCountContracts), ...Object.values(playerLinkContracts)];
   assert.deepEqual(

@@ -5,11 +5,11 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareAppConfigStore } from "../src/runtime/cloudflare-app-config-store";
-import { createCloudflareBlocklistStore } from "../src/runtime/cloudflare-blocklist-store";
+import { createSqliteAppConfigStore } from "./support/sqlite/runtime/sqlite-app-config-store";
+import { createSqliteBlocklistStore } from "./support/sqlite/runtime/sqlite-blocklist-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-type BlocklistBatchStore = ReturnType<typeof createCloudflareBlocklistStore> & {
+type BlocklistBatchStore = ReturnType<typeof createSqliteBlocklistStore> & {
   applyGuildEmojiMutations(input: {
     guildId: string;
     emojis: string[];
@@ -19,11 +19,8 @@ type BlocklistBatchStore = ReturnType<typeof createCloudflareBlocklistStore> & {
 
 test("Reaction Rules stores use the migrated unified database without runtime DDL", async () => {
   const database = new SqliteD1Database();
-  const blocklist = createCloudflareBlocklistStore(
-    database as unknown as D1Database,
-    "bot-default",
-  );
-  const appConfig = createCloudflareAppConfigStore(database as unknown as D1Database);
+  const blocklist = createSqliteBlocklistStore(database as unknown as D1Database, "bot-default");
+  const appConfig = createSqliteAppConfigStore(database as unknown as D1Database);
 
   await appConfig.upsertAppConfig({ key: "bot_user_id", value: "bot-from-db" });
   await blocklist.applyGuildEmojiMutation({ guildId: "guild-1", emoji: "✅", action: "add" });
@@ -79,7 +76,7 @@ test("Reaction Rules stores use the migrated unified database without runtime DD
 
 test("Reaction Rules store applies batch emoji additions as one mutation", async () => {
   const database = new SqliteD1Database();
-  const blocklist = createCloudflareBlocklistStore(
+  const blocklist = createSqliteBlocklistStore(
     database as unknown as D1Database,
     "bot-default",
   ) as BlocklistBatchStore;
@@ -95,11 +92,8 @@ test("Reaction Rules store applies batch emoji additions as one mutation", async
 
 test("Gateway blocklist reads only the requested Guild while preserving the configured bot ID", async () => {
   const database = new SqliteD1Database();
-  const blocklist = createCloudflareBlocklistStore(
-    database as unknown as D1Database,
-    "bot-default",
-  );
-  const appConfig = createCloudflareAppConfigStore(database as unknown as D1Database);
+  const blocklist = createSqliteBlocklistStore(database as unknown as D1Database, "bot-default");
+  const appConfig = createSqliteAppConfigStore(database as unknown as D1Database);
 
   await appConfig.upsertAppConfig({ key: "bot_user_id", value: "bot-from-db" });
   await blocklist.applyGuildEmojiMutation({ guildId: "guild-1", emoji: "✅", action: "add" });

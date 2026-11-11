@@ -77,7 +77,7 @@ interface PlayerLinkDraft {
 type PlatformLinkMetadata = (typeof PLATFORM_METADATA)[PlayerLinkPlatform];
 
 /**
- * Builds the full config POST body for /admin/api/steam-link/config (or the
+ * Builds the full config POST body for the current Player Link config endpoint (or the
  * player-link variant). Shared by the manual Save button and the auto-save
  * toggles so both send an identical payload.
  */

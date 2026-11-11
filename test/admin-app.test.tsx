@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -1476,14 +1477,9 @@ test("describeError collapses HTML worker failures into a friendly dashboard mes
 test("readJsonOrThrow shows friendly Discord rate limit JSON errors", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        code: "discord_rate_limited",
-        error: "Discord is rate limiting server discovery. Try again shortly.",
-        retryAfterMs: 1000,
-      }),
-      { status: 429, headers: { "content-type": "application/json" } },
-    );
+    adminErrorResponse("Discord is rate limiting server discovery. Try again shortly.", 429, {
+      code: "discord_rate_limited",
+    });
 
   try {
     await assert.rejects(readJsonOrThrow("/admin/api/guilds"), {
@@ -1725,8 +1721,6 @@ test("ticket panel editor renders types and questions on the Types tab", () => {
             supportRoleId: "role-1",
             allowedCreatorRoleIds: ["role-2"],
             channelNamePrefix: "appeal",
-            autoReplyEnabled: true,
-            autoReplyMessage: null,
             responseRules: [
               {
                 id: "rule-1",
@@ -1734,7 +1728,8 @@ test("ticket panel editor renders types and questions on the Types tab", () => {
                 message: "Please run /steamlink.",
               },
             ],
-            anonymousEnabled: false,
+            anonymousSupportEnabled: false,
+            staffDiscussionThreadEnabled: false,
             limitExclusion: true,
             mentionSupportRole: true,
             questions: [
@@ -1815,9 +1810,8 @@ function renderTicketQuestionEditor(
             supportRoleId: "role-1",
             channelNamePrefix: "support",
             questions: [question],
-            autoReplyEnabled: false,
-            autoReplyMessage: null,
             limitExclusion: false,
+            responseRules: [],
           },
         ],
       }}
@@ -1936,9 +1930,8 @@ function createTicketPanelWithQuestion(question: TicketQuestion): TicketPanelCon
         supportRoleId: "role-1",
         channelNamePrefix: "support",
         questions: [question],
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
         limitExclusion: false,
+        responseRules: [],
       },
     ],
   };
@@ -2057,8 +2050,6 @@ test("ticket panel editor warns when a response-rule role no longer exists", () 
             buttonStyle: "primary",
             supportRoleId: "role-1",
             channelNamePrefix: "appeal",
-            autoReplyEnabled: false,
-            autoReplyMessage: null,
             responseRules: [
               {
                 id: "rule-1",
@@ -2066,7 +2057,8 @@ test("ticket panel editor warns when a response-rule role no longer exists", () 
                 message: "Please verify your account.",
               },
             ],
-            anonymousEnabled: false,
+            anonymousSupportEnabled: false,
+            staffDiscussionThreadEnabled: false,
             limitExclusion: false,
             questions: [],
           },
@@ -2125,10 +2117,9 @@ test("ticket panel editor hides rule and condition add buttons at response-rule 
             buttonStyle: "primary",
             supportRoleId: "role-1",
             channelNamePrefix: "appeal",
-            autoReplyEnabled: false,
-            autoReplyMessage: null,
             responseRules: cappedRules,
-            anonymousEnabled: false,
+            anonymousSupportEnabled: false,
+            staffDiscussionThreadEnabled: false,
             limitExclusion: false,
             questions: [],
           },

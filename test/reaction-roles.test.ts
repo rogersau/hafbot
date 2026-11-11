@@ -7,7 +7,7 @@ import {
   type ReactionRoleSettings,
 } from "../src/reaction-roles";
 import { ReactionRoleService } from "../src/services/reaction-role-service";
-import { createCloudflareReactionRoleStore } from "../src/runtime/cloudflare-reaction-role-store";
+import { createSqliteReactionRoleStore } from "./support/sqlite/runtime/sqlite-reaction-role-store";
 import type { ReactionRoleDiscord } from "../src/discord/reaction-roles";
 import type { GuildPermissionContext } from "../src/runtime/admin-permissions";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
@@ -32,10 +32,10 @@ const event = (overrides: object = {}) => ({
 
 function fixture(
   now: () => number = Date.now,
-  staffRoles?: Parameters<typeof createCloudflareReactionRoleStore>[1],
+  staffRoles?: Parameters<typeof createSqliteReactionRoleStore>[1],
 ) {
   const database = new SqliteD1Database();
-  const store = createCloudflareReactionRoleStore(database.d1, staffRoles);
+  const store = createSqliteReactionRoleStore(database.d1, staffRoles);
   const context: GuildPermissionContext = {
     guildId: "100",
     botUserId: "900",
@@ -162,12 +162,6 @@ test("independent panels retain legacy storage and reconcile the message that ac
   assert.equal(
     f.database.query<{ count: number }>("SELECT COUNT(*) AS count FROM reaction_role_panels")[0]
       .count,
-    0,
-  );
-  assert.equal(
-    f.database.query<{ count: number }>(
-      "SELECT COUNT(*) AS count FROM reaction_role_additional_panels",
-    )[0].count,
     1,
   );
 });
@@ -279,7 +273,7 @@ test("panels publish once, seed every choice, and survive store reconstruction",
   assert.equal(f.messages[0].enforce_nonce, true);
   assert.deepEqual(f.seeds, ["🟢", "🔵", "🟢", "🔵"]);
   assert.equal(
-    (await createCloudflareReactionRoleStore(f.database.d1).readPanel("100"))?.messageId,
+    (await createSqliteReactionRoleStore(f.database.d1).readPanel("100"))?.messageId,
     "500",
   );
   assert.equal(await f.store.readPanel("101"), null);
@@ -639,7 +633,7 @@ test("environment-configured HAF admin and billing support roles remain protecte
   await assert.rejects(() => f.service.save("100", settings), /staff|protected|verification/);
 
   const originalService = new ReactionRoleService(
-    createCloudflareReactionRoleStore(f.database.d1),
+    createSqliteReactionRoleStore(f.database.d1),
     f.discord,
     "900",
   );

@@ -8,7 +8,7 @@ import {
   createDiscordSocialProviderConfig,
   customerAuthUserOptions,
   rejectDiscordUserIdUpdate,
-} from "../auth/auth";
+} from "../auth/discord-auth";
 import { adminRole, ownerRole, viewerRole, workspaceAccessControl } from "../auth/permissions";
 import type { PostgresDatabaseCapability } from "./postgres-capability";
 

@@ -1,3 +1,5 @@
+import { testWebhookCredential, webhookTargets } from "./support/webhook-credentials";
+import type { Cache } from "../src/runtime/discord-json-cache";
 import type { QueueProducer } from "../src/runtime/queue-types";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
@@ -12,9 +14,9 @@ import { createDiscordGuildResourceValidator } from "../src/discord/guild-resour
 import type { RuntimeAppOptions } from "../src/runtime/app-types";
 import { isRecord } from "../src/unknown-parse";
 import { renderAdminShell } from "../src/runtime/admin-shell";
-import { createCustomerAuth } from "../src/runtime/auth/auth";
+import { createCustomerAuth } from "./support/sqlite/runtime/auth/auth";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
-import { createCloudflareTicketTranscriptCapabilityStore } from "../src/runtime/cloudflare-ticket-transcript-capability-store";
+import { createSqliteTicketTranscriptCapabilityStore } from "./support/sqlite/runtime/sqlite-ticket-transcript-capability-store";
 import { purgeExpiredTicketTranscripts } from "../src/runtime/ticket-transcript-retention";
 import type { GatewayController, RuntimeStore } from "../src/runtime/contracts";
 import {
@@ -42,6 +44,7 @@ import type { RuntimeStores } from "../src/runtime/app-types";
 import { buildEphemeralMessage } from "../src/discord-interactions";
 import type { CreateChannelMessageInput } from "../src/discord/messages";
 import { createWebhookCredentialKeyRing } from "../src/security/webhook-credentials";
+import { signSensitiveComponentId } from "../src/security/sensitive-component-ids";
 import { createComponentIdSigner } from "../src/security/component-id-signer";
 import type { OperationalEvent } from "../src/observability/operational-reporter";
 import {
@@ -578,7 +581,7 @@ test("createRuntimeApp runs bounded 180-day feedback retention and continues aft
 test("createRuntimeApp purges retained Ticket transcript capabilities and objects", async () => {
   const fixture = createProductionRuntimeStores();
   runtimeStoreFixtures.add(fixture);
-  const capabilities = createCloudflareTicketTranscriptCapabilityStore(fixture.database.d1);
+  const capabilities = createSqliteTicketTranscriptCapabilityStore(fixture.database.d1);
   const nowMs = Date.now();
   await capabilities.issue({
     objectId: "expired-transcript-object",
@@ -1043,11 +1046,19 @@ test("createRuntimeApp forwards configured public webhook proxy requests", async
     name: "Alerts",
     enabled: true,
     banLookupEnabled: false,
-    banLookupNotificationUrl: null,
+    banLookupCredentialId: null,
     banLookupAppIds: [],
     destinations: [
-      { id: "main", label: "Main", url: "https://discord.com/api/webhooks/1/main" },
-      { id: "errors", label: "Errors", url: "https://discord.com/api/webhooks/2/errors" },
+      {
+        id: "main",
+        label: "Main",
+        credentialId: testWebhookCredential("https://discord.com/api/webhooks/900001/main"),
+      },
+      {
+        id: "errors",
+        label: "Errors",
+        credentialId: testWebhookCredential("https://discord.com/api/webhooks/2/errors"),
+      },
     ],
     defaultDestinationIds: ["main"],
     routingRules: [
@@ -1099,10 +1110,15 @@ test("createRuntimeApp forwards configured public webhook proxy requests", async
     assert.deepEqual(fetchCalls, []);
     assert.deepEqual(queuedDeliveries, [
       {
+        version: 2,
         config: { guildId: "guild-1", publicId: "public_webhook_1234" },
-        destinations: [
-          { id: "errors", label: "Errors", url: "https://discord.com/api/webhooks/2/errors" },
-        ],
+        destinations: webhookTargets([
+          {
+            id: "errors",
+            label: "Errors",
+            credentialId: testWebhookCredential("https://discord.com/api/webhooks/2/errors"),
+          },
+        ]),
         body: JSON.stringify({ content: "error happened" }),
         contentType: "application/json",
       },
@@ -1121,9 +1137,15 @@ test("request-scoped runtime apps keep known webhooks available when invalid adm
     name: "Review cache",
     enabled: true,
     banLookupEnabled: false,
-    banLookupNotificationUrl: null,
+    banLookupCredentialId: null,
     banLookupAppIds: [],
-    destinations: [{ id: "main", label: "Main", url: "https://discord.com/api/webhooks/1/main" }],
+    destinations: [
+      {
+        id: "main",
+        label: "Main",
+        credentialId: testWebhookCredential("https://discord.com/api/webhooks/900001/main"),
+      },
+    ],
     defaultDestinationIds: ["main"],
     routingRules: [],
     createdAtMs: 1,
@@ -1204,6 +1226,16 @@ test("request-scoped runtime apps keep known webhooks available when invalid adm
 });
 
 test("createRuntimeApp applies content replacements to plain-text webhook proxy requests", async () => {
+  const credentials = createTestWebhookCredentialService();
+  const credential = await credentials.replace(
+    {
+      kind: "proxy_destination",
+      guildId: "guild-1",
+      publicId: "public_webhook_1234",
+      destinationId: "main",
+    },
+    "https://discord.com/api/webhooks/900001/main",
+  );
   const originalFetch = globalThis.fetch;
   const fetchCalls: Array<{ url: string; body: string | undefined }> = [];
   const config: WebhookProxyConfig = {
@@ -1212,9 +1244,15 @@ test("createRuntimeApp applies content replacements to plain-text webhook proxy 
     name: "Alerts",
     enabled: true,
     banLookupEnabled: false,
-    banLookupNotificationUrl: null,
+    banLookupCredentialId: null,
     banLookupAppIds: [],
-    destinations: [{ id: "main", label: "Main", url: "https://discord.com/api/webhooks/1/main" }],
+    destinations: [
+      {
+        id: "main",
+        label: "Main",
+        credentialId: credential.credentialId,
+      },
+    ],
     defaultDestinationIds: ["main"],
     routingRules: [],
     contentReplacements: [
@@ -1248,6 +1286,7 @@ test("createRuntimeApp applies content replacements to plain-text webhook proxy 
           return publicId === config.publicId ? config : null;
         },
       }),
+      webhookCredentialService: credentials,
       gateway: {} as GatewayController,
     });
 
@@ -1268,7 +1307,7 @@ test("createRuntimeApp applies content replacements to plain-text webhook proxy 
     assert.equal(response.status, 204);
     assert.deepEqual(fetchCalls, [
       {
-        url: "https://discord.com/api/webhooks/1/main",
+        url: "https://discord.com/api/webhooks/900001/main",
         body: [
           "ColdAsFk",
           "Player Name:",
@@ -1284,6 +1323,16 @@ test("createRuntimeApp applies content replacements to plain-text webhook proxy 
 });
 
 test("createRuntimeApp applies content replacements inside embed field values", async () => {
+  const credentials = createTestWebhookCredentialService();
+  const credential = await credentials.replace(
+    {
+      kind: "proxy_destination",
+      guildId: "guild-1",
+      publicId: "public_webhook_1234",
+      destinationId: "main",
+    },
+    "https://discord.com/api/webhooks/900001/main",
+  );
   const originalFetch = globalThis.fetch;
   const fetchCalls: Array<{ url: string; body: string | undefined }> = [];
   const config: WebhookProxyConfig = {
@@ -1292,9 +1341,15 @@ test("createRuntimeApp applies content replacements inside embed field values", 
     name: "Alerts",
     enabled: true,
     banLookupEnabled: false,
-    banLookupNotificationUrl: null,
+    banLookupCredentialId: null,
     banLookupAppIds: [],
-    destinations: [{ id: "main", label: "Main", url: "https://discord.com/api/webhooks/1/main" }],
+    destinations: [
+      {
+        id: "main",
+        label: "Main",
+        credentialId: credential.credentialId,
+      },
+    ],
     defaultDestinationIds: ["main"],
     routingRules: [],
     contentReplacements: [
@@ -1328,6 +1383,7 @@ test("createRuntimeApp applies content replacements inside embed field values", 
           return publicId === config.publicId ? config : null;
         },
       }),
+      webhookCredentialService: credentials,
       gateway: {} as GatewayController,
     });
 
@@ -1349,7 +1405,7 @@ test("createRuntimeApp applies content replacements inside embed field values", 
     assert.equal(response.status, 204);
     assert.deepEqual(fetchCalls, [
       {
-        url: "https://discord.com/api/webhooks/1/main",
+        url: "https://discord.com/api/webhooks/900001/main",
         body: JSON.stringify({
           embeds: [
             {
@@ -1372,6 +1428,16 @@ test("createRuntimeApp applies content replacements inside embed field values", 
 });
 
 test("createRuntimeApp invalidates cached webhook configs after admin updates", async () => {
+  const credentials = createTestWebhookCredentialService();
+  const credential = await credentials.replace(
+    {
+      kind: "proxy_destination",
+      guildId: "guild-1",
+      publicId: "public_webhook_1234",
+      destinationId: "main",
+    },
+    "https://discord.com/api/webhooks/900001/main",
+  );
   const originalFetch = globalThis.fetch;
   const fetchCalls: Array<{ url: string; body: string | undefined }> = [];
   let readCount = 0;
@@ -1381,9 +1447,15 @@ test("createRuntimeApp invalidates cached webhook configs after admin updates", 
     name: "Alerts",
     enabled: true,
     banLookupEnabled: false,
-    banLookupNotificationUrl: null,
+    banLookupCredentialId: null,
     banLookupAppIds: [],
-    destinations: [{ id: "main", label: "Main", url: "https://discord.com/api/webhooks/1/main" }],
+    destinations: [
+      {
+        id: "main",
+        label: "Main",
+        credentialId: credential.credentialId,
+      },
+    ],
     defaultDestinationIds: ["main"],
     routingRules: [],
     createdAtMs: 1,
@@ -1411,7 +1483,7 @@ test("createRuntimeApp invalidates cached webhook configs after admin updates", 
           config = nextConfig;
         },
       }),
-      webhookCredentialService: createTestWebhookCredentialService(),
+      webhookCredentialService: credentials,
       gateway: {} as GatewayController,
     });
 
@@ -1462,7 +1534,7 @@ test("createRuntimeApp invalidates cached webhook configs after admin updates", 
     assert.equal(readCount, 3);
     assert.deepEqual(fetchCalls, [
       {
-        url: "https://discord.com/api/webhooks/1/main",
+        url: "https://discord.com/api/webhooks/900001/main",
         body: JSON.stringify({ content: "first" }),
       },
       {
@@ -1548,17 +1620,25 @@ test("createRuntimeApp creates webhook proxy configs with generated public IDs",
   ]);
 });
 
-test("createRuntimeApp preserves legacy webhook destinations through the Admin migration flow", async () => {
-  const legacyUrl = "https://discord.com/api/webhooks/900000/legacy_secret";
-  const legacyConfig: WebhookProxyConfig = {
+test("createRuntimeApp preserves encrypted webhook credentials through an Admin edit", async () => {
+  const webhookUrl = "https://discord.com/api/webhooks/900000/synthetic_secret";
+  const credentials = createTestWebhookCredentialService();
+  const owner = {
+    kind: "proxy_destination" as const,
     guildId: "guild-1",
     publicId: "public_webhook_1234",
-    name: "Legacy alerts",
+    destinationId: "main",
+  };
+  const credential = await credentials.replace(owner, webhookUrl);
+  const currentConfig: WebhookProxyConfig = {
+    guildId: "guild-1",
+    publicId: "public_webhook_1234",
+    name: "Alerts",
     enabled: true,
     banLookupEnabled: false,
-    banLookupNotificationUrl: null,
+    banLookupCredentialId: null,
     banLookupAppIds: [],
-    destinations: [{ id: "main", label: "Main", url: legacyUrl }],
+    destinations: [{ id: "main", label: "Main", credentialId: credential.credentialId }],
     defaultDestinationIds: ["main"],
     routingRules: [
       { id: "errors", label: "Errors", pattern: "error", flags: "i", destinationIds: ["main"] },
@@ -1576,16 +1656,16 @@ test("createRuntimeApp preserves legacy webhook destinations through the Admin m
         return { guildId, tier: "premium" as const, updatedAtMs: 0 };
       },
       async listWebhookProxyConfigs() {
-        return [legacyConfig];
+        return [currentConfig];
       },
       async readWebhookProxyConfig() {
-        return legacyConfig;
+        return currentConfig;
       },
       async upsertWebhookProxyConfig(config: WebhookProxyConfig) {
         savedConfig = config;
       },
     }),
-    webhookCredentialService: createTestWebhookCredentialService(),
+    webhookCredentialService: credentials,
     gateway: {} as GatewayController,
   });
 
@@ -1601,17 +1681,17 @@ test("createRuntimeApp preserves legacy webhook destinations through the Admin m
   const destination = resource.configs[0]?.destinations[0];
   assert.ok(destination);
   assert.equal(destination.id, "main");
-  assert.doesNotMatch(JSON.stringify(resource), /legacy_secret/);
+  assert.doesNotMatch(JSON.stringify(resource), /synthetic_secret/);
 
   const saveResponse = await app.fetch(
     new Request("https://runtime.example/admin/api/webhook-proxy/config", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        guildId: legacyConfig.guildId,
-        publicId: legacyConfig.publicId,
-        name: legacyConfig.name,
-        enabled: legacyConfig.enabled,
+        guildId: currentConfig.guildId,
+        publicId: currentConfig.publicId,
+        name: currentConfig.name,
+        enabled: currentConfig.enabled,
         destinations: [
           {
             id: destination.id,
@@ -1619,15 +1699,17 @@ test("createRuntimeApp preserves legacy webhook destinations through the Admin m
             credential: { action: "preserve", credentialId: destination.credential.credentialId },
           },
         ],
-        defaultDestinationIds: legacyConfig.defaultDestinationIds,
-        routingRules: legacyConfig.routingRules,
+        defaultDestinationIds: currentConfig.defaultDestinationIds,
+        routingRules: currentConfig.routingRules,
       }),
     }),
   );
   assert.equal(saveResponse.status, 200);
-  assert.equal(savedConfig?.destinations[0]?.url, legacyUrl);
-  assert.deepEqual(savedConfig?.routingRules, legacyConfig.routingRules);
-  assert.equal(savedConfig?.destinationsV2?.[0]?.id, "main");
+  assert.equal(savedConfig?.destinations[0]?.credentialId, credential.credentialId);
+  assert.equal((await credentials.resolve(credential.credentialId, owner)).url, webhookUrl);
+  assert.doesNotMatch(JSON.stringify(savedConfig), /synthetic_secret/);
+  assert.deepEqual(savedConfig?.routingRules, currentConfig.routingRules);
+  assert.equal(savedConfig?.destinations[0]?.id, "main");
 });
 
 function createTestWebhookCredentialService(): WebhookCredentialService {
@@ -3249,7 +3331,7 @@ test("createRuntimeApp starts configured Turnstile Member Verification from a Ve
   const originalFetch = globalThis.fetch;
   const attempts: unknown[] = [];
   const componentIdSigner = createComponentIdSigner({
-    currentSecret: "member-verification-panel-emergency-window-test-secret",
+    currentSecret: "member-verification-panel-current-format-test-secret",
   });
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ roles: [] }), {
@@ -3304,14 +3386,19 @@ test("createRuntimeApp starts configured Turnstile Member Verification from a Ve
       turnstileSiteKey: "site-key",
       turnstileSecretKey: "secret-key",
       componentIdSigner,
-      memberVerificationPanelLegacyUntilMs: Date.now() + 60_000,
     });
 
     const response = await app.fetch(
       createInteractionRequest({
         type: 3,
         user: { id: "user-1" },
-        data: { custom_id: "member_verification_verify:guild-1" },
+        data: {
+          custom_id: await signSensitiveComponentId(
+            "member_verification_verify:guild-1",
+            componentIdSigner,
+            { guildId: "guild-1" },
+          ),
+        },
         message: { id: "panel-message", channel_id: "welcome-channel" },
       }),
     );
@@ -4479,7 +4566,7 @@ test("createRuntimeApp reads current user guilds from KV on a fresh guild-admin 
         },
       }),
       gateway: {} as GatewayController,
-      discordCacheKv: {
+      discordCache: {
         async get(key: string) {
           kvGets.push(key);
           if (key === "bot-guilds") {
@@ -4492,7 +4579,7 @@ test("createRuntimeApp reads current user guilds from KV on a fresh guild-admin 
           }
           return null;
         },
-      } as unknown as KVNamespace,
+      } as unknown as Cache<string>,
     });
 
     const response = await app.fetch(new Request("https://runtime.example/admin/api/guilds"));
@@ -4550,7 +4637,7 @@ test("createRuntimeApp refresh bypasses KV current user guilds and updates the c
         },
       }),
       gateway: {} as GatewayController,
-      discordCacheKv: {
+      discordCache: {
         async get(key: string) {
           kvGets.push(key);
           return JSON.stringify([{ guildId: "guild-stale", name: "Stale Guild" }]);
@@ -4558,7 +4645,7 @@ test("createRuntimeApp refresh bypasses KV current user guilds and updates the c
         async put(key: string, value: string, options?: { expirationTtl?: number }) {
           kvPuts.push({ key, value, options });
         },
-      } as unknown as KVNamespace,
+      } as unknown as Cache<string>,
     });
 
     const response = await app.fetch(
@@ -4607,7 +4694,7 @@ test("createRuntimeApp refresh bypasses KV current user guilds and updates the c
               icon: null,
             },
           ]),
-          options: { expirationTtl: 300 },
+          options: { ttlSeconds: 300 },
         },
       ],
     );
@@ -4855,14 +4942,14 @@ test("createRuntimeApp fails closed when fresh bot Guild membership is rate limi
       discordAccounts: {
         readDiscordAccessToken: async () => "strict-link-user-token",
       },
-      discordCacheKv: {
+      discordCache: {
         async get(key: string) {
           return key === "bot-guilds"
             ? JSON.stringify([{ guildId: "guild-1", name: "Stale Guild", icon: null }])
             : null;
         },
         async put() {},
-      } as unknown as KVNamespace,
+      } as unknown as Cache<string>,
       workspaceStore,
       verifyDiscordRequest: async () => true,
       stores: createRuntimeStoresWithOverrides({} as RuntimeStore),
@@ -5433,9 +5520,12 @@ test("createRuntimeApp rejects malformed POST /admin/api/timed-roles bodies with
     );
 
     assert.equal(response.status, 400);
-    const body = (await response.json()) as { error: string; issues?: Array<{ path: string }> };
+    const body = (await response.json()) as {
+      error: string;
+      fieldIssues?: Array<{ path: string }>;
+    };
     assert.equal(body.error, "Invalid request body");
-    assert.ok(body.issues?.some((issue) => issue.path === "duration"));
+    assert.ok(body.fieldIssues?.some((issue) => issue.path === "duration"));
     assert.deepEqual(calls, []);
   } finally {
     globalThis.fetch = originalFetch;
@@ -5592,9 +5682,9 @@ test("createRuntimeApp rejects malformed POST /admin/api/blocklist bodies with 4
   );
 
   assert.equal(response.status, 400);
-  const body = (await response.json()) as { error: string; issues?: Array<{ path: string }> };
+  const body = (await response.json()) as { error: string; fieldIssues?: Array<{ path: string }> };
   assert.equal(body.error, "Invalid request body");
-  assert.ok(body.issues?.some((issue) => issue.path === "action"));
+  assert.ok(body.fieldIssues?.some((issue) => issue.path === "action"));
   assert.deepEqual(calls, []);
 });
 
@@ -6513,7 +6603,6 @@ test("createRuntimeApp exposes ticket admin APIs through session auth and publis
         {
           ...panel.ticketTypes[0]!,
           allowedCreatorRoleIds: ["role-2"],
-          autoReplyEnabled: false,
           limitExclusion: true,
           responseRules: [
             {
@@ -6548,9 +6637,9 @@ test("createRuntimeApp exposes ticket admin APIs through session auth and publis
     );
     assert.equal(saveResponse.status, 200);
     assert.deepEqual(await saveResponse.json(), { ok: true, panel: steamPanel });
-    assert.equal(
-      (storedPanel as TicketPanelConfig | null)?.ticketTypes[0]?.autoReplyEnabled,
-      false,
+    assert.deepEqual(
+      (storedPanel as TicketPanelConfig | null)?.ticketTypes[0]?.responseRules,
+      steamPanel.ticketTypes[0].responseRules,
     );
 
     const readResponse = await app.fetch(
@@ -6745,7 +6834,7 @@ test("createRuntimeApp publishes unsaved ticket panel edits from the request bod
     ticketTypes: [
       {
         ...createTicketPanelConfig().ticketTypes[0]!,
-        autoReplyMessage: "Old saved reply",
+        responseRules: [{ id: "welcome", conditions: [], message: "Old saved reply" }],
       },
     ],
   };
@@ -6755,7 +6844,7 @@ test("createRuntimeApp publishes unsaved ticket panel edits from the request bod
     ticketTypes: [
       {
         ...createTicketPanelConfig().ticketTypes[0]!,
-        autoReplyMessage: "New local reply",
+        responseRules: [{ id: "welcome", conditions: [], message: "New local reply" }],
       },
     ],
   };
@@ -6821,7 +6910,7 @@ test("createRuntimeApp publishes unsaved ticket panel edits from the request bod
     assert.equal(publishResponse.status, 200);
     assert.deepEqual(await publishResponse.json(), { ok: true, panelMessageId: "panel-message-2" });
     assert.equal(
-      (storedPanel as TicketPanelConfig | null)?.ticketTypes[0]?.autoReplyMessage,
+      (storedPanel as TicketPanelConfig | null)?.ticketTypes[0]?.responseRules[0]?.message,
       "New local reply",
     );
     assert.equal((storedPanel as TicketPanelConfig | null)?.panelMessageId, "panel-message-2");
@@ -7366,7 +7455,7 @@ test("createRuntimeApp offers one basic Ticket Panel and Type on Free while gati
   assert.equal(freeBody.ok, true);
   assert.equal(freeBody.panel.ticketCreationLimit, 1);
   assert.equal(freeBody.panel.ticketTypes.length, 1);
-  assert.equal(freeBody.panel.ticketTypes[0]?.autoReplyEnabled, false);
+  assert.deepEqual(freeBody.panel.ticketTypes[0]?.responseRules, []);
 
   const freeTypeLimitResponse = await freeApp.fetch(
     new Request("https://runtime.example/admin/api/tickets/panel", {
@@ -7443,8 +7532,6 @@ test("createRuntimeApp offers one basic Ticket Panel and Type on Free while gati
       {
         ...freeBody.panel.ticketTypes[0]!,
         allowedCreatorRoleIds: ["role-member"],
-        autoReplyEnabled: true,
-        autoReplyMessage: "Retained auto reply",
         responseRules: [{ id: "rule-1", conditions: [], message: "Retained rule" }],
         anonymousSupportEnabled: true,
         limitExclusion: true,
@@ -7476,7 +7563,7 @@ test("createRuntimeApp offers one basic Ticket Panel and Type on Free while gati
   assert.equal(freeStoredPanel?.ticketCreationLimit, 5);
   assert.equal(freeStoredPanel?.ticketTypes.length, 2);
   assert.equal(freeStoredPanel?.ticketTypes[0]?.id, "renamed-on-free");
-  assert.equal(freeStoredPanel?.ticketTypes[0]?.autoReplyMessage, "Retained auto reply");
+  assert.equal(freeStoredPanel?.ticketTypes[0]?.responseRules[0]?.message, "Retained rule");
 
   const freeAiTestResponse = await freeApp.fetch(
     new Request("https://runtime.example/admin/api/tickets/test-action", {
@@ -7967,7 +8054,7 @@ test("createRuntimeApp handles ticket open modal submit and close interactions",
       discordPublicKey: "a".repeat(64),
       discordBotToken: "bot-token",
       verifyDiscordRequest: async () => true,
-      ticketTranscriptCapabilities: createCloudflareTicketTranscriptCapabilityStore(
+      ticketTranscriptCapabilities: createSqliteTicketTranscriptCapabilityStore(
         fixture.database.d1,
       ),
       ticketTranscriptBlobs: {
@@ -8429,10 +8516,9 @@ test("createRuntimeApp keeps retained paid Ticket controls dormant on Free", asy
         ...createTicketPanelConfig(true).ticketTypes[0]!,
         questions: [],
         allowedCreatorRoleIds: ["paid-role"],
-        autoReplyEnabled: true,
-        autoReplyMessage: "Retained automatic reply",
         responseRules: [{ id: "retained-rule", conditions: [], message: "Retained rule reply" }],
-        anonymousEnabled: true,
+        anonymousSupportEnabled: true,
+        staffDiscussionThreadEnabled: true,
         limitExclusion: true,
       },
     ],
@@ -8665,11 +8751,9 @@ test("createRuntimeApp posts a separate rendered auto-reply after opening a tick
     ticketTypes: [
       {
         ...createTicketPanelConfig(true).ticketTypes[0]!,
-        autoReplyEnabled: true,
-        autoReplyMessage: "Thanks {{answer.reason}}. An agent will be with you shortly.",
         responseRules: [
           {
-            id: "legacy-auto-reply",
+            id: "welcome",
             conditions: [],
             message: "Thanks {{answer.reason}}. An agent will be with you shortly.",
           },
@@ -8781,11 +8865,9 @@ test("createRuntimeApp defers ticket modal submit and finishes creation in waitU
     ticketTypes: [
       {
         ...createTicketPanelConfig(true).ticketTypes[0]!,
-        autoReplyEnabled: true,
-        autoReplyMessage: "Thanks {{answer.reason}}. An agent will be with you shortly.",
         responseRules: [
           {
-            id: "legacy-auto-reply",
+            id: "welcome",
             conditions: [],
             message: "Thanks {{answer.reason}}. An agent will be with you shortly.",
           },
@@ -9115,11 +9197,9 @@ test("createRuntimeApp still opens the ticket when the auto-reply message fails"
     ticketTypes: [
       {
         ...createTicketPanelConfig(true).ticketTypes[0],
-        autoReplyEnabled: true,
-        autoReplyMessage: "Thanks {{answer.reason}}. An agent will be with you shortly.",
         responseRules: [
           {
-            id: "legacy-auto-reply",
+            id: "welcome",
             conditions: [],
             message: "Thanks {{answer.reason}}. An agent will be with you shortly.",
           },
@@ -9229,13 +9309,7 @@ test("createRuntimeApp skips ticket auto-reply when disabled for the ticket type
   const discordCalls: Array<{ method: string; url: string; body: unknown }> = [];
   const panel: TicketPanelConfig = {
     ...createTicketPanelConfig(true),
-    ticketTypes: [
-      {
-        ...createTicketPanelConfig(true).ticketTypes[0]!,
-        autoReplyEnabled: false,
-        autoReplyMessage: "Thanks {{answer.reason}}. An agent will be with you shortly.",
-      },
-    ],
+    ticketTypes: [{ ...createTicketPanelConfig(true).ticketTypes[0]!, responseRules: [] }],
   };
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -10501,7 +10575,6 @@ test("createRuntimeApp rejects wrong-actor and expired signed close controls bef
       }),
       gateway: {} as GatewayController,
       componentIdSigner,
-      componentIdLegacyUntilMs: nowMs + 60_000,
     });
 
     const validResponse = await app.fetch(
@@ -10532,12 +10605,8 @@ test("createRuntimeApp rejects wrong-actor and expired signed close controls bef
       }),
     );
     assert.deepEqual(await existingEnvelopeResponse.json(), {
-      type: 7,
-      data: {
-        content: "The ticket opener chose to keep this ticket open.",
-        allowed_mentions: { parse: [] },
-        components: [],
-      },
+      type: 4,
+      data: { flags: 64, content: "This action is no longer available." },
     });
 
     const wrongActorResponse = await app.fetch(
@@ -10550,21 +10619,6 @@ test("createRuntimeApp rejects wrong-actor and expired signed close controls bef
       }),
     );
     assert.deepEqual(await wrongActorResponse.json(), {
-      type: 4,
-      data: { flags: 64, content: "This action is no longer available." },
-    });
-
-    nowMs += 61_000;
-    const outsideMigrationWindowResponse = await app.fetch(
-      createInteractionRequest({
-        type: 3,
-        guild_id: "guild-1",
-        channel_id: "ticket-channel-1",
-        member: { user: { id: "user-1" }, roles: [] },
-        data: { custom_id: existingSignedDecline },
-      }),
-    );
-    assert.deepEqual(await outsideMigrationWindowResponse.json(), {
       type: 4,
       data: { flags: 64, content: "This action is no longer available." },
     });
@@ -11023,10 +11077,7 @@ function createTicketPanelConfig(published = false): TicketPanelConfig {
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "appeal",
-        autoReplyEnabled: true,
-        autoReplyMessage: null,
         responseRules: [],
-        anonymousEnabled: false,
         anonymousSupportEnabled: false,
         staffDiscussionThreadEnabled: false,
         ticketHistoryPromptVisibility: "off",
@@ -11050,10 +11101,10 @@ function createTicketPanelConfig(published = false): TicketPanelConfig {
 function assertTicketPanelValidationIssue(body: unknown, path: string): void {
   assert.equal(typeof body, "object");
   assert.notEqual(body, null);
-  const response = body as { error?: unknown; issues?: Array<{ path?: unknown }> };
+  const response = body as { error?: unknown; fieldIssues?: Array<{ path?: unknown }> };
   assert.equal(response.error, "Invalid request body");
   assert.ok(
-    response.issues?.some((issue) => issue.path === path),
+    response.fieldIssues?.some((issue) => issue.path === path),
     `expected ticket panel validation issue at ${path}`,
   );
 }

@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import type { AppConfigMutation } from "./admin-types";
 
+export type { GuildNotificationChannelStore } from "./contracts/guild-notification-channel-store";
 export type { BlocklistStore } from "./contracts/blocklist-store";
 export type { AppConfigStore } from "./contracts/app-config-store";
 export type { TimedRoleStore } from "./contracts/timed-role-store";
@@ -18,7 +19,6 @@ export type { LfgStore } from "./contracts/lfg-store";
 export type { ClanStore } from "./contracts/clan-store";
 export type { SuggestionStore } from "./contracts/suggestion-store";
 export type { FeatureSetupStore } from "./contracts/feature-setup-store";
-export type { SteamLinkStore } from "./contracts/steam-link-store";
 export type { PlatformLinkStore } from "./contracts/platform-link-store";
 export type { GuildRbacStore } from "./contracts/guild-rbac-store";
 export type { ProductAnalyticsPreferenceStore } from "./contracts/product-analytics-preference-store";

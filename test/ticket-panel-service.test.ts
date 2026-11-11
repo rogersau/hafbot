@@ -818,30 +818,6 @@ test("Ticket Panel preserves provider failures when a published channel still ex
   );
 });
 
-test("Ticket Panel compares legacy response rules semantically on free saves", async () => {
-  const saved = createPanel();
-  delete saved.ticketTypes[0].responseRules;
-  saved.ticketTypes[0].autoReplyEnabled = true;
-  saved.ticketTypes[0].autoReplyMessage = "Legacy reply";
-  const candidate = structuredClone(saved);
-  candidate.ticketTypes[0].responseRules = [
-    { id: "legacy-auto-reply", conditions: [], message: "Legacy reply" },
-  ];
-  candidate.panelTitle = "Unrelated change";
-  const service = createTicketPanelService({
-    store: createStore([saved]),
-    entitlements: {
-      readGuildEntitlement: async (guildId) => ({ guildId, tier: "free", updatedAtMs: 1 }),
-    },
-    guildResources: createPermissiveGuildResourceValidator(),
-    discord: createDiscordAdapter(),
-  });
-
-  const result = await service.savePanel(candidate);
-
-  assert.equal(result.ok, true);
-});
-
 test("Ticket Panel diagnostics rejects any ticket type without a support role", () => {
   const panel = createPanel();
   panel.ticketTypes.push({
@@ -929,6 +905,8 @@ test("Ticket Lifecycle owns effective configuration and creator eligibility", as
     readConfig: async () => ({ guilds: {}, botUserId: "bot" }),
     readGuildConfig: async () => ({ guilds: {}, botUserId: "bot" }),
     applyGuildEmojiMutation: async () => ({ guilds: {}, botUserId: "bot" }),
+    readGuildNotificationChannel: async () => null,
+    upsertGuildNotificationChannel: async () => {},
   };
   const premium = createTicketLifecycle({
     tickets,
@@ -1375,6 +1353,8 @@ test("Ticket Lifecycle resumes template completion after Discord delivery", asyn
       readConfig: async () => ({ guilds: {}, botUserId: "bot" }),
       readGuildConfig: async () => ({ guilds: {}, botUserId: "bot" }),
       applyGuildEmojiMutation: async () => ({ guilds: {}, botUserId: "bot" }),
+      readGuildNotificationChannel: async () => null,
+      upsertGuildNotificationChannel: async () => {},
     },
     entitlements: premiumEntitlements(),
     messageTemplates: {
@@ -1423,6 +1403,8 @@ test("Ticket Lifecycle durably defers unresolved recovery", async () => {
       readConfig: async () => ({ guilds: {}, botUserId: "bot" }),
       readGuildConfig: async () => ({ guilds: {}, botUserId: "bot" }),
       applyGuildEmojiMutation: async () => ({ guilds: {}, botUserId: "bot" }),
+      readGuildNotificationChannel: async () => null,
+      upsertGuildNotificationChannel: async () => {},
     },
     entitlements: premiumEntitlements(),
     recoveryQueue: {
@@ -1914,10 +1896,7 @@ function createPanel(): TicketPanelConfig {
         supportRoleId: "support-role",
         channelNamePrefix: "ticket",
         questions: [],
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
         responseRules: [],
-        anonymousEnabled: false,
         anonymousSupportEnabled: false,
         staffDiscussionThreadEnabled: false,
         ticketHistoryPromptVisibility: "off",
@@ -1964,7 +1943,7 @@ function createDiscordAdapter(
 function premiumEntitlements() {
   const fixture = createProductionRuntimeStores();
   fixture.database.execRaw(
-    "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', 'premium', 'premium', 1)",
+    "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', 'premium', 1)",
   );
   return fixture.stores.guildEntitlements;
 }
@@ -1972,7 +1951,7 @@ function premiumEntitlements() {
 function freeEntitlements() {
   const fixture = createProductionRuntimeStores();
   fixture.database.execRaw(
-    "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', 'free', 'free', 1)",
+    "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', 'free', 1)",
   );
   return fixture.stores.guildEntitlements;
 }
@@ -1980,7 +1959,7 @@ function freeEntitlements() {
 function createLifecycle(tickets: TicketStore, productAnalytics?: ProductAnalyticsReporter) {
   const fixture = createProductionRuntimeStores();
   fixture.database.execRaw(
-    "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', 'premium', 'premium', 1)",
+    "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', 'premium', 1)",
   );
   return createTicketLifecycle({
     tickets,

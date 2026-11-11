@@ -2,8 +2,8 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { CloudflareCommerceOfferingStore } from "../src/runtime/commerce/cloudflare-offering-store";
-import { CloudflarePaidRoleStore } from "../src/runtime/commerce/cloudflare-paid-role-store";
+import { SqliteCommerceOfferingStore } from "./support/sqlite/runtime/commerce/sqlite-offering-store";
+import { SqlitePaidRoleStore } from "./support/sqlite/runtime/commerce/sqlite-paid-role-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 test("offering dashboard aggregates currency-safe financials and exposes active price without wallet fields", async () => {
@@ -21,9 +21,7 @@ test("offering dashboard aggregates currency-safe financials and exposes active 
       INSERT INTO commerce_payments(id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_payment_intent_id,currency,amount_minor,amount_received_minor,amount_refunded_minor,status,created_at_ms,updated_at_ms)
         VALUES ('pay-1','acct_1','cus-1','buyer-1','off-1','price-1','pi-1','AUD',500,500,0,'succeeded',1,1);
     `);
-    const dashboard = await new CloudflareCommerceOfferingStore(database.d1).readDashboard(
-      "acct_1",
-    );
+    const dashboard = await new SqliteCommerceOfferingStore(database.d1).readDashboard("acct_1");
     assert.equal(dashboard.offerings[0]?.activePrices[0]?.stripePriceId, "price_1");
     assert.equal(dashboard.offerings[0]?.grossByCurrency.AUD, 500);
     assert.equal(dashboard.offerings[0]?.supportContact, "seller@example.test");
@@ -59,7 +57,7 @@ test("role replacement keeps the old Offering role until every assignment is mig
       INSERT INTO commerce_role_assignments(id,entitlement_id,guild_id,discord_user_id,discord_role_id,status,attempt_count,assigned_at_ms,created_at_ms,updated_at_ms)
         VALUES ('assignment-2','ent-2','guild-1','user-1','role-old','assigned',1,1,1,1);
     `);
-    const catalog = new CloudflareCommerceOfferingStore(database.d1);
+    const catalog = new SqliteCommerceOfferingStore(database.d1);
     const offering = await catalog.readOffering("off-1");
     const lifecycle = await catalog.readLifecycle("off-1");
     assert.ok(offering && lifecycle);
@@ -70,12 +68,12 @@ test("role replacement keeps the old Offering role until every assignment is mig
         replacementRoleId: "role-new",
         nowMs: 2,
       }),
-      "migration_pending",
+      "replacement_pending",
     );
     assert.equal((await catalog.readOffering("off-1"))?.discordRoleId, "role-old");
     assert.equal((await catalog.readLifecycle("off-1"))?.state, "repair_required");
 
-    const roleStore = new CloudflarePaidRoleStore(database.d1);
+    const roleStore = new SqlitePaidRoleStore(database.d1);
     const repair = (await roleStore.listPendingRoleRepairs())[0];
     assert.ok(repair);
     database.execRaw(

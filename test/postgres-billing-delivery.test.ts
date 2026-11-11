@@ -1,19 +1,16 @@
+import type { PostgresDatabaseCapability } from "../src/runtime/postgres/postgres-capability";
+import { executePostgresCommands } from "../src/runtime/postgres/postgres-statements";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
-import { CloudflareBillingDeliveryStore } from "../src/runtime/billing/cloudflare-delivery-store";
+import { PostgresBillingDeliveryStore } from "../src/runtime/postgres/postgres-billing-delivery-store";
 import {
   BillingDeliveryError,
   processBillingDelivery,
   type BillingDiscordDelivery,
 } from "../src/runtime/billing/delivery";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 const NOW = 1_800_000_000_000;
@@ -60,14 +57,14 @@ test(
       assert.deepEqual(await readCases(database), []);
       assert.equal(
         await database
-          .prepare("SELECT COUNT(*) AS count FROM billing_operation_delivery")
-          .first("count"),
+          .query("SELECT COUNT(*) AS count FROM billing_operation_delivery", [])
+          .then((rows) => rows[0]?.["count"] ?? null),
         0,
       );
       assert.equal(
         await database
-          .prepare("SELECT COUNT(*) AS count FROM billing_operations_ledger")
-          .first("count"),
+          .query("SELECT COUNT(*) AS count FROM billing_operations_ledger", [])
+          .then((rows) => rows[0]?.["count"] ?? null),
         0,
       );
     });
@@ -120,17 +117,20 @@ test(
       assert.equal(completed.auditStatus, "delivered");
       assert.equal(
         await database
-          .prepare("SELECT audit_message_id FROM billing_operation_delivery WHERE operation_id = ?")
-          .bind("operation-fixture")
-          .first("audit_message_id"),
+          .query(
+            "SELECT audit_message_id FROM billing_operation_delivery WHERE operation_id = $1",
+            ["operation-fixture"],
+          )
+          .then((rows) => rows[0]?.["audit_message_id"] ?? null),
         "private-audit-fixture",
       );
       assert.deepEqual(
         (
-          await database
-            .prepare("SELECT destination, outcome FROM billing_delivery_attempts ORDER BY id")
-            .all()
-        ).results,
+          await database.queryResult(
+            "SELECT destination, outcome FROM billing_delivery_attempts ORDER BY id",
+            [],
+          )
+        ).rows,
         [
           { destination: "owner_dm", outcome: "permanent_failure" },
           { destination: "audit", outcome: "delivered" },
@@ -151,7 +151,10 @@ test(
 );
 
 async function withPostgres(
-  operation: (database: D1Database, store: CloudflareBillingDeliveryStore) => Promise<void>,
+  operation: (
+    database: PostgresDatabaseCapability,
+    store: PostgresBillingDeliveryStore,
+  ) => Promise<void>,
 ) {
   assert.ok(postgresUrl);
   const url = new URL(postgresUrl);
@@ -165,24 +168,19 @@ async function withPostgres(
   });
   try {
     await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-    await applyPostgresMigrations(
-      database,
-      await readPostgresMigrations(resolve("migrations/postgres")),
-    );
-    const d1 = createPostgresD1CompatibilityDatabase(database);
-    await operation(d1, new CloudflareBillingDeliveryStore(d1));
+    await initializePostgresSchema(database);
+    await operation(database, new PostgresBillingDeliveryStore(database));
   } finally {
     await database.close();
   }
 }
 
-async function seedOperation(database: D1Database) {
-  await database.batch([
-    database
-      .prepare(
-        "INSERT INTO billing_operations_ledger(id, owner_id, kind, source, summary_json, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)",
-      )
-      .bind(
+async function seedOperation(database: PostgresDatabaseCapability) {
+  await executePostgresCommands(database, [
+    {
+      statement:
+        "INSERT INTO billing_operations_ledger(id, owner_id, kind, source, summary_json, created_at_ms) VALUES ($1, $2, $3, $4, $5, $6)",
+      values: [
         "operation-fixture",
         "owner-fixture",
         "payment_recovery_required",
@@ -194,28 +192,30 @@ async function seedOperation(database: D1Database) {
           effectiveAtMs: NOW,
         }),
         NOW,
-      ),
-    database
-      .prepare("INSERT INTO billing_operation_delivery(operation_id, updated_at_ms) VALUES (?, ?)")
-      .bind("operation-fixture", NOW),
+      ],
+    },
+    {
+      statement:
+        "INSERT INTO billing_operation_delivery(operation_id, updated_at_ms) VALUES ($1, $2)",
+      values: ["operation-fixture", NOW],
+    },
   ]);
 }
 
-function readTerminal(database: D1Database) {
+function readTerminal(database: PostgresDatabaseCapability) {
   return database
-    .prepare(
-      "SELECT owner_dm_status, terminal_reason, updated_at_ms FROM billing_operation_delivery WHERE operation_id = ?",
+    .query(
+      "SELECT owner_dm_status, terminal_reason, updated_at_ms FROM billing_operation_delivery WHERE operation_id = $1",
+      ["operation-fixture"],
     )
-    .bind("operation-fixture")
-    .first();
+    .then((rows) => rows[0] ?? null);
 }
 
-async function readCases(database: D1Database) {
+async function readCases(database: PostgresDatabaseCapability) {
   return (
-    await database
-      .prepare(
-        "SELECT id, owner_id, kind, status, safe_provider_ids_json, opened_at_ms, updated_at_ms FROM billing_support_cases ORDER BY id",
-      )
-      .all<Record<string, unknown>>()
-  ).results;
+    await database.queryResult<Record<string, unknown>>(
+      "SELECT id, owner_id, kind, status, safe_provider_ids_json, opened_at_ms, updated_at_ms FROM billing_support_cases ORDER BY id",
+      [],
+    )
+  ).rows;
 }

@@ -9,8 +9,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "jsx": "react-jsx",
-    "types": ["@cloudflare/workers-types"],
-    "lib": ["ES2022"],
+    "types": ["node"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true
   },
   "include": ["src/**/*.ts"],

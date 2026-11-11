@@ -1,3 +1,4 @@
+import type { WebhookIngressGuardNamespace } from "../src/runtime/contracts/webhook-ingress-guard";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -7,8 +8,7 @@ import test from "node:test";
 
 import { createPublicRoutes } from "../src/routes/public-routes";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
-import { createCloudflareTicketTranscriptCapabilityStore } from "../src/runtime/cloudflare-ticket-transcript-capability-store";
-import type { WebhookIngressGuardDO } from "../src/durable-objects/webhook-ingress-guard";
+import { createSqliteTicketTranscriptCapabilityStore } from "./support/sqlite/runtime/sqlite-ticket-transcript-capability-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("public routes serve the customer changelog application", async () => {
@@ -99,7 +99,7 @@ test("public routes reject an expired transcript capability before reading conte
   const originalDateNow = Date.now;
   Date.now = () => 3_000;
   const database = new SqliteD1Database();
-  const capabilities = createCloudflareTicketTranscriptCapabilityStore(database.d1);
+  const capabilities = createSqliteTicketTranscriptCapabilityStore(database.d1);
   await capabilities.issue({
     objectId: "transcript-1",
     guildId: "guild-1",
@@ -143,7 +143,7 @@ test("public routes reject an expired transcript capability before reading conte
 test("public routes authorize transcript attachments through the parent capability", async () => {
   let cancelled = 0;
   const database = new SqliteD1Database();
-  const capabilities = createCloudflareTicketTranscriptCapabilityStore(database.d1);
+  const capabilities = createSqliteTicketTranscriptCapabilityStore(database.d1);
   await capabilities.issue({
     objectId: "transcript-object-1",
     guildId: "guild-1",
@@ -211,7 +211,7 @@ test("public routes authorize transcript attachments through the parent capabili
 
 test("public routes make revoked transcript and attachment links indistinguishable", async () => {
   const database = new SqliteD1Database();
-  const capabilities = createCloudflareTicketTranscriptCapabilityStore(database.d1);
+  const capabilities = createSqliteTicketTranscriptCapabilityStore(database.d1);
   const nowMs = Date.now();
   await capabilities.issue({
     objectId: "transcript-object-1",
@@ -271,7 +271,7 @@ test("public routes make revoked transcript and attachment links indistinguishab
 
 test("public routes reject capabilities issued for another Guild or channel", async () => {
   const database = new SqliteD1Database();
-  const capabilities = createCloudflareTicketTranscriptCapabilityStore(database.d1);
+  const capabilities = createSqliteTicketTranscriptCapabilityStore(database.d1);
   await capabilities.issue({
     objectId: "transcript-object-1",
     guildId: "guild-1",
@@ -335,7 +335,7 @@ test("public routes durably limit transcript capability failures", async () => {
         async complete() {},
       };
     },
-  } as unknown as DurableObjectNamespace<WebhookIngressGuardDO>;
+  } as unknown as WebhookIngressGuardNamespace;
   const routes = createPublicRoutes({
     features: ALL_FEATURES_ENABLED,
     ticketTranscriptAccessGuard: guard,
@@ -486,7 +486,7 @@ test("webhook proxy POST preserves retries without exposing source state", async
           async complete() {},
         };
       },
-    } as unknown as DurableObjectNamespace<WebhookIngressGuardDO>,
+    } as unknown as WebhookIngressGuardNamespace,
     webhookProxyService: {
       async readCachedInboundWebhookSource(publicId: string) {
         return publicId.startsWith("known_") ? true : null;

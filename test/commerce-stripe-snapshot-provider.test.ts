@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { StripeCommerceSnapshotProvider } from "../src/runtime/commerce/stripe-snapshot-provider";
+import { StripeCommerceSnapshotProvider } from "./support/sqlite/runtime/commerce/stripe-snapshot-provider";
 import { CommerceProjectionQuarantineError } from "../src/runtime/commerce/reconciliation";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 

@@ -66,7 +66,7 @@ export function createBillingManagementService(options: {
       const projection = await current(ownerId);
       const source = options.catalog.get(projection.priceId!);
       const target = options.catalog.get(targetPriceId);
-      if (!source || !target || target.legacy) {
+      if (!source || !target) {
         throw new ManagementError("unsupported_price", 400);
       }
       if (source.plan === "premium_plus" && target.plan === "premium") {

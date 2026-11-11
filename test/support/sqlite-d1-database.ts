@@ -1,6 +1,8 @@
 // @ts-ignore -- node:sqlite is available in the Node runtime used by these tests.
 import { DatabaseSync } from "node:sqlite";
-import { currentSchemaSource, type TestSchemaSource } from "./schema-source";
+import { readFileSync } from "node:fs";
+
+const SQLITE_SCHEMA = readFileSync("test/support/fixtures/sqlite-schema.sql", "utf8");
 
 export interface CanonicalSchemaRow {
   type: string;
@@ -17,9 +19,9 @@ export interface TestDatabase {
 }
 
 export async function createTestDatabase(
-  options: { schema?: TestSchemaSource; seed?: (db: D1Database) => Promise<void> } = {},
+  options: { seed?: (db: D1Database) => Promise<void> } = {},
 ): Promise<TestDatabase> {
-  const adapter = new SqliteD1Database(options.schema);
+  const adapter = new SqliteD1Database();
   if (options.seed) await options.seed(adapter.d1);
   return adapter;
 }
@@ -31,8 +33,8 @@ export class SqliteD1Database {
 
   readonly d1: D1Database;
 
-  constructor(schema: TestSchemaSource = currentSchemaSource()) {
-    for (const migration of schema.migrations()) this.sqlite.exec(migration.sql);
+  constructor() {
+    this.sqlite.exec(SQLITE_SCHEMA);
     this.d1 = {
       prepare: (query: string) => this.prepare(query),
       batch: (statements: SqliteD1PreparedStatement[]) => this.batch(statements),

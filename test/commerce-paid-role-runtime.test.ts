@@ -3,11 +3,11 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import type { Env } from "../src/env";
+import type { Env } from "./support/test-env";
 import {
-  createCloudflarePaidRoleRuntime,
+  createSqlitePaidRoleRuntime,
   type CommerceRoleQueueMessage,
-} from "../src/runtime/commerce/cloudflare-paid-role-runtime";
+} from "./support/sqlite/runtime/commerce/sqlite-paid-role-runtime";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 const NOW = 1_800_000_000_000;
@@ -16,16 +16,16 @@ test("paid-role runtime rejects Stripe keys from the wrong environment", async (
   const database = await createTestDatabase();
   try {
     const staging = runtimeEnv(database.d1);
-    assert.ok(createCloudflarePaidRoleRuntime(staging));
+    assert.ok(createSqlitePaidRoleRuntime(staging));
     assert.equal(
-      createCloudflarePaidRoleRuntime({
+      createSqlitePaidRoleRuntime({
         ...staging,
         STRIPE_SECRET_KEY: "sk_live_platform_key_material",
       }),
       null,
     );
     assert.equal(
-      createCloudflarePaidRoleRuntime({
+      createSqlitePaidRoleRuntime({
         ...staging,
         STAGING_MODE: undefined,
       }),
@@ -82,7 +82,7 @@ test("paid-role runtime repairs the Queue gap and grants only through its manage
       BOT_USER_ID: "bot",
       DISCORD_BOT_TOKEN: "token",
     } as unknown as Env;
-    const runtime = createCloudflarePaidRoleRuntime(env);
+    const runtime = createSqlitePaidRoleRuntime(env);
     assert.ok(runtime);
     await runtime.store.enqueueRoleOperation({
       operationKey: "role:assignment-1:1",
@@ -149,7 +149,7 @@ test("member leave is recoverable and never creates a role-wide repair", async (
     globalThis.fetch = async () => {
       throw new Error("member leave must not call Discord");
     };
-    const runtime = createCloudflarePaidRoleRuntime(runtimeEnv(database.d1));
+    const runtime = createSqlitePaidRoleRuntime(runtimeEnv(database.d1));
     assert.ok(runtime);
     await runtime.processMessage({
       outboxId: "leave-1",
@@ -195,7 +195,7 @@ test("a pending Stripe projection never adopts or removes a manually granted rol
       }
       throw new Error(`Unexpected Discord request: ${url}`);
     };
-    const runtime = createCloudflarePaidRoleRuntime(runtimeEnv(database.d1));
+    const runtime = createSqlitePaidRoleRuntime(runtimeEnv(database.d1));
     assert.ok(runtime);
     const message = {
       outboxId: "manual-active",
@@ -240,7 +240,7 @@ test("a missing role creates one role-wide repair", async () => {
       }
       return new Response("not found", { status: 404 });
     };
-    const runtime = createCloudflarePaidRoleRuntime(runtimeEnv(database.d1));
+    const runtime = createSqlitePaidRoleRuntime(runtimeEnv(database.d1));
     assert.ok(runtime);
     for (const operationKey of ["missing-role-1", "missing-role-2"]) {
       await runtime.processMessage({
@@ -301,7 +301,7 @@ test("provider cancellation survives Discord success and retries with one identi
       }
       return new Response("not found", { status: 404 });
     };
-    const runtime = createCloudflarePaidRoleRuntime(runtimeEnv(database.d1));
+    const runtime = createSqlitePaidRoleRuntime(runtimeEnv(database.d1));
     assert.ok(runtime);
     await runtime.processMessage({
       outboxId: "remove-1",
@@ -374,7 +374,7 @@ test("permanent guild deletion archives sales, queues immediate cancellation and
         'sub_crossseller','active',0,${NOW + 2_592_000_000},${NOW},${NOW}
       );
     `);
-    const runtime = createCloudflarePaidRoleRuntime(runtimeEnv(database.d1));
+    const runtime = createSqlitePaidRoleRuntime(runtimeEnv(database.d1));
     assert.ok(runtime);
     assert.equal(await runtime.store.enqueueGuildDeletion("guild-1", "delete-1", NOW), 1);
     assert.deepEqual(database.query("SELECT status FROM commerce_offerings"), [
@@ -461,17 +461,18 @@ async function seed(database: D1Database): Promise<void> {
 }
 
 test("reserved access derives trusted subscription checkout identity without changing payment or role state", async () => {
-  const { createGameAccessRuntime, createCloudflareGameAccessStore } =
-    await import("../src/runtime/commerce/game-access-runtime");
-  const { createCloudflarePlatformLinkStore } =
-    await import("../src/runtime/cloudflare-platform-link-store");
-  const { createCloudflareWardogsStore } = await import("../src/runtime/cloudflare-wardogs-store");
+  const { createGameAccessRuntime, createSqliteGameAccessStore } =
+    await import("./support/sqlite/runtime/commerce/game-access-runtime");
+  const { createSqlitePlatformLinkStore } =
+    await import("./support/sqlite/runtime/sqlite-platform-link-store");
+  const { createSqliteWardogsStore } =
+    await import("./support/sqlite/runtime/sqlite-wardogs-store");
   const { WardogsService } = await import("../src/wardogs/service");
   const database = await createTestDatabase();
   const originalFetch = globalThis.fetch;
   try {
     await seed(database.d1);
-    const links = createCloudflarePlatformLinkStore(database.d1);
+    const links = createSqlitePlatformLinkStore(database.d1);
     await links.upsertPlatformLink({
       guildId: "guild-1",
       userId: "buyer-discord",
@@ -483,7 +484,7 @@ test("reserved access derives trusted subscription checkout identity without cha
       metadataJson: null,
       linkedAtMs: 1,
     });
-    const store = createCloudflareGameAccessStore(database.d1);
+    const store = createSqliteGameAccessStore(database.d1);
     await store.configure({
       offeringId: "offering-1",
       guildId: "guild-1",
@@ -549,8 +550,7 @@ test("reserved access derives trusted subscription checkout identity without cha
       botUserId: "bot",
       botToken: "fake",
       wardogs: new WardogsService({
-        store: createCloudflareWardogsStore(database.d1),
-        runtime: "cloudflare",
+        store: createSqliteWardogsStore(database.d1),
       }),
     });
     await runtime.service.processDue();

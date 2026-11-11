@@ -1,3 +1,4 @@
+import type { Cache } from "../discord-json-cache";
 import type { WardogsService } from "../../wardogs/service";
 import { defineRoute, type Route } from "../admin-route-registry";
 import { guildScopedAccess } from "../admin-route-guards";
@@ -92,7 +93,7 @@ export interface PermissionsAdminRoutesOptions {
     request: Request,
     botGuilds?: Promise<BotGuild[]>,
   ) => Promise<string[] | Response | null>;
-  discordCacheKv?: KVNamespace;
+  discordCache?: Cache<string>;
   discordSupportInvite?: string;
   guildDiscoveryService?: GuildDiscoveryService;
 }
@@ -252,7 +253,7 @@ export function createPermissionsAdminRoutes(
           const allGuildsPromise = getCachedBotGuilds(
             options.discordBotToken,
             refreshDiscordCache,
-            options.discordCacheKv,
+            options.discordCache,
           );
           const authorizedGuildIds = options.listAuthorizedCustomerGuildIds
             ? await options.listAuthorizedCustomerGuildIds(request, allGuildsPromise)
@@ -760,12 +761,12 @@ function mapDiscordRateLimitError(error: unknown): Response | null {
     return null;
   }
 
-  const body: { error: string; code: string; retryAfterMs?: number } = {
+  const body: { error: string; code: string; retryAfterSeconds?: number } = {
     error: "Discord is rate limiting server discovery. Try again shortly.",
     code: "discord_rate_limited",
   };
   if (error.retryAfterMs !== undefined) {
-    body.retryAfterMs = error.retryAfterMs;
+    body.retryAfterSeconds = Math.ceil(error.retryAfterMs / 1000);
   }
   return Response.json(body, { status: 429 });
 }

@@ -26,7 +26,7 @@ test("buildIdentifyPayload creates the expected gateway identify frame", () => {
       token: "bot-token",
       intents: 34435,
       properties: {
-        os: "cloudflare",
+        os: "node",
         browser: "haf-bot",
         device: "haf-bot",
       },

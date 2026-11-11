@@ -1,3 +1,5 @@
+import { testWebhookCredential, testWebhookResolver } from "./support/webhook-credentials";
+import type { SteamBanLookupQueueMessage } from "../src/services/webhook-proxy-service";
 import type { QueueBatch } from "../src/runtime/queue-types";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
@@ -7,10 +9,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { deliverSteamBanLookupQueueBatch } from "../src/runtime/steam-ban-lookup-queue-consumer";
-import {
-  SteamBanLookupService,
-  type SteamBanLookupMessage,
-} from "../src/services/steam-ban-lookup-service";
+import { SteamBanLookupService } from "../src/services/steam-ban-lookup-service";
 import { WebhookCredentialService } from "../src/security/webhook-credentials/store";
 
 test("Steam lookup consumer settles each queued lookup independently", async () => {
@@ -18,14 +17,19 @@ test("Steam lookup consumer settles each queued lookup independently", async () 
   const retry = fakeMessage("retry", lookupMessage("76561198000000002"));
   const malformed = fakeMessage("malformed", { guildId: "guild-1" });
 
-  await deliverSteamBanLookupQueueBatch(fakeBatch([complete, retry, malformed]), {
-    async processBatch(messages) {
-      if (messages[0]?.steamIds[0] === "76561198000000002") {
-        throw new Error("Steam unavailable");
-      }
-      return { status: "complete" };
+  await deliverSteamBanLookupQueueBatch(
+    fakeBatch([complete, retry, malformed]),
+    {
+      async processBatch(messages) {
+        if (messages[0]?.steamIds[0] === "76561198000000002") {
+          throw new Error("Steam unavailable");
+        }
+        return { status: "complete" };
+      },
     },
-  });
+    console,
+    testWebhookResolver,
+  );
 
   assert.deepEqual(complete.actions, ["ack"]);
   assert.deepEqual(retry.actions, ["retry"]);
@@ -48,7 +52,12 @@ test("Steam lookup consumer retries provider failures from the production servic
     logger: { error() {} },
   });
 
-  await deliverSteamBanLookupQueueBatch(fakeBatch([message]), service);
+  await deliverSteamBanLookupQueueBatch(
+    fakeBatch([message]),
+    service,
+    console,
+    testWebhookResolver,
+  );
 
   assert.deepEqual(message.actions, ["retry"]);
 });
@@ -64,7 +73,12 @@ test("Steam lookup consumer terminally acknowledges a missing API key", async ()
     },
   });
 
-  await deliverSteamBanLookupQueueBatch(fakeBatch([message]), service);
+  await deliverSteamBanLookupQueueBatch(
+    fakeBatch([message]),
+    service,
+    console,
+    testWebhookResolver,
+  );
 
   assert.deepEqual(message.actions, ["ack"]);
 });
@@ -108,11 +122,13 @@ test("Steam lookup retries credential storage outages but acknowledges deleted c
   assert.deepEqual(deleted.actions, ["ack"]);
 });
 
-function lookupMessage(steamId: string): SteamBanLookupMessage {
+function lookupMessage(steamId: string): SteamBanLookupQueueMessage {
   return {
     guildId: "guild-1",
     steamIds: [steamId],
-    notificationUrl: "https://example.com/ban-reports",
+    version: 2,
+    publicId: "lookup-source",
+    notificationCredentialId: testWebhookCredential("https://example.com/ban-reports"),
     banLookupAppIds: [221100],
   };
 }

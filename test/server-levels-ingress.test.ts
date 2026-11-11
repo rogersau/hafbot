@@ -6,8 +6,8 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import { createWebhookCredentialKeyRing } from "../src/security/webhook-credentials";
 import { ServerLevelCredentialService } from "../src/server-levels/credentials";
-import { createCloudflareServerLevelCredentialStore } from "../src/runtime/cloudflare-server-level-credential-store";
-import { createCloudflareServerLevelStore } from "../src/runtime/cloudflare-server-level-store";
+import { createSqliteServerLevelCredentialStore } from "./support/sqlite/runtime/sqlite-server-level-credential-store";
+import { createSqliteServerLevelStore } from "./support/sqlite/runtime/sqlite-server-level-store";
 import { handleServerLevelIngress } from "../src/server-levels/ingress";
 import type { ServerLevelOperationalEvent } from "../src/server-levels/telemetry";
 import { RecordingQueue } from "./support/adapters/recording-queue";
@@ -15,9 +15,9 @@ import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("CFTools ingress authenticates exact bounded facts and acknowledges only after durable acceptance", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   const credentials = new ServerLevelCredentialService(
-    createCloudflareServerLevelCredentialStore(database.d1),
+    createSqliteServerLevelCredentialStore(database.d1),
     createWebhookCredentialKeyRing({ keyV1: bytes(7) }),
   );
   const queue = new RecordingQueue<{ inboxId: string; guildId: string }>();
@@ -122,9 +122,9 @@ test("CFTools ingress authenticates exact bounded facts and acknowledges only af
 
 test("CFTools ingress rejects bad credentials, mismatched servers, and oversized bodies", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   const credentials = new ServerLevelCredentialService(
-    createCloudflareServerLevelCredentialStore(database.d1),
+    createSqliteServerLevelCredentialStore(database.d1),
     createWebhookCredentialKeyRing({ keyV1: bytes(9) }),
   );
   const telemetry: ServerLevelOperationalEvent[] = [];
@@ -207,9 +207,9 @@ test("CFTools ingress rejects bad credentials, mismatched servers, and oversized
 
 test("CFTools ingress extracts a numeric SteamID64 from a sanitized native Hephaistos body", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   const credentials = new ServerLevelCredentialService(
-    createCloudflareServerLevelCredentialStore(database.d1),
+    createSqliteServerLevelCredentialStore(database.d1),
     createWebhookCredentialKeyRing({ keyV1: bytes(11) }),
   );
   try {

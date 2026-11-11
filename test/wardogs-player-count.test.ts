@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
-import { createCloudflareWardogsStore } from "../src/runtime/cloudflare-wardogs-store";
+import { createSqliteWardogsStore } from "./support/sqlite/runtime/sqlite-wardogs-store";
 import { WardogsService } from "../src/wardogs/service";
 import { createWebhookCredentialKeyRing } from "../src/security/webhook-credentials";
 import { createWardogsPlayerCountStatusProvider } from "../src/services/wardogs-player-count-status-provider";
@@ -19,10 +19,8 @@ const synthetic = JSON.parse(readFileSync("test/fixtures/wardogs/reads.json", "u
 async function setup() {
   const fixture = createProductionRuntimeStores();
   await fixture.database.d1
-    .prepare(
-      "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES (?, ?, ?, ?)",
-    )
-    .bind("guild-1", "premium", "premium", 1)
+    .prepare("INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES (?, ?, ?)")
+    .bind("guild-1", "premium", 1)
     .run();
   const clock = { now: 2_000_000 };
   const calls: string[] = [];
@@ -33,7 +31,6 @@ async function setup() {
       {
         id: "synthetic",
         origin: "https://wardogs.example.com",
-        runtime: "cloudflare",
         securePathEvidence: "Synthetic fixture recording only",
       },
     ],
@@ -41,9 +38,8 @@ async function setup() {
   };
   const createWardogs = () =>
     new WardogsService({
-      store: createCloudflareWardogsStore(fixture.database.d1),
+      store: createSqliteWardogsStore(fixture.database.d1),
       policy,
-      runtime: "cloudflare",
       keyRing: () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) }),
       now: () => clock.now,
       wait: async (ms) => {
@@ -243,9 +239,7 @@ test("WARDOGS Player Count suppresses polling for free, suspended, disabled and 
     await f.service.testServerReachability("guild-1", f.server.id);
     f.gates.enabled = true;
     await f.database.d1
-      .prepare(
-        "UPDATE guild_entitlements SET tier = 'free', plan = 'free' WHERE guild_id = 'guild-1'",
-      )
+      .prepare("UPDATE guild_entitlements SET plan = 'free' WHERE guild_id = 'guild-1'")
       .run();
     await f.service.testServerReachability("guild-1", f.server.id);
     await f.service.refreshAllServers();

@@ -283,7 +283,7 @@ function createDefaultLfgConfig(guildId: string) {
 
 function seedPremiumEntitlement(fixture: ReturnType<typeof createProductionRuntimeStores>) {
   fixture.database.execRaw(
-    "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', 'premium', 'premium', 1)",
+    "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', 'premium', 1)",
   );
 }
 

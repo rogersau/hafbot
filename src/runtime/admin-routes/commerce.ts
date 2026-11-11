@@ -190,7 +190,9 @@ const brandingBody = z.object({
 });
 
 export interface CommerceAdminServices {
-  gameAccess?: ReturnType<typeof import("../commerce/game-access-runtime").createGameAccessRuntime>;
+  gameAccess?: ReturnType<
+    typeof import("../postgres/postgres-commerce-game-access-runtime").createGameAccessRuntime
+  >;
   store: Pick<
     CommerceStore,
     | "readConnectedAccountByGuild"

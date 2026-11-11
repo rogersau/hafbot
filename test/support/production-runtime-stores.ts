@@ -1,38 +1,38 @@
 import type { RuntimeStores } from "../../src/runtime/app-types";
-import { createCloudflareAppConfigStore } from "../../src/runtime/cloudflare-app-config-store";
-import { createCloudflareBanCaseStore } from "../../src/runtime/cloudflare-ban-case-store";
-import { createCloudflareBlocklistStore } from "../../src/runtime/cloudflare-blocklist-store";
-import { createCloudflareBotDefenseStore } from "../../src/runtime/cloudflare-bot-defense-store";
-import { createCloudflareClanStore } from "../../src/runtime/cloudflare-clan-store";
-import { createCloudflareConfigurationRevisionStore } from "../../src/runtime/cloudflare-configuration-revision-store";
-import { createCloudflareEventStore } from "../../src/runtime/cloudflare-event-store";
-import { createCloudflareEvidenceVaultStore } from "../../src/runtime/cloudflare-evidence-vault-store";
-import { createCloudflareFeatureSetupStore } from "../../src/runtime/cloudflare-feature-setup-store";
-import { createCloudflareGuildAuditLogStore } from "../../src/runtime/cloudflare-guild-audit-log-store";
-import { createCloudflareGuildEntitlementStore } from "../../src/runtime/cloudflare-guild-entitlement-store";
-import { createCloudflareGuildR2ObjectStore } from "../../src/runtime/cloudflare-guild-r2-object-store";
-import { createCloudflareGuildRbacStore } from "../../src/runtime/cloudflare-guild-rbac-store";
-import { createCloudflareGuildServiceSuspensionStore } from "../../src/runtime/cloudflare-guild-service-suspension-store";
-import { createCloudflareImageRulesStore } from "../../src/runtime/cloudflare-image-rules-store";
-import { createCloudflareLfgStore } from "../../src/runtime/cloudflare-lfg-store";
-import { createCloudflareManagedMessageStore } from "../../src/runtime/cloudflare-managed-message-store";
-import { createCloudflareMarketplaceStore } from "../../src/runtime/cloudflare-marketplace-store";
-import { createCloudflareMemberVerificationStore } from "../../src/runtime/cloudflare-member-verification-store";
-import { createCloudflareMentionProtectionStore } from "../../src/runtime/cloudflare-mention-protection-store";
-import { createCloudflareMessageTemplateStore } from "../../src/runtime/cloudflare-message-template-store";
-import { createCloudflarePlatformLinkStore } from "../../src/runtime/cloudflare-platform-link-store";
-import { createCloudflarePlayerCountStore } from "../../src/runtime/cloudflare-player-count-store";
-import { createCloudflareReactionLimitStore } from "../../src/runtime/cloudflare-reaction-limit-store";
-import { createCloudflareReactionRoleStore } from "../../src/runtime/cloudflare-reaction-role-store";
-import { createCloudflareSuggestionStore } from "../../src/runtime/cloudflare-suggestion-store";
-import { createCloudflareAdminFeedbackStore } from "../../src/runtime/cloudflare-admin-feedback-store";
-import { createCloudflareTicketStore } from "../../src/runtime/cloudflare-ticket-store";
-import { createCloudflareTimedRoleStore } from "../../src/runtime/cloudflare-timed-role-store";
-import { createCloudflareUserPreferencesStore } from "../../src/runtime/cloudflare-user-preferences-store";
-import { createCloudflareWebhookProxyStore } from "../../src/runtime/cloudflare-webhook-proxy-store";
-import { createCloudflareWhiteLabelBotStore } from "../../src/runtime/cloudflare-white-label-bot-store";
-import { createCloudflareOneTimeTokenStore } from "../../src/runtime/cloudflare-one-time-token-store";
-import { createCloudflareServerLevelStore } from "../../src/runtime/cloudflare-server-level-store";
+import { createSqliteAppConfigStore } from "./sqlite/runtime/sqlite-app-config-store";
+import { createSqliteBanCaseStore } from "./sqlite/runtime/sqlite-ban-case-store";
+import { createSqliteBlocklistStore } from "./sqlite/runtime/sqlite-blocklist-store";
+import { createSqliteBotDefenseStore } from "./sqlite/runtime/sqlite-bot-defense-store";
+import { createSqliteClanStore } from "./sqlite/runtime/sqlite-clan-store";
+import { createSqliteConfigurationRevisionStore } from "./sqlite/runtime/sqlite-configuration-revision-store";
+import { createSqliteEventStore } from "./sqlite/runtime/sqlite-event-store";
+import { createSqliteEvidenceVaultStore } from "./sqlite/runtime/sqlite-evidence-vault-store";
+import { createSqliteFeatureSetupStore } from "./sqlite/runtime/sqlite-feature-setup-store";
+import { createSqliteGuildAuditLogStore } from "./sqlite/runtime/sqlite-guild-audit-log-store";
+import { createSqliteGuildEntitlementStore } from "./sqlite/runtime/sqlite-guild-entitlement-store";
+import { createSqliteGuildR2ObjectStore } from "./sqlite/runtime/sqlite-guild-r2-object-store";
+import { createSqliteGuildRbacStore } from "./sqlite/runtime/sqlite-guild-rbac-store";
+import { createSqliteGuildServiceSuspensionStore } from "./sqlite/runtime/sqlite-guild-service-suspension-store";
+import { createSqliteImageRulesStore } from "./sqlite/runtime/sqlite-image-rules-store";
+import { createSqliteLfgStore } from "./sqlite/runtime/sqlite-lfg-store";
+import { createSqliteManagedMessageStore } from "./sqlite/runtime/sqlite-managed-message-store";
+import { createSqliteMarketplaceStore } from "./sqlite/runtime/sqlite-marketplace-store";
+import { createSqliteMemberVerificationStore } from "./sqlite/runtime/sqlite-member-verification-store";
+import { createSqliteMentionProtectionStore } from "./sqlite/runtime/sqlite-mention-protection-store";
+import { createSqliteMessageTemplateStore } from "./sqlite/runtime/sqlite-message-template-store";
+import { createSqlitePlatformLinkStore } from "./sqlite/runtime/sqlite-platform-link-store";
+import { createSqlitePlayerCountStore } from "./sqlite/runtime/sqlite-player-count-store";
+import { createSqliteReactionLimitStore } from "./sqlite/runtime/sqlite-reaction-limit-store";
+import { createSqliteReactionRoleStore } from "./sqlite/runtime/sqlite-reaction-role-store";
+import { createSqliteSuggestionStore } from "./sqlite/runtime/sqlite-suggestion-store";
+import { createSqliteAdminFeedbackStore } from "./sqlite/runtime/sqlite-admin-feedback-store";
+import { createSqliteTicketStore } from "./sqlite/runtime/sqlite-ticket-store";
+import { createSqliteTimedRoleStore } from "./sqlite/runtime/sqlite-timed-role-store";
+import { createSqliteUserPreferencesStore } from "./sqlite/runtime/sqlite-user-preferences-store";
+import { createSqliteWebhookProxyStore } from "./sqlite/runtime/sqlite-webhook-proxy-store";
+import { createSqliteWhiteLabelBotStore } from "./sqlite/runtime/sqlite-white-label-bot-store";
+import { createSqliteOneTimeTokenStore } from "./sqlite/runtime/sqlite-one-time-token-store";
+import { createSqliteServerLevelStore } from "./sqlite/runtime/sqlite-server-level-store";
 import type { TestDatabase } from "./sqlite-d1-database";
 import { SqliteD1Database } from "./sqlite-d1-database";
 
@@ -58,40 +58,40 @@ export function createProductionRuntimeStores(
   const database = new SqliteD1Database();
   const d1 = database.d1;
   const stores: RuntimeStores = {
-    blocklist: createCloudflareBlocklistStore(d1, options.botUserId ?? "bot-user-id"),
-    appConfig: createCloudflareAppConfigStore(d1),
-    timedRoles: createCloudflareTimedRoleStore(d1),
-    tickets: createCloudflareTicketStore(d1),
-    configurationRevisions: createCloudflareConfigurationRevisionStore(d1),
-    marketplace: createCloudflareMarketplaceStore(d1),
-    events: createCloudflareEventStore(d1),
-    lfg: createCloudflareLfgStore(d1),
-    clans: createCloudflareClanStore(d1),
-    webhookProxy: createCloudflareWebhookProxyStore(d1),
-    playerCount: createCloudflarePlayerCountStore(d1),
-    platformLink: createCloudflarePlatformLinkStore(d1),
-    guildRbac: createCloudflareGuildRbacStore(d1),
-    guildEntitlements: createCloudflareGuildEntitlementStore(d1),
-    guildR2Objects: createCloudflareGuildR2ObjectStore(d1),
-    reactionLimits: createCloudflareReactionLimitStore(d1),
-    reactionRoles: createCloudflareReactionRoleStore(d1),
-    evidenceVault: createCloudflareEvidenceVaultStore(d1),
-    imageRules: createCloudflareImageRulesStore(d1),
-    botDefense: createCloudflareBotDefenseStore(d1),
-    mentionProtection: createCloudflareMentionProtectionStore(d1),
-    userPreferences: createCloudflareUserPreferencesStore(d1),
-    guildAuditLog: createCloudflareGuildAuditLogStore(d1),
-    whiteLabelBots: createCloudflareWhiteLabelBotStore(d1),
-    banCases: createCloudflareBanCaseStore(d1),
-    memberVerification: createCloudflareMemberVerificationStore(d1),
-    managedMessages: createCloudflareManagedMessageStore(d1),
-    messageTemplates: createCloudflareMessageTemplateStore(d1),
-    guildServiceSuspensions: createCloudflareGuildServiceSuspensionStore(d1),
-    featureSetup: createCloudflareFeatureSetupStore(d1),
-    suggestions: createCloudflareSuggestionStore(d1),
-    adminFeedback: createCloudflareAdminFeedbackStore(d1),
-    oneTimeTokens: createCloudflareOneTimeTokenStore(d1),
-    serverLevels: createCloudflareServerLevelStore(d1),
+    blocklist: createSqliteBlocklistStore(d1, options.botUserId ?? "bot-user-id"),
+    appConfig: createSqliteAppConfigStore(d1),
+    timedRoles: createSqliteTimedRoleStore(d1),
+    tickets: createSqliteTicketStore(d1),
+    configurationRevisions: createSqliteConfigurationRevisionStore(d1),
+    marketplace: createSqliteMarketplaceStore(d1),
+    events: createSqliteEventStore(d1),
+    lfg: createSqliteLfgStore(d1),
+    clans: createSqliteClanStore(d1),
+    webhookProxy: createSqliteWebhookProxyStore(d1),
+    playerCount: createSqlitePlayerCountStore(d1),
+    platformLink: createSqlitePlatformLinkStore(d1),
+    guildRbac: createSqliteGuildRbacStore(d1),
+    guildEntitlements: createSqliteGuildEntitlementStore(d1),
+    guildR2Objects: createSqliteGuildR2ObjectStore(d1),
+    reactionLimits: createSqliteReactionLimitStore(d1),
+    reactionRoles: createSqliteReactionRoleStore(d1),
+    evidenceVault: createSqliteEvidenceVaultStore(d1),
+    imageRules: createSqliteImageRulesStore(d1),
+    botDefense: createSqliteBotDefenseStore(d1),
+    mentionProtection: createSqliteMentionProtectionStore(d1),
+    userPreferences: createSqliteUserPreferencesStore(d1),
+    guildAuditLog: createSqliteGuildAuditLogStore(d1),
+    whiteLabelBots: createSqliteWhiteLabelBotStore(d1),
+    banCases: createSqliteBanCaseStore(d1),
+    memberVerification: createSqliteMemberVerificationStore(d1),
+    managedMessages: createSqliteManagedMessageStore(d1),
+    messageTemplates: createSqliteMessageTemplateStore(d1),
+    guildServiceSuspensions: createSqliteGuildServiceSuspensionStore(d1),
+    featureSetup: createSqliteFeatureSetupStore(d1),
+    suggestions: createSqliteSuggestionStore(d1),
+    adminFeedback: createSqliteAdminFeedbackStore(d1),
+    oneTimeTokens: createSqliteOneTimeTokenStore(d1),
+    serverLevels: createSqliteServerLevelStore(d1),
     ...options.overrides,
   };
   return { database, stores, close: () => database.close() };

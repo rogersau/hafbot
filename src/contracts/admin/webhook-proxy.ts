@@ -119,7 +119,6 @@ const forwardLogSchema = z.object({
   id: z.string(),
   publicId: z.string(),
   destinationId: z.string(),
-  destinationUrl: z.string().optional(),
   credentialFingerprint: z.string().nullable().optional(),
   status: z.number().int().nullable(),
   ok: z.boolean(),

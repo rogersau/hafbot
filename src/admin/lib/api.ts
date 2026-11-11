@@ -10,7 +10,7 @@ export class AdminApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly code: AdminErrorCode | "legacy_error",
+    readonly code: AdminErrorCode,
     readonly correlationId: string,
     readonly retryable: boolean,
     readonly retryAfterSeconds?: number,
@@ -26,7 +26,7 @@ export class AdminApiError extends Error {
 export async function readJsonOrThrow<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init);
   if (!response.ok) {
-    throw await parseAdminApiError(response, `${response.status} ${response.statusText}`);
+    throw await parseAdminApiError(response, "The dashboard request failed. Please try again.");
   }
 
   return response.json() as Promise<T>;
@@ -90,7 +90,7 @@ export async function parseAdminApiError(
   try {
     body = JSON.parse(raw) as Record<string, unknown>;
   } catch {
-    /* legacy text */
+    /* A proxy or network intermediary may return a non-JSON response. */
   }
   const envelope = adminErrorEnvelopeSchema.safeParse(body);
   if (envelope.success) {
@@ -106,13 +106,7 @@ export async function parseAdminApiError(
       envelope.data.staleReason,
     );
   }
-  const message =
-    body && typeof body.error === "string"
-      ? body.error
-      : raw
-        ? describeError(new Error(raw))
-        : fallback;
-  return new AdminApiError(message, response.status, "legacy_error", correlationHeader, false);
+  return new AdminApiError(fallback, response.status, "internal_error", correlationHeader, false);
 }
 
 export const isAuthenticationError = (error: unknown): error is AdminApiError =>

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { parseDeploymentMode } from "../src/runtime/deployment-mode";
 import { createPostgresGuildEntitlementStore } from "../src/runtime/postgres/postgres-guild-entitlement-store";
-import { createCloudflareGuildEntitlementStore } from "../src/runtime/cloudflare-guild-entitlement-store";
+import { createSqliteGuildEntitlementStore } from "./support/sqlite/runtime/sqlite-guild-entitlement-store";
 import type { PostgresDatabaseCapability } from "../src/runtime/postgres/postgres-capability";
 import { assertGuildPremiumTier } from "../src/runtime/entitlement-checks";
 
@@ -13,7 +13,7 @@ test("self-hosted core capabilities need no subscription row or database read", 
   } as unknown as PostgresDatabaseCapability;
   for (const store of [
     createPostgresGuildEntitlementStore(database, "self-hosted"),
-    createCloudflareGuildEntitlementStore({} as D1Database, "self-hosted"),
+    createSqliteGuildEntitlementStore({} as D1Database, "self-hosted"),
   ]) {
     assert.deepEqual(await store.readGuildEntitlement("guild-a"), {
       guildId: "guild-a",
@@ -52,7 +52,7 @@ test("invalid deployment modes fail closed instead of granting paid capabilities
       /HAF_DEPLOYMENT_MODE/,
     );
     assert.throws(
-      () => createCloudflareGuildEntitlementStore({} as D1Database, invalid),
+      () => createSqliteGuildEntitlementStore({} as D1Database, invalid),
       /HAF_DEPLOYMENT_MODE/,
     );
   }
@@ -60,8 +60,8 @@ test("invalid deployment modes fail closed instead of granting paid capabilities
 
 test("a self-hosted read never changes a cached hosted store for the same database", () => {
   const database = {} as D1Database;
-  const hosted = createCloudflareGuildEntitlementStore(database);
-  const selfHosted = createCloudflareGuildEntitlementStore(database, "self-hosted");
+  const hosted = createSqliteGuildEntitlementStore(database);
+  const selfHosted = createSqliteGuildEntitlementStore(database, "self-hosted");
   assert.notEqual(hosted, selfHosted);
-  assert.equal(createCloudflareGuildEntitlementStore(database, "hosted"), hosted);
+  assert.equal(createSqliteGuildEntitlementStore(database, "hosted"), hosted);
 });

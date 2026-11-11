@@ -1,3 +1,8 @@
+import {
+  webhookTargets,
+  testWebhookCredential,
+  testWebhookResolver,
+} from "./support/webhook-credentials";
 import type { QueueBatch } from "../src/runtime/queue-types";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
@@ -51,6 +56,7 @@ test("webhook delivery consumer retries an exhausted rate limit from the product
       },
     },
     {
+      credentialService: testWebhookResolver,
       maxAttempts: 1,
       fetch: async () =>
         new Response("rate limited", { status: 429, headers: { "retry-after": "2" } }),
@@ -119,8 +125,15 @@ test("webhook delivery retries credential storage outages but acknowledges delet
 
 function deliveryEnvelope(publicId: string): WebhookProxyDeliveryEnvelope {
   return {
+    version: 2,
     config: { guildId: "guild-1", publicId },
-    destinations: [{ id: "main", label: "Main", url: "https://example.com/webhook" }],
+    destinations: webhookTargets([
+      {
+        id: "main",
+        label: "Main",
+        credentialId: testWebhookCredential("https://example.com/webhook"),
+      },
+    ]),
     body: "{}",
     contentType: "application/json",
   };

@@ -39,8 +39,6 @@ export interface InteractionRouteOptions {
   workspaceStore?: WorkspaceStore;
   waitUntil?: (promise: Promise<unknown>) => void;
   componentIdSigner?: ComponentIdSigner;
-  componentIdLegacyUntilMs?: number;
-  memberVerificationPanelLegacyUntilMs?: number;
   handleInteractionRequest: (
     request: Request,
     options: Pick<
@@ -62,8 +60,6 @@ export interface InteractionRouteOptions {
       | "workspaceStore"
       | "waitUntil"
       | "componentIdSigner"
-      | "componentIdLegacyUntilMs"
-      | "memberVerificationPanelLegacyUntilMs"
     >,
   ) => Promise<Response>;
 }

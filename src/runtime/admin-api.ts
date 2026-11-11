@@ -1,3 +1,4 @@
+import type { Cache } from "./discord-json-cache";
 import type { WardogsService } from "../wardogs/service";
 import { checkRouteCollisions, dispatchAdminRoute } from "./admin-route-registry";
 import { createAdminRoutes } from "./admin-routes";
@@ -47,7 +48,7 @@ export interface AdminApiHandlerOptions {
   readCustomerAdminSession?: (request: Request) => Promise<CustomerSession | null>;
   guildDiscoveryService?: GuildDiscoveryService;
   discordSupportInvite?: string;
-  discordCacheKv?: KVNamespace;
+  discordCache?: Cache<string>;
   turnstileSiteKey?: string;
   turnstileSecretKey?: string;
   services?: Partial<ServiceFactory>;
@@ -103,7 +104,7 @@ export function createAdminApiHandler(options: AdminApiHandlerOptions) {
     readCustomerAdminSession: options.readCustomerAdminSession,
     listAuthorizedCustomerGuildIds: options.listAuthorizedCustomerGuildIds,
     discordSupportInvite: options.discordSupportInvite,
-    discordCacheKv: options.discordCacheKv,
+    discordCache: options.discordCache,
     turnstileSiteKey: options.turnstileSiteKey,
     turnstileSecretKey: options.turnstileSecretKey,
     services: options.services,

@@ -75,7 +75,7 @@ export interface CommerceOfferingStore {
     lifecycle: CommerceOfferingLifecycleRecord;
     replacementRoleId: string;
     nowMs: number;
-  }): Promise<"updated" | "migration_pending">;
+  }): Promise<"updated" | "replacement_pending">;
   beginRetirement(input: {
     offering: CommerceOffering;
     lifecycle: CommerceOfferingLifecycleRecord;
@@ -214,8 +214,7 @@ export class CommerceOfferingService {
       name: input.name.trim(),
       description: normalizeDescription(input.description),
       purchaseType: "subscription",
-      // The legacy table stores published as active; the lifecycle projection
-      // is the authority for all richer states.
+      // The lifecycle projection describes publication and repair states.
       status: "draft",
       archivedAtMs: null,
       createdAtMs: now,
@@ -440,7 +439,7 @@ export class CommerceOfferingService {
 
   async replaceRole(input: { offeringId: string; discordRoleId: string }): Promise<{
     lifecycle: CommerceOfferingLifecycleRecord;
-    status: "updated" | "migration_pending";
+    status: "updated" | "replacement_pending";
   }> {
     const offering = await this.requireOffering(input.offeringId);
     const lifecycle = await this.requireLifecycle(input.offeringId);
@@ -483,7 +482,7 @@ export class CommerceOfferingService {
       });
     }
     // Stores expose immutable price creation but not an update operation by
-    // design. CloudflareOfferingStore supplies this narrow optional hook.
+    // design. The offering store supplies this narrow optional hook.
     const storeWithRetire = this.store as CommerceOfferingStore & {
       retirePrice?: (priceId: string, retiredAtMs: number) => Promise<void>;
     };

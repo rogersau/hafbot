@@ -12,11 +12,6 @@ import {
 import type { BillingSubscriptionProjection } from "../src/runtime/billing/types";
 
 const catalog = createBillingCatalog({
-  founderPremiumMonthlyPriceId: "fpm",
-  founderPremiumYearlyPriceId: "fpy",
-  legacyFounderPremiumYearlyPriceId: "legacy_fpy",
-  founderPremiumPlusMonthlyPriceId: "fppm",
-  founderPremiumPlusYearlyPriceId: "fppy",
   premiumMonthlyPriceId: "pm",
   premiumMonthlyProductId: "p",
   premiumYearlyPriceId: "py",
@@ -41,14 +36,14 @@ test("Premium upgrade is immediate, prorated, pending-payment safe, and sync-onl
       return store.projection;
     },
   });
-  assert.deepEqual(await service.changePrice("owner", "fppm", "intent_upgrade"), {
+  assert.deepEqual(await service.changePrice("owner", "ppm", "intent_upgrade"), {
     effective: "immediate",
     chargeImpact: "prorated",
     url: "https://portal",
   });
   assert.deepEqual(provider.updated[0], {
     subscriptionId: "sub",
-    priceId: "fppm",
+    priceId: "ppm",
     idempotencyKey: "update-price:owner:intent_upgrade",
     proration: "always_invoice",
     pendingIfIncomplete: true,
@@ -69,12 +64,12 @@ test("Premium Plus downgrade schedules renewal and blocks excess assignments or 
     },
   });
   store.assignmentCount = 2;
-  await assert.rejects(() => service.changePrice("owner", "fpm", "intent_blocked"), /obligations/);
+  await assert.rejects(() => service.changePrice("owner", "pm", "intent_blocked"), /obligations/);
   store.assignmentCount = 1;
   store.whiteLabel = true;
-  await assert.rejects(() => service.changePrice("owner", "fpm", "intent_blocked2"), /obligations/);
+  await assert.rejects(() => service.changePrice("owner", "pm", "intent_blocked2"), /obligations/);
   store.whiteLabel = false;
-  assert.deepEqual(await service.changePrice("owner", "fpm", "intent_downgrade"), {
+  assert.deepEqual(await service.changePrice("owner", "pm", "intent_downgrade"), {
     effective: "renewal",
     effectiveAtMs: 2_000,
     url: "https://portal",
@@ -105,22 +100,20 @@ test("Portal is ephemeral, cancellation is period-end reversible, and Grace/quar
   );
   store.projection.status = "past_due";
   await assert.rejects(
-    () => service.changePrice("owner", "fppm", "intent_grace"),
+    () => service.changePrice("owner", "ppm", "intent_grace"),
     /billing_in_grace/,
   );
   store.projection.status = "active";
   store.projection.quarantineReason = "duplicate";
   await assert.rejects(
-    () => service.changePrice("owner", "fppm", "intent_quarantine"),
+    () => service.changePrice("owner", "ppm", "intent_quarantine"),
     /quarantined/,
   );
 });
 
-test("historical Founder subscriptions can choose current standard Prices but not retired rates", async () => {
+test("public plan changes reject unconfigured source and target prices", async () => {
   const provider = new FakeProvider();
-  const store = new FakeStore("premium", "fpm");
-  store.projection.pricingCohort = "founder";
-  store.projection.founderAwardedAtMs = 1;
+  const store = new FakeStore("premium", "private-retired-price");
   const service = createBillingManagementService({
     provider,
     store,
@@ -130,70 +123,17 @@ test("historical Founder subscriptions can choose current standard Prices but no
       return store.projection;
     },
   });
-
-  await service.changePrice("owner", "fppm", "intent_founder_upgrade");
-  assert.equal(provider.updated[0]?.priceId, "fppm");
   await assert.rejects(
-    service.changePrice("owner", "ppm", "intent_standard_bypass"),
+    service.changePrice("owner", "ppm", "intent_retired_source"),
     /unsupported_price/,
   );
-});
-
-test("active subscriptions can choose current Prices without historical Founder qualification", async () => {
-  const provider = new FakeProvider();
-  const store = new FakeStore("premium", "fpm");
-  store.projection.pricingCohort = null;
-  const service = createBillingManagementService({
-    provider,
-    store,
-    catalog,
-    publicBaseUrl: "https://haf",
-    async syncOwner() {
-      return store.projection;
-    },
-  });
-  await service.changePrice("owner", "fppm", "intent_test_current");
-  assert.equal(provider.updated[0]?.priceId, "fppm");
-  assert.equal(store.projection.pricingCohort, null);
-});
-
-test("a subscription on a retired higher Price can select the current rate for the same plan", async () => {
-  const provider = new FakeProvider();
-  const store = new FakeStore("premium", "pm");
-  const service = createBillingManagementService({
-    provider,
-    store,
-    catalog,
-    publicBaseUrl: "https://haf",
-    async syncOwner() {
-      return store.projection;
-    },
-  });
-  await service.changePrice("owner", "fpm", "intent_current_rate");
-  assert.equal(provider.updated[0]?.priceId, "fpm");
-});
-
-test("legacy Founder Prices are valid sources but cannot be selected as targets", async () => {
-  const provider = new FakeProvider();
-  const store = new FakeStore("premium", "legacy_fpy");
-  store.projection.frequency = "yearly";
-  store.projection.pricingCohort = "founder";
-  store.projection.founderAwardedAtMs = 1;
-  const service = createBillingManagementService({
-    provider,
-    store,
-    catalog,
-    publicBaseUrl: "https://haf",
-    async syncOwner() {
-      return store.projection;
-    },
-  });
-
-  await service.changePrice("owner", "fpm", "intent_from_legacy");
+  store.projection.priceId = "pm";
   await assert.rejects(
-    () => service.changePrice("owner", "legacy_fpy", "intent_to_legacy"),
+    service.changePrice("owner", "private-retired-price", "intent_retired_target"),
     /unsupported_price/,
   );
+  assert.deepEqual(provider.updated, []);
+  assert.deepEqual(provider.scheduled, []);
 });
 
 class FakeProvider implements BillingManagementProvider {

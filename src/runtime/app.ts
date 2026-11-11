@@ -38,7 +38,7 @@ import {
 import { getMemberBaseGuildPermissions } from "./admin-permissions";
 import { getAdminLoginLocation, redirect, renderAdminShell } from "./admin-shell";
 import type { RuntimeAppOptions } from "./app-types";
-import type { CustomerAuth } from "./auth/auth";
+import type { CustomerAuth } from "./auth/customer-auth";
 import { DiscordPaidRoleAdapter } from "./commerce/discord-paid-role-adapter";
 import { DEFAULT_COMMERCE_ACCENT_COLOR, defaultCommerceBranding } from "../commerce/branding";
 import { readCustomerSession } from "./auth/customer-session";
@@ -98,12 +98,12 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
       ? createGuildDiscoveryService({
           discordAccounts: options.discordAccounts,
           listUserGuilds: (accessToken, authUserId, refresh = false) =>
-            getCachedCurrentUserGuilds(accessToken, refresh, authUserId, options.discordCacheKv),
+            getCachedCurrentUserGuilds(accessToken, refresh, authUserId, options.discordCache),
           listBotGuilds: async (refresh = false, allowStaleOnRateLimit = true) =>
             getCachedBotGuilds(
               options.discordBotToken,
               refresh,
-              options.discordCacheKv,
+              options.discordCache,
               allowStaleOnRateLimit,
             ),
         })
@@ -178,7 +178,7 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
       stores: serviceStores,
       discordBotToken: options.discordBotToken,
       discordBotUserId: options.discordBotUserId,
-      discordCacheKv: options.discordCacheKv,
+      discordCache: options.discordCache,
       steamWebApiKey: options.steamWebApiKey,
       webhookProxyLogPersistenceEnabled: options.webhookProxyLogPersistenceEnabled,
       ticketRecoveryQueue: options.ticketRecoveryQueue,
@@ -448,7 +448,7 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
     guildDiscoveryService,
     listAuthorizedCustomerGuildIds,
     discordSupportInvite: options.discordSupportInvite,
-    discordCacheKv: options.discordCacheKv,
+    discordCache: options.discordCache,
     turnstileSiteKey: options.turnstileSiteKey,
     turnstileSecretKey: options.turnstileSecretKey,
     aiTranscriptSummarizerEnv: options.aiTranscriptSummarizerEnv,
@@ -716,8 +716,6 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
     workspaceStore: options.workspaceStore,
     waitUntil: options.waitUntil,
     componentIdSigner: options.componentIdSigner,
-    componentIdLegacyUntilMs: options.componentIdLegacyUntilMs,
-    memberVerificationPanelLegacyUntilMs: options.memberVerificationPanelLegacyUntilMs,
   });
 
   return {
@@ -1058,13 +1056,13 @@ async function listCustomerGuildAdminGuildIds(
   const [guilds, userGuilds] = await Promise.all([
     providedBotGuilds
       ? providedBotGuilds
-      : getCachedBotGuilds(options.discordBotToken, refreshDiscordCache, options.discordCacheKv),
+      : getCachedBotGuilds(options.discordBotToken, refreshDiscordCache, options.discordCache),
     discordAccessToken
       ? getCachedCurrentUserGuilds(
           discordAccessToken,
           refreshDiscordCache,
           session.user.id,
-          options.discordCacheKv,
+          options.discordCache,
         )
       : Promise.resolve([]),
   ]);

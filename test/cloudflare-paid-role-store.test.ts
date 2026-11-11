@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 import type { PaidRoleEntitlementState } from "../src/commerce/paid-role-entitlement";
-import { CloudflarePaidRoleStore } from "../src/runtime/commerce/cloudflare-paid-role-store";
+import { SqlitePaidRoleStore } from "./support/sqlite/runtime/commerce/sqlite-paid-role-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 const NOW = 1_800_000_000_000;
@@ -11,7 +11,7 @@ const NOW = 1_800_000_000_000;
 test("paid role operation claims are idempotent and release allows retry", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflarePaidRoleStore(database.d1, () => "id-1");
+    const store = new SqlitePaidRoleStore(database.d1, () => "id-1");
     assert.equal(
       await store.appendOperation({
         operationKey: "op-1",
@@ -83,7 +83,7 @@ test("expired provider-action lease owners cannot overwrite reclaimed work", asy
         provider_cancellation_state,attempt_count,created_at_ms,updated_at_ms
       ) VALUES ('assignment-lease','ent-lease','guild-1','user-1','role-1','assigned','pending',0,${NOW},${NOW});
     `);
-    const store = new CloudflarePaidRoleStore(database.d1, () => "action-lease");
+    const store = new SqlitePaidRoleStore(database.d1, () => "action-lease");
     await store.enqueueProviderAction({
       operationKey: "cancel-lease",
       assignmentId: "assignment-lease",
@@ -129,7 +129,7 @@ test("expired provider-action lease owners cannot overwrite reclaimed work", asy
 test("paid role state and commerce role assignments persist without claiming manual roles", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflarePaidRoleStore(database.d1);
+    const store = new SqlitePaidRoleStore(database.d1);
     const state = roleState();
     await store.saveState(state);
     assert.deepEqual(await store.readState(state.entitlementId), state);
@@ -192,7 +192,7 @@ test("paid role state and commerce role assignments persist without claiming man
 test("rebuild uses the provider grace anchor instead of reconciliation timestamps", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflarePaidRoleStore(database.d1);
+    const store = new SqlitePaidRoleStore(database.d1);
     const graceStartedAtMs = NOW - 3 * 24 * 60 * 60 * 1_000;
     database.execRaw(`
       INSERT INTO commerce_buyers(id,discord_user_id,created_at_ms,updated_at_ms) VALUES ('buyer-grace','user-grace',${NOW},${NOW});
@@ -222,7 +222,7 @@ test("rebuild uses the provider grace anchor instead of reconciliation timestamp
 test("rebuild resolves one-time entitlement payment state without a subscription", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflarePaidRoleStore(database.d1);
+    const store = new SqlitePaidRoleStore(database.d1);
     database.execRaw(`
       INSERT INTO commerce_buyers(id,discord_user_id,created_at_ms,updated_at_ms) VALUES ('buyer-once','user-once',${NOW},${NOW});
       INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms) VALUES ('offering-once','seller-once','guild-once','role-once','Lifetime','one_time','active',${NOW},${NOW});
@@ -244,7 +244,7 @@ test("rebuild resolves one-time entitlement payment state without a subscription
 test("role outbox, repairs, audit, incidents, and notifications are durable", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflarePaidRoleStore(database.d1, () => "generated");
+    const store = new SqlitePaidRoleStore(database.d1, () => "generated");
     const message = {
       operationKey: "op-outbox",
       entitlementId: "ent-1",

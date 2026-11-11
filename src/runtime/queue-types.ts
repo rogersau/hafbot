@@ -1,14 +1,30 @@
-/** Queue operations shared by Cloudflare and the portable PostgreSQL runtime. */
+export interface QueueSendOptions {
+  delaySeconds?: number;
+}
+export interface QueueRetryOptions {
+  delaySeconds?: number;
+}
+
 export interface QueueProducer<Body = unknown> {
   send(message: Body, options?: QueueSendOptions): Promise<unknown>;
   sendBatch(
-    messages: Iterable<MessageSendRequest<Body>>,
-    options?: QueueSendBatchOptions,
+    messages: Iterable<{ body: Body; delaySeconds?: number }>,
+    options?: QueueSendOptions,
   ): Promise<unknown>;
 }
 
-/** Consumers use message settlement, without requiring provider-specific backlog metrics. */
-export type QueueBatch<Body = unknown> = Pick<
-  MessageBatch<Body>,
-  "queue" | "messages" | "ackAll" | "retryAll"
->;
+export interface QueueMessage<Body = unknown> {
+  readonly id: string;
+  readonly timestamp: Date;
+  readonly body: Body;
+  readonly attempts: number;
+  ack(): void;
+  retry(options?: QueueRetryOptions): void;
+}
+
+export interface QueueBatch<Body = unknown> {
+  readonly queue: string;
+  readonly messages: readonly QueueMessage<Body>[];
+  ackAll(): void;
+  retryAll(options?: QueueRetryOptions): void;
+}

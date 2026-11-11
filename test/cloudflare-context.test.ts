@@ -1,3 +1,4 @@
+import type { Cache } from "../src/runtime/discord-json-cache";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -5,9 +6,9 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareContext } from "../src/runtime/cloudflare-context";
-import { createCloudflareGuildR2ObjectStore } from "../src/runtime/cloudflare-guild-r2-object-store";
-import type { Env } from "../src/env";
+import { createSqliteContext } from "./support/sqlite/runtime/sqlite-context";
+import { createSqliteGuildR2ObjectStore } from "./support/sqlite/runtime/sqlite-guild-r2-object-store";
+import type { Env } from "./support/test-env";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 function createMockEnv(overrides: Partial<Env> = {}): Env {
@@ -24,7 +25,6 @@ function createMockEnv(overrides: Partial<Env> = {}): Env {
     WEBHOOK_PROXY_DELIVERY_QUEUE: { send: async () => undefined } as any,
     HAF_DB: createNoopD1Database(),
     COMPONENT_ID_SIGNING_SECRET: "component-id-signing-secret-for-production-tests",
-    COMPONENT_ID_LEGACY_UNTIL: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     ...overrides,
   } as Env;
 }
@@ -43,7 +43,7 @@ function createNoopD1Database(): D1Database {
   } as unknown as D1Database;
 }
 
-test("createCloudflareContext reuses customer auth for matching auth configuration", () => {
+test("createSqliteContext reuses customer auth for matching auth configuration", () => {
   const env = createMockEnv({
     HAF_DB: {} as D1Database,
     BETTER_AUTH_SECRET: "c9a7Jd8Nq2vR5xT1mP0sL6wY3eK4hB7z",
@@ -52,16 +52,16 @@ test("createCloudflareContext reuses customer auth for matching auth configurati
     DISCORD_OAUTH_CLIENT_SECRET: "discord-client-secret",
   });
 
-  const firstContext = createCloudflareContext(env);
-  const secondContext = createCloudflareContext(env);
+  const firstContext = createSqliteContext(env);
+  const secondContext = createSqliteContext(env);
 
   assert.ok(firstContext.customerAuth);
   assert.strictEqual(firstContext.customerAuth, secondContext.customerAuth);
 });
 
-test("createCloudflareContext exposes grouped stores by bounded context", () => {
+test("createSqliteContext exposes grouped stores by bounded context", () => {
   const env = createMockEnv();
-  const context = createCloudflareContext(env);
+  const context = createSqliteContext(env);
 
   assert.strictEqual(context.database.binding, env.HAF_DB);
   assert.ok(context.database.drizzle);
@@ -111,9 +111,33 @@ test("createCloudflareContext exposes grouped stores by bounded context", () => 
   assert.strictEqual(typeof context.discordAccounts.readDiscordAccessToken, "function");
 });
 
-test("createCloudflareContext wires Commerce only with its dedicated webhook secret and Queue", () => {
+test("public Billing starts with only the current plan prices", async () => {
+  const context = createSqliteContext(
+    createMockEnv({
+      BILLING_SYNC_QUEUE: { send: async () => undefined } as unknown as Queue<unknown>,
+      STRIPE_SECRET_KEY: "sk_test_public_billing_key_material",
+      STRIPE_WEBHOOK_SECRET: "whsec_public_billing_key_material",
+      STRIPE_API_VERSION: "2026-06-24.dahlia",
+      STRIPE_PORTAL_CONFIGURATION_ID: "bpc_public",
+      BETTER_AUTH_URL: "https://public.example.test",
+      STRIPE_PREMIUM_MONTHLY_PRICE_ID: "price_pm",
+      STRIPE_PREMIUM_YEARLY_PRICE_ID: "price_py",
+      STRIPE_PREMIUM_PRODUCT_ID: "prod_p",
+      STRIPE_PREMIUM_PLUS_MONTHLY_PRICE_ID: "price_ppm",
+      STRIPE_PREMIUM_PLUS_YEARLY_PRICE_ID: "price_ppy",
+      STRIPE_PREMIUM_PLUS_PRODUCT_ID: "prod_pp",
+    }),
+  );
+  assert.ok(context.billingCheckoutService);
+  assert.deepEqual(
+    (await context.billingCheckoutService.listCatalog()).map(({ priceId }) => priceId),
+    ["price_pm", "price_py", "price_ppm", "price_ppy"],
+  );
+});
+
+test("createSqliteContext wires Commerce only with its dedicated webhook secret and Queue", () => {
   const queue = { send: async () => undefined } as unknown as Queue<unknown>;
-  const configured = createCloudflareContext(
+  const configured = createSqliteContext(
     createMockEnv({
       COMMERCE_SYNC_QUEUE: queue,
       COMMERCE_ROLE_QUEUE: queue,
@@ -129,7 +153,7 @@ test("createCloudflareContext wires Commerce only with its dedicated webhook sec
   assert.equal(typeof configured.sweepCommerceRoleOutbox, "function");
   assert.equal(typeof configured.reconcileCommerceRoles, "function");
 
-  const billingSecretOnly = createCloudflareContext(
+  const billingSecretOnly = createSqliteContext(
     createMockEnv({
       COMMERCE_SYNC_QUEUE: queue,
       STAGING_MODE: "true",
@@ -141,9 +165,9 @@ test("createCloudflareContext wires Commerce only with its dedicated webhook sec
   assert.equal(billingSecretOnly.commerceWebhookHandler, undefined);
 });
 
-test("createCloudflareContext fails closed for malformed Commerce Stripe secrets", () => {
+test("createSqliteContext fails closed for malformed Commerce Stripe secrets", () => {
   const queue = { send: async () => undefined } as unknown as Queue<unknown>;
-  const context = createCloudflareContext(
+  const context = createSqliteContext(
     createMockEnv({
       COMMERCE_ENABLED: "true",
       COMMERCE_SUPPORT_PAYMENTS_ENABLED: "true",
@@ -161,71 +185,38 @@ test("createCloudflareContext fails closed for malformed Commerce Stripe secrets
   assert.equal(context.commerceSupportService, undefined);
 });
 
-test("createCloudflareContext fails fast when HAF_DB is missing", () => {
+test("createSqliteContext fails fast when HAF_DB is missing", () => {
   const env = createMockEnv({ HAF_DB: undefined });
-  assert.throws(() => createCloudflareContext(env), /HAF_DB binding is required/);
+  assert.throws(() => createSqliteContext(env), /HAF_DB binding is required/);
 });
 
-test("createCloudflareContext fails closed when production component signing is missing", () => {
+test("createSqliteContext fails closed when production component signing is missing", () => {
   const env = createMockEnv({ COMPONENT_ID_SIGNING_SECRET: undefined });
-  assert.throws(() => createCloudflareContext(env), /COMPONENT_ID_SIGNING_SECRET/);
+  assert.throws(() => createSqliteContext(env), /COMPONENT_ID_SIGNING_SECRET/);
 });
 
-test("createCloudflareContext bounds the component ID legacy migration window", () => {
-  const env = createMockEnv({
-    COMPONENT_ID_LEGACY_UNTIL: new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString(),
-  });
-  assert.throws(() => createCloudflareContext(env), /within the next 30 days/);
-});
-
-test("createCloudflareContext allows a bounded Member Verification panel legacy window", () => {
-  const until = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000 - 60_000).toISOString();
-  const context = createCloudflareContext(
-    createMockEnv({ MEMBER_VERIFICATION_PANEL_LEGACY_UNTIL: until }),
-  );
-
-  assert.equal(context.memberVerificationPanelLegacyUntilMs, Date.parse(until));
-});
-
-test("createCloudflareContext rejects a Member Verification panel window over 90 days", () => {
-  const env = createMockEnv({
-    MEMBER_VERIFICATION_PANEL_LEGACY_UNTIL: new Date(
-      Date.now() + 91 * 24 * 60 * 60 * 1000,
-    ).toISOString(),
-  });
-  assert.throws(() => createCloudflareContext(env), /within the next 90 days/);
-});
-
-test("createCloudflareContext disables an expired component ID legacy migration window", () => {
-  const context = createCloudflareContext(
-    createMockEnv({ COMPONENT_ID_LEGACY_UNTIL: new Date(Date.now() - 1_000).toISOString() }),
-  );
-
-  assert.equal(context.componentIdLegacyUntilMs, undefined);
-});
-
-test("createCloudflareContext passes through DISCORD_SUPPORT_INVITE", () => {
+test("createSqliteContext passes through DISCORD_SUPPORT_INVITE", () => {
   const env = createMockEnv({
     DISCORD_SUPPORT_INVITE: "https://discord.gg/HpRPkdm6dv",
   });
 
-  const context = createCloudflareContext(env);
+  const context = createSqliteContext(env);
 
   assert.strictEqual(context.discordSupportInvite, "https://discord.gg/HpRPkdm6dv");
 });
 
-test("createCloudflareContext passes through optional Discord cache KV binding", () => {
-  const discordCacheKv = {} as KVNamespace;
+test("createSqliteContext passes through optional Discord cache KV binding", () => {
+  const discordCache = {} as Cache<string>;
   const env = createMockEnv({
-    DISCORD_CACHE_KV: discordCacheKv,
+    discordCache: discordCache,
   });
 
-  const context = createCloudflareContext(env);
+  const context = createSqliteContext(env);
 
-  assert.strictEqual(context.discordCacheKv, discordCacheKv);
+  assert.strictEqual(context.discordCache, discordCache);
 });
 
-test("createCloudflareContext exposes image rules classifier env when configured", () => {
+test("createSqliteContext exposes image rules classifier env when configured", () => {
   const env = createMockEnv({
     IMAGE_RULES_API_BASE_URL: "https://api.example.com",
     IMAGE_RULES_API_KEY: "secret-key",
@@ -236,7 +227,7 @@ test("createCloudflareContext exposes image rules classifier env when configured
     IMAGE_RULES_MAX_RETRIES: "1",
   });
 
-  const context = createCloudflareContext(env);
+  const context = createSqliteContext(env);
 
   assert.ok(context.imageRulesClassifierEnv);
   assert.equal(context.imageRulesClassifierEnv.apiBaseUrl, "https://api.example.com");
@@ -248,39 +239,39 @@ test("createCloudflareContext exposes image rules classifier env when configured
   assert.equal(context.imageRulesClassifierEnv.maxRetries, 1);
 });
 
-test("createCloudflareContext omits image rules classifier env when base URL is missing", () => {
+test("createSqliteContext omits image rules classifier env when base URL is missing", () => {
   const env = createMockEnv({
     IMAGE_RULES_API_BASE_URL: undefined,
     IMAGE_RULES_API_KEY: "secret-key",
   });
 
-  const context = createCloudflareContext(env);
+  const context = createSqliteContext(env);
 
   assert.equal(context.imageRulesClassifierEnv, undefined);
 });
 
-test("createCloudflareContext passes through optional webhook proxy delivery queue binding", () => {
+test("createSqliteContext passes through optional webhook proxy delivery queue binding", () => {
   const webhookProxyDeliveryQueue = { send: async () => undefined } as unknown as Queue<unknown>;
   const env = createMockEnv({
     WEBHOOK_PROXY_DELIVERY_QUEUE: webhookProxyDeliveryQueue,
   });
 
-  const context = createCloudflareContext(env);
+  const context = createSqliteContext(env);
 
   assert.strictEqual(context.webhookProxyDeliveryQueue, webhookProxyDeliveryQueue);
 });
 
-test("createCloudflareContext omits discordSupportInvite when env var is missing", () => {
+test("createSqliteContext omits discordSupportInvite when env var is missing", () => {
   const env = createMockEnv({
     DISCORD_SUPPORT_INVITE: undefined,
   });
 
-  const context = createCloudflareContext(env);
+  const context = createSqliteContext(env);
 
   assert.strictEqual(context.discordSupportInvite, undefined);
 });
 
-test("createCloudflareContext wires ticket transcript R2 helpers when a bucket is configured", async () => {
+test("createSqliteContext wires ticket transcript R2 helpers when a bucket is configured", async () => {
   const bucketCalls: Array<{ action: string; key: string; body?: unknown; contentType?: string }> =
     [];
   const env = createMockEnv({
@@ -323,7 +314,7 @@ test("createCloudflareContext wires ticket transcript R2 helpers when a bucket i
     } as unknown as R2Bucket,
   });
 
-  const context = createCloudflareContext(env);
+  const context = createSqliteContext(env);
 
   await context.ticketTranscriptBlobs?.putHtml(
     "guild-1/channel-1.html",
@@ -368,7 +359,7 @@ test("createCloudflareContext wires ticket transcript R2 helpers when a bucket i
   ]);
 });
 
-test("createCloudflareContext isolates Managed Media and rejects new metadata-free objects", async () => {
+test("createSqliteContext isolates Managed Media and rejects unclassified objects regardless of age", async () => {
   const database = new SqliteD1Database();
   const objects = new Map<
     string,
@@ -411,7 +402,7 @@ test("createCloudflareContext isolates Managed Media and rejects new metadata-fr
       objects.delete(key);
     },
   } as unknown as R2Bucket;
-  const context = createCloudflareContext(
+  const context = createSqliteContext(
     createMockEnv({
       HAF_DB: database as unknown as D1Database,
       TICKET_TRANSCRIPTS_BUCKET: bucket,
@@ -450,10 +441,7 @@ test("createCloudflareContext isolates Managed Media and rejects new metadata-fr
     contentType: "image/png",
     uploaded: new Date("2026-08-14T23:59:59.999Z"),
   });
-  assert.equal(
-    (await context.publicManagedMedia.getImage({ guildId: "guild-1", filename }))?.contentType,
-    "image/png",
-  );
+  assert.equal(await context.publicManagedMedia.getImage({ guildId: "guild-1", filename }), null);
 
   objects.set(key, {
     body: new ArrayBuffer(1),
@@ -480,10 +468,10 @@ test("createCloudflareContext isolates Managed Media and rejects new metadata-fr
   assert.equal(objects.has(key), false);
 });
 
-test("createCloudflareContext enforces R2 quota before transcript blob writes", async () => {
+test("createSqliteContext enforces R2 quota before transcript blob writes", async () => {
   const bucketCalls: Array<{ action: string; key: string }> = [];
   const database = new SqliteD1Database();
-  await createCloudflareGuildR2ObjectStore(database as unknown as D1Database).upsertObject({
+  await createSqliteGuildR2ObjectStore(database as unknown as D1Database).upsertObject({
     guildId: "guild-1",
     key: "guild-1/existing.bin",
     sizeBytes: 100 * 1024 * 1024 - 2,
@@ -502,7 +490,7 @@ test("createCloudflareContext enforces R2 quota before transcript blob writes", 
     } as unknown as R2Bucket,
   });
 
-  const context = createCloudflareContext(env);
+  const context = createSqliteContext(env);
   assert.ok(context.ticketTranscriptBlobs);
 
   await context.ticketTranscriptBlobs.putHtml("guild-1/channel-1.html", "ab");

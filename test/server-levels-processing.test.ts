@@ -5,14 +5,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildAwardSegments, ServerLevelProcessor } from "../src/server-levels/processor";
 import type { ServerLevelAward } from "../src/server-levels/model";
-import { createCloudflarePlatformLinkStore } from "../src/runtime/cloudflare-platform-link-store";
-import { createCloudflareServerLevelStore } from "../src/runtime/cloudflare-server-level-store";
+import { createSqlitePlatformLinkStore } from "./support/sqlite/runtime/sqlite-platform-link-store";
+import { createSqliteServerLevelStore } from "./support/sqlite/runtime/sqlite-server-level-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("trusted linked attendance awards fixed-point Server XP through the durable processor", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
     await links.upsertPlatformLink({
@@ -64,8 +64,8 @@ test("trusted linked attendance awards fixed-point Server XP through the durable
 
 test("lifecycle boundaries, Free entitlement, and the kill switch fail closed without catch-up", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 100);
     await links.upsertPlatformLink({
@@ -140,8 +140,8 @@ test("lifecycle boundaries, Free entitlement, and the kill switch fail closed wi
 
 test("periodic checkpoints award only through the ordering watermark", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
     await links.upsertPlatformLink({
@@ -183,8 +183,8 @@ test("periodic checkpoints award only through the ordering watermark", async () 
 
 test("linking Steam during trusted current presence starts earning at the link timestamp", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
     await accept(store, {
@@ -228,8 +228,8 @@ test("linking Steam during trusted current presence starts earning at the link t
 
 test("continuous sessions stop at twelve hours and cannot reopen without a fresh join", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   const joinedAtMs = 1_000;
   const twelveHoursMs = 12 * 60 * 60 * 1_000;
   try {
@@ -278,8 +278,8 @@ test("continuous sessions stop at twelve hours and cannot reopen without a fresh
 
 test("the ordering buffer starts at receipt time and late arrivals fail closed", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
     let currentTime = 700_001;
@@ -333,8 +333,8 @@ test("the ordering buffer starts at receipt time and late arrivals fail closed",
 
 test("a checkpoint stops before an accepted event whose receipt window is still open", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
     let currentTime = 700_002;
@@ -382,8 +382,8 @@ test("a checkpoint stops before an accepted event whose receipt window is still 
 
 test("an event already older than the ordering window is late even without a cursor", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
     await store.acceptProviderEvent({
@@ -420,8 +420,8 @@ test("an event already older than the ordering window is late even without a cur
 
 test("cross-server awards serialize by Guild member before overlap and cap decisions", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
     await seedServer(store, "server-2", "endpoint-2", 100);
@@ -519,8 +519,8 @@ test("cross-server awards serialize by Guild member before overlap and cap decis
 
 test("Steam unlink checkpoints accrued XP before closing the earning session", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
     await links.upsertPlatformLink({
@@ -568,8 +568,8 @@ test("Steam unlink checkpoints accrued XP before closing the earning session", a
 
 test("disabling Server Levels checkpoints accrued XP before closing earning sessions", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
     await links.upsertPlatformLink({
@@ -617,8 +617,8 @@ test("disabling Server Levels checkpoints accrued XP before closing earning sess
 
 test("Guild member departure checkpoints accrued XP before closing earning sessions", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
     await links.upsertPlatformLink({
@@ -668,8 +668,8 @@ test("Guild member departure checkpoints accrued XP before closing earning sessi
 
 test("Data API reconciliation establishes a no-backfill roster and proposes capacity", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const links = createCloudflarePlatformLinkStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const links = createSqlitePlatformLinkStore(database.d1);
   let currentTime = 700_001;
   try {
     await seedServer(store, "server-1", "endpoint-1", 4);
@@ -816,7 +816,7 @@ test("the rolling cap resumes only as earlier qualifying time expires", () => {
 });
 
 async function seedServer(
-  store: ReturnType<typeof createCloudflareServerLevelStore>,
+  store: ReturnType<typeof createSqliteServerLevelStore>,
   id: string,
   endpointId: string,
   maxSlots: number,
@@ -847,7 +847,7 @@ async function seedServer(
 }
 
 async function accept(
-  store: ReturnType<typeof createCloudflareServerLevelStore>,
+  store: ReturnType<typeof createSqliteServerLevelStore>,
   input: {
     inboxId: string;
     deliveryId: string;
@@ -867,7 +867,7 @@ async function accept(
 }
 
 async function acceptForServer(
-  store: ReturnType<typeof createCloudflareServerLevelStore>,
+  store: ReturnType<typeof createSqliteServerLevelStore>,
   configuredGameServerId: string,
   input: {
     inboxId: string;
@@ -916,8 +916,8 @@ function intervalAward(
 for (const validSnapshot of [true, false]) {
   test(`Steam replacement finalizes accrued XP after commit with ${validSnapshot ? "the removed identity" : "an unrelated snapshot rejected"}`, async () => {
     const database = new SqliteD1Database();
-    const store = createCloudflareServerLevelStore(database.d1);
-    const links = createCloudflarePlatformLinkStore(database.d1);
+    const store = createSqliteServerLevelStore(database.d1);
+    const links = createSqlitePlatformLinkStore(database.d1);
     try {
       await seedServer(store, "server-1", "endpoint-1", 4);
       const original = {

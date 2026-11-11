@@ -11,8 +11,9 @@ Runtime/database changes also need `pnpm test:postgres` on a disposable local `_
 Use your own development Discord identity; automated public CI uses no real Discord account.
 
 Keep PRs focused and explain observed behaviour, the change and meaningful validation. Preserve
-Discord authorization, tenant boundaries, job/operation identities, forward-only migrations and
-secret redaction. Public CI validates fork PRs on fresh GitHub-hosted runners with read-only
+Discord authorization, tenant boundaries, job/operation identities and secret redaction. Update
+the current installation schema directly; this baseline contains no migration or historical
+compatibility path. Public CI validates fork PRs on fresh GitHub-hosted runners with read-only
 permissions. It has no deployment, cloud provisioning, package publishing or private-network access.
 
 Unless stated otherwise, contributions are provided under the [MIT license](LICENSE). Preserve

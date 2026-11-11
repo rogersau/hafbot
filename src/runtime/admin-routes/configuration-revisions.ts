@@ -328,7 +328,7 @@ async function prepareGenericRestore(options: AdminRoutesOptions, request: Resto
   }
   const adapter = configurationRevisionAdapters.get(request.feature);
   const parsed = parseSnapshot(revision.snapshotJson);
-  const target = adapter.migrateSnapshot(parsed);
+  const target = adapter.parseSnapshot(parsed);
   const current = await readCurrent(options, request.feature, request.guildId, request.resourceKey);
   const head = await revisions.readHead({
     guildId: request.guildId,
@@ -473,23 +473,18 @@ function buildWebhookRestore(
     : [];
   const omitted = new Set(request.omittedSecretSlots ?? []);
   const destinations: WebhookProxyConfig["destinations"] = [];
-  const destinationsV2: NonNullable<WebhookProxyConfig["destinationsV2"]> = [];
   for (const destination of targetDestinations) {
     if (typeof destination.id !== "string" || typeof destination.label !== "string") continue;
     const slot = `destinations.${destination.id}`;
     if (omitted.has(slot)) continue;
-    const currentV2 = current?.destinationsV2?.find((entry) => entry.id === destination.id);
-    const currentLegacy = current?.destinations.find((entry) => entry.id === destination.id);
+    const preserved = current?.destinations.find((entry) => entry.id === destination.id);
     const replacement = replacementFor(request, slot);
-    if (currentV2 && currentLegacy) {
-      destinations.push({ id: destination.id, label: destination.label, url: currentLegacy.url });
-      destinationsV2.push({
+    if (preserved || replacement) {
+      destinations.push({
         id: destination.id,
         label: destination.label,
-        credentialId: currentV2.credentialId,
+        credentialId: preserved?.credentialId ?? "",
       });
-    } else if (replacement) {
-      destinations.push({ id: destination.id, label: destination.label, url: replacement });
     } else {
       requiredSecretInputs.push(slot);
     }
@@ -511,13 +506,11 @@ function buildWebhookRestore(
     name: typeof target.name === "string" ? target.name : "Webhook Proxy",
     enabled: target.enabled === true,
     banLookupEnabled: target.banLookupEnabled === true,
-    banLookupNotificationUrl: preserveBan ? (current?.banLookupNotificationUrl ?? null) : null,
-    ...(preserveBan ? { banLookupCredentialId: current!.banLookupCredentialId } : {}),
+    banLookupCredentialId: preserveBan ? current!.banLookupCredentialId : null,
     banLookupAppIds: Array.isArray(target.banLookupAppIds)
       ? target.banLookupAppIds.filter((value): value is number => typeof value === "number")
       : [],
     destinations,
-    destinationsV2,
     defaultDestinationIds: Array.isArray(target.defaultDestinationIds)
       ? target.defaultDestinationIds.filter(
           (value): value is string => typeof value === "string" && retainedIds.has(value),
@@ -532,7 +525,6 @@ function buildWebhookRestore(
     contentReplacements: Array.isArray(target.contentReplacements)
       ? (target.contentReplacements as NonNullable<WebhookProxyConfig["contentReplacements"]>)
       : [],
-    credentialMigratedAtMs: Date.now(),
     createdAtMs: current?.createdAtMs ?? Date.now(),
     updatedAtMs: Date.now(),
   };
@@ -547,36 +539,35 @@ async function materializeWebhookReplacementCredentials(
   const config = next as WebhookProxyConfig;
   const service = options.webhookCredentialService;
   if (!service) throw new Error("Webhook credential service is unavailable.");
-  const destinationsV2 = [...(config.destinationsV2 ?? [])];
-  for (const destination of config.destinations) {
-    if (destinationsV2.some((entry) => entry.id === destination.id)) continue;
-    const owner = {
-      kind: "proxy_destination" as const,
-      guildId: config.guildId,
-      publicId: config.publicId,
-      destinationId: destination.id,
-    };
-    const masked = await service.replace(owner, destination.url);
-    destinationsV2.push({
-      id: destination.id,
-      label: destination.label,
-      credentialId: masked.credentialId,
-    });
-  }
-  let banLookupCredentialId = config.banLookupCredentialId ?? null;
-  let banLookupNotificationUrl = config.banLookupNotificationUrl;
+  const destinations = await Promise.all(
+    config.destinations.map(async (destination) => {
+      const replacement = replacementFor(request, `destinations.${destination.id}`);
+      if (!replacement) {
+        if (!destination.credentialId) throw new Error("Replacement credential is required.");
+        return destination;
+      }
+      const credential = await service.replace(
+        {
+          kind: "proxy_destination",
+          guildId: config.guildId,
+          publicId: config.publicId,
+          destinationId: destination.id,
+        },
+        replacement,
+      );
+      return { ...destination, credentialId: credential.credentialId };
+    }),
+  );
   const replacement = replacementFor(request, "banLookupNotification");
-  if (replacement) {
-    const owner = {
-      kind: "ban_lookup_notification" as const,
-      guildId: config.guildId,
-      publicId: config.publicId,
-    };
-    const masked = await service.replace(owner, replacement);
-    banLookupCredentialId = masked.credentialId;
-    banLookupNotificationUrl = replacement;
-  }
-  return { ...config, destinationsV2, banLookupCredentialId, banLookupNotificationUrl };
+  const banLookupCredentialId = replacement
+    ? (
+        await service.replace(
+          { kind: "ban_lookup_notification", guildId: config.guildId, publicId: config.publicId },
+          replacement,
+        )
+      ).credentialId
+    : config.banLookupCredentialId;
+  return { ...config, destinations, banLookupCredentialId };
 }
 
 async function validateDiscordReferences(

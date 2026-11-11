@@ -36,22 +36,15 @@ export const ticketPanelRevisionAdapter: ConfigurationRevisionAdapter<
   serialize(config, resourceKey) {
     return serializeTicketPanelConfiguration(config, resourceKey);
   },
-  migrateSnapshot(snapshot) {
-    return v1Migration("tickets", snapshot);
+  parseSnapshot(snapshot) {
+    return parseCurrentSnapshot("tickets", snapshot);
   },
 };
 
 type SafeWebhookProxySnapshot = Omit<
   WebhookProxyConfig,
-  | "guildId"
-  | "createdAtMs"
-  | "updatedAtMs"
-  | "destinations"
-  | "banLookupNotificationUrl"
-  | "credentialMigratedAtMs"
-> & {
-  destinations: Array<{ id: string; label: string }>;
-};
+  "guildId" | "createdAtMs" | "updatedAtMs" | "destinations" | "banLookupCredentialId"
+> & { destinations: Array<{ id: string; label: string }> };
 
 type MentionProtectionSnapshot = Omit<
   MentionProtectionConfig,
@@ -88,7 +81,7 @@ function emptyEnvelope<T>(
   return envelope<T>(feature, resourceKey, null);
 }
 
-function v1Migration<T>(
+function parseCurrentSnapshot<T>(
   feature: ConfigurationFeatureKey,
   snapshot: ConfigurationSnapshotEnvelope<unknown>,
 ): ConfigurationSnapshotEnvelope<T> {
@@ -131,13 +124,13 @@ export const webhookProxyRevisionAdapter: ConfigurationRevisionAdapter<
   },
   serialize(config, resourceKey) {
     if (!config) return emptyEnvelope<SafeWebhookProxySnapshot>("webhook-proxy", resourceKey);
-    const destinations = (config.destinationsV2 ?? config.destinations).map(({ id, label }) => ({
+    const destinations = config.destinations.map(({ id, label }) => ({
       id,
       label,
     }));
-    const destinationCredentials = config.destinationsV2?.length
-      ? config.destinationsV2.map((destination) => destination.credentialId)
-      : config.destinations.map(() => "legacy-configured");
+    const destinationCredentials = config.destinations.map(
+      (destination) => destination.credentialId,
+    );
     const secretSlots: Record<string, SecretSlotSnapshot> = {};
     for (const [index, credential] of destinationCredentials.entries()) {
       secretSlots[`destinations.${destinations[index]?.id ?? index}`] = {
@@ -146,11 +139,7 @@ export const webhookProxyRevisionAdapter: ConfigurationRevisionAdapter<
         restorePolicy: "preserve-current",
       };
     }
-    const banCredential = config.banLookupCredentialId
-      ? config.banLookupCredentialId
-      : config.banLookupNotificationUrl
-        ? "legacy-configured"
-        : null;
+    const banCredential = config.banLookupCredentialId;
     secretSlots.banLookupNotification = banCredential
       ? {
           state: "configured",
@@ -168,12 +157,6 @@ export const webhookProxyRevisionAdapter: ConfigurationRevisionAdapter<
         banLookupEnabled: config.banLookupEnabled,
         banLookupAppIds: [...new Set(config.banLookupAppIds)].sort((a, b) => a - b),
         destinations,
-        ...(config.destinationsV2
-          ? {
-              destinationsV2: destinations.map((item) => ({ ...item, credentialId: "configured" })),
-            }
-          : {}),
-        ...(config.banLookupCredentialId ? { banLookupCredentialId: "configured" } : {}),
         defaultDestinationIds: sorted(config.defaultDestinationIds),
         routingRules: config.routingRules.map((rule) => ({
           ...rule,
@@ -186,8 +169,8 @@ export const webhookProxyRevisionAdapter: ConfigurationRevisionAdapter<
       secretSlots,
     );
   },
-  migrateSnapshot(snapshot) {
-    return v1Migration("webhook-proxy", snapshot);
+  parseSnapshot(snapshot) {
+    return parseCurrentSnapshot("webhook-proxy", snapshot);
   },
 };
 
@@ -222,8 +205,8 @@ export const mentionProtectionRevisionAdapter: ConfigurationRevisionAdapter<
       excludedRoleIds: sorted(value.excludedRoleIds),
     });
   },
-  migrateSnapshot(snapshot) {
-    return v1Migration("mention-protection", snapshot);
+  parseSnapshot(snapshot) {
+    return parseCurrentSnapshot("mention-protection", snapshot);
   },
 };
 
@@ -255,8 +238,8 @@ export const botDefenseRevisionAdapter: ConfigurationRevisionAdapter<
       modRoleIds: sorted(value.modRoleIds),
     });
   },
-  migrateSnapshot(snapshot) {
-    return v1Migration("bot-defense", snapshot);
+  parseSnapshot(snapshot) {
+    return parseCurrentSnapshot("bot-defense", snapshot);
   },
 };
 
@@ -288,8 +271,8 @@ export const memberVerificationRevisionAdapter: ConfigurationRevisionAdapter<
     } = config;
     return envelope("member-verification", resourceKey, value);
   },
-  migrateSnapshot(snapshot) {
-    return v1Migration("member-verification", snapshot);
+  parseSnapshot(snapshot) {
+    return parseCurrentSnapshot("member-verification", snapshot);
   },
 };
 
@@ -319,8 +302,8 @@ export const guildAuditLogRevisionAdapter: ConfigurationRevisionAdapter<
       excludedRoleIds: sorted(value.excludedRoleIds ?? []),
     });
   },
-  migrateSnapshot(snapshot) {
-    return v1Migration("guild-audit-log", snapshot);
+  parseSnapshot(snapshot) {
+    return parseCurrentSnapshot("guild-audit-log", snapshot);
   },
 };
 

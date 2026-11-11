@@ -10,7 +10,7 @@ import { parseDeploymentMode, selfHostedGuildEntitlements } from "../deployment-
 
 interface GuildEntitlementRow extends Record<string, unknown> {
   guild_id: string;
-  plan: string | null;
+  plan: string;
   updated_at_ms: string | number;
 }
 
@@ -22,7 +22,7 @@ export function createPostgresGuildEntitlementStore(
   return {
     async readGuildEntitlement(guildId): Promise<GuildEntitlement> {
       const rows = await database.query<GuildEntitlementRow>(
-        `SELECT guild_id, COALESCE(plan, tier) AS plan, updated_at_ms
+        `SELECT guild_id, plan, updated_at_ms
          FROM guild_entitlements
          WHERE guild_id = $1`,
         [guildId],

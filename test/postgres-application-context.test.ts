@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
 import { __testing as runtimeTesting } from "../src/node/postgres-runtime";
@@ -7,12 +6,8 @@ import {
   createPostgresDatabaseCapabilityFromEnvironment,
   type PostgresDatabaseCapability,
 } from "../src/runtime/postgres/postgres-capability";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
 import { createPostgresJobQueue } from "../src/runtime/postgres/postgres-job-queue";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { InMemoryObjectStore } from "./support/in-memory-object-store";
 import { moderationConfigSchema } from "../src/community-tools/config";
 import { ReactionRoleService } from "../src/services/reaction-role-service";
@@ -24,8 +19,8 @@ import { createReputationDiscord } from "../src/reputation/discord";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 
-test("portable environment reuses the Discord OAuth client ID as the application ID", () => {
-  const env = runtimeTesting.createPortableEnv(
+test("Node environment reuses the Discord OAuth client ID as the application ID", () => {
+  const env = runtimeTesting.createNodeEnvironment(
     {
       NODE_ENV: "test",
       DISCORD_PUBLIC_KEY: "a".repeat(64),
@@ -33,7 +28,6 @@ test("portable environment reuses the Discord OAuth client ID as the application
       BOT_USER_ID: "123456789012345678",
       DISCORD_OAUTH_CLIENT_ID: "987654321098765432",
     },
-    {} as D1Database,
     {} as never,
   );
 
@@ -41,7 +35,7 @@ test("portable environment reuses the Discord OAuth client ID as the application
 });
 
 test(
-  "portable application context executes every bridged store's critical empty-state read",
+  "Node application context executes every native store's critical empty-state read",
   { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
   async (t) => {
     assert.ok(postgresUrl);
@@ -53,7 +47,6 @@ test(
     });
     try {
       await resetAndMigrate(database);
-      const d1 = createPostgresD1CompatibilityDatabase(database);
       const jobs = createPostgresJobQueue(database);
       const queues = runtimeTesting.createQueueBindings(database, jobs);
       const environment = {
@@ -63,12 +56,11 @@ test(
         DISCORD_BOT_TOKEN: "application-context-token",
         BOT_USER_ID: "123456789012345678",
       };
-      const env = runtimeTesting.createPortableEnv(environment, d1, queues);
-      const { app } = runtimeTesting.createPortableContext({
+      const env = runtimeTesting.createNodeEnvironment(environment, queues);
+      const { app } = runtimeTesting.createNodeContext({
         environment,
         env,
         database,
-        d1,
         objects: new InMemoryObjectStore(),
       });
       const guildId = "empty-guild";
@@ -160,11 +152,10 @@ test(
             SELF_HOSTED_OPERATOR_NAME: "Independent Operators",
             SELF_HOSTED_PRIVACY_URL: "https://policies.example/privacy",
           };
-          const selfHosted = runtimeTesting.createPortableContext({
+          const selfHosted = runtimeTesting.createNodeContext({
             environment: selfHostedEnvironment,
-            env: runtimeTesting.createPortableEnv(selfHostedEnvironment, d1, queues),
+            env: runtimeTesting.createNodeEnvironment(selfHostedEnvironment, queues),
             database,
-            d1,
             objects: new InMemoryObjectStore(),
           });
           assert.equal(selfHosted.app.selfHostedSite?.operatorName, "Independent Operators");
@@ -323,10 +314,7 @@ test(
 
 async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-  await applyPostgresMigrations(
-    database,
-    await readPostgresMigrations(resolve("migrations/postgres")),
-  );
+  await initializePostgresSchema(database);
 }
 
 function assertSafeTestDatabase(value: string): void {

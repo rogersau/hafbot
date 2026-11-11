@@ -1,4 +1,4 @@
-import type { BillingCatalogEntry, FounderAdmission } from "./types";
+import type { BillingCatalogEntry } from "./types";
 
 export interface LandingPrice {
   plan: BillingCatalogEntry["plan"];
@@ -11,7 +11,6 @@ export interface LandingPrice {
 
 export interface LandingPriceCatalog {
   read(): Promise<readonly LandingPrice[] | null>;
-  readFounderAdmission?(): Promise<FounderAdmission>;
 }
 
 export interface StripeDisplayPrice {
@@ -42,7 +41,6 @@ export function createLandingPriceCatalog(options: {
   staleForMs?: number;
   cache?: Map<string, CachedLandingPrices>;
   onError?: (message: string, error: unknown) => void;
-  countFounderPlaces?: () => Promise<number>;
 }): LandingPriceCatalog {
   const now = options.now ?? Date.now;
   const freshForMs = options.freshForMs ?? 15 * 60 * 1_000;
@@ -51,24 +49,18 @@ export function createLandingPriceCatalog(options: {
   const onError = options.onError ?? console.error;
   const catalogKey = [...options.catalog.values()]
     .sort((left, right) => left.priceId.localeCompare(right.priceId))
-    .map(
-      (entry) =>
-        `${entry.priceId}:${entry.productId}:${entry.plan}:${entry.frequency}:${entry.cohort}:${entry.legacy === true ? "legacy" : "current"}`,
-    )
+    .map((entry) => `${entry.priceId}:${entry.productId}:${entry.plan}:${entry.frequency}`)
     .join("|");
 
   return {
     async read() {
-      const selectedCatalog = new Map(
-        [...options.catalog].filter(([, entry]) => entry.legacy !== true),
-      );
       const cacheKey = `${catalogKey}:current`;
       const cached = cache.get(cacheKey);
       const ageMs = cached ? now() - cached.readAtMs : Number.POSITIVE_INFINITY;
       if (cached && ageMs <= freshForMs) return cached.prices;
 
       try {
-        const prices = await readCompleteCatalog(selectedCatalog, options.stripe);
+        const prices = await readCompleteCatalog(options.catalog, options.stripe);
         cache.set(cacheKey, { readAtMs: now(), prices });
         return prices;
       } catch (error) {

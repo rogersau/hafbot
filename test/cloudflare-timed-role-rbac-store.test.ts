@@ -5,14 +5,14 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareGuildRbacStore } from "../src/runtime/cloudflare-guild-rbac-store";
-import { createCloudflareTimedRoleStore } from "../src/runtime/cloudflare-timed-role-store";
+import { createSqliteGuildRbacStore } from "./support/sqlite/runtime/sqlite-guild-rbac-store";
+import { createSqliteTimedRoleStore } from "./support/sqlite/runtime/sqlite-timed-role-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("Timed Role and Guild RBAC stores use the migrated unified database without runtime DDL", async () => {
   const database = new SqliteD1Database();
-  const timedRoles = createCloudflareTimedRoleStore(database as unknown as D1Database);
-  const rbac = createCloudflareGuildRbacStore(database as unknown as D1Database);
+  const timedRoles = createSqliteTimedRoleStore(database as unknown as D1Database);
+  const rbac = createSqliteGuildRbacStore(database as unknown as D1Database);
 
   await timedRoles.upsertTimedRole({
     guildId: "guild-1",
@@ -58,7 +58,7 @@ test("Timed Role and Guild RBAC stores use the migrated unified database without
 
 test("Timed Role store adds, updates, lists, expires, and removes assignments", async () => {
   const database = new SqliteD1Database();
-  const timedRoles = createCloudflareTimedRoleStore(database as unknown as D1Database);
+  const timedRoles = createSqliteTimedRoleStore(database as unknown as D1Database);
 
   await timedRoles.upsertTimedRole({
     guildId: "guild-1",
@@ -165,7 +165,7 @@ test("Timed Role store adds, updates, lists, expires, and removes assignments", 
 
 test("Timed Role store reads, writes, and clears new-member config", async () => {
   const database = new SqliteD1Database();
-  const timedRoles = createCloudflareTimedRoleStore(database as unknown as D1Database);
+  const timedRoles = createSqliteTimedRoleStore(database as unknown as D1Database);
 
   assert.ok(timedRoles.readNewMemberTimedRoleConfig);
   assert.ok(timedRoles.upsertNewMemberTimedRoleConfig);
@@ -198,7 +198,7 @@ test("Timed Role store reads, writes, and clears new-member config", async () =>
 
 test("Timed Role store reads, writes, and clears manual-assignment config", async () => {
   const database = new SqliteD1Database();
-  const timedRoles = createCloudflareTimedRoleStore(database as unknown as D1Database);
+  const timedRoles = createSqliteTimedRoleStore(database as unknown as D1Database);
 
   assert.ok(timedRoles.readManualAssignmentTimedRoleConfig);
   assert.ok(timedRoles.upsertManualAssignmentTimedRoleConfig);
@@ -236,7 +236,7 @@ test("Timed Role store reads, writes, and clears manual-assignment config", asyn
 
 test("Timed Role store persists immutable suspension snapshots and mutable restoration work", async () => {
   const database = new SqliteD1Database();
-  const timedRoles = createCloudflareTimedRoleStore(database as unknown as D1Database);
+  const timedRoles = createSqliteTimedRoleStore(database as unknown as D1Database);
 
   await timedRoles.upsertTimedRole({
     guildId: "guild-1",
@@ -316,7 +316,7 @@ test("Timed Role store persists immutable suspension snapshots and mutable resto
 
 test("Timed Role store persists explicitly configured suspended roles", async () => {
   const database = new SqliteD1Database();
-  const timedRoles = createCloudflareTimedRoleStore(database as unknown as D1Database);
+  const timedRoles = createSqliteTimedRoleStore(database as unknown as D1Database);
 
   await timedRoles.upsertNewMemberTimedRoleConfig!({
     guildId: "guild-1",

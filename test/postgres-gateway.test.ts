@@ -1,5 +1,5 @@
+import { gatewayEnvelope } from "./support/gateway-envelope";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
 import type {
@@ -27,10 +27,7 @@ import {
   type PostgresLease,
   type PostgresLeaseStore,
 } from "../src/runtime/postgres/postgres-lease-store";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 const realSetTimeout = setTimeout;
@@ -158,16 +155,18 @@ for (const rollback of [true, false]) {
         );
         assert.ok(lease);
         await seedCommittedSession(store, lease, nowMs);
-        const acceptance = store.dispatch({
-          identityId: "standard",
-          botUserId: "bot-1",
-          lease,
-          sessionId: "session-1",
-          sequence: 2,
-          type: "MESSAGE_CREATE",
-          data: { id: "pending", guild_id: "guild-1", author: { id: "author-1" } },
-          nowMs,
-        });
+        const acceptance = store.dispatch(
+          gatewayEnvelope({
+            identityId: "standard",
+            botUserId: "bot-1",
+            lease,
+            sessionId: "session-1",
+            sequence: 2,
+            type: "MESSAGE_CREATE",
+            data: { id: "pending", guild_id: "guild-1", author: { id: "author-1" } },
+            nowMs,
+          }),
+        );
         const outcome = acceptance.then(
           () => null,
           (error: unknown) => error,
@@ -241,7 +240,7 @@ for (const rollback of [false, true]) {
         );
         assert.ok(lease);
         await seedCommittedSession(store, lease, nowMs);
-        const input = {
+        const input = gatewayEnvelope({
           identityId: "standard",
           botUserId: "bot-1",
           lease,
@@ -250,7 +249,7 @@ for (const rollback of [false, true]) {
           type: "MESSAGE_CREATE",
           data: { id: "takeover-message", guild_id: "guild-1", author: { id: "author-1" } },
           nowMs,
-        };
+        });
         const outcome = store.dispatch(input).then(
           () => null,
           (error: unknown) => error,
@@ -639,17 +638,19 @@ async function seedCommittedSession(
 ): Promise<void> {
   assert.equal(await store.write("standard", lease, committedSnapshot(), { nowMs }), true);
   assert.deepEqual(await readResumeTuple(store), [null, null, null]);
-  await store.dispatch({
-    identityId: "standard",
-    botUserId: "bot-1",
-    lease,
-    sessionId: "session-1",
-    sequence: 1,
-    ready: { sessionId: "session-1", resumeGatewayUrl: "wss://resume.example.test" },
-    type: "READY",
-    data: { session_id: "session-1", resume_gateway_url: "wss://resume.example.test" },
-    nowMs,
-  });
+  await store.dispatch(
+    gatewayEnvelope({
+      identityId: "standard",
+      botUserId: "bot-1",
+      lease,
+      sessionId: "session-1",
+      sequence: 1,
+      ready: { sessionId: "session-1", resumeGatewayUrl: "wss://resume.example.test" },
+      type: "READY",
+      data: { session_id: "session-1", resume_gateway_url: "wss://resume.example.test" },
+      nowMs,
+    }),
+  );
 }
 
 function deferred() {
@@ -786,113 +787,129 @@ test(
         true,
       );
 
-      await store.dispatch({
-        identityId: "standard",
-        botUserId: "bot-1",
-        lease,
-        sessionId: "session-1",
-        sequence: 0,
-        ready: { sessionId: "session-1", resumeGatewayUrl: "wss://resume.example.test" },
-        type: "READY",
-        data: {},
-        nowMs,
-      });
+      await store.dispatch(
+        gatewayEnvelope({
+          identityId: "standard",
+          botUserId: "bot-1",
+          lease,
+          sessionId: "session-1",
+          sequence: 0,
+          ready: { sessionId: "session-1", resumeGatewayUrl: "wss://resume.example.test" },
+          type: "READY",
+          data: {},
+          nowMs,
+        }),
+      );
 
-      const created = await store.dispatch({
-        identityId: "standard",
-        botUserId: "bot-1",
-        lease,
-        sessionId: "session-1",
-        sequence: 1,
-        type: "MESSAGE_CREATE",
-        data: {
-          id: "message-1",
-          guild_id: "guild-1",
-          author: { id: "author-1", username: "Author" },
-        },
-        nowMs,
-      });
+      const created = await store.dispatch(
+        gatewayEnvelope({
+          identityId: "standard",
+          botUserId: "bot-1",
+          lease,
+          sessionId: "session-1",
+          sequence: 1,
+          type: "MESSAGE_CREATE",
+          data: {
+            id: "message-1",
+            guild_id: "guild-1",
+            author: { id: "author-1", username: "Author" },
+          },
+          nowMs,
+        }),
+      );
       assert.ok(created);
       assert.equal((await store.read("standard"))?.lastSequence, 1);
-      const duplicate = await store.dispatch({
-        identityId: "standard",
-        botUserId: "bot-1",
-        lease,
-        sessionId: "session-1",
-        sequence: 1,
-        type: "MESSAGE_CREATE",
-        data: {
-          id: "message-1",
-          guild_id: "guild-1",
-          author: { id: "author-1", username: "Author" },
-        },
-        nowMs,
-      });
+      const duplicate = await store.dispatch(
+        gatewayEnvelope({
+          identityId: "standard",
+          botUserId: "bot-1",
+          lease,
+          sessionId: "session-1",
+          sequence: 1,
+          type: "MESSAGE_CREATE",
+          data: {
+            id: "message-1",
+            guild_id: "guild-1",
+            author: { id: "author-1", username: "Author" },
+          },
+          nowMs,
+        }),
+      );
       assert.equal(duplicate?.eventKey, created.eventKey);
       assert.equal((await jobs.stats())[0]?.queued, 1);
-      await store.dispatch({
-        identityId: "standard",
-        botUserId: "bot-1",
-        lease,
-        sessionId: "session-1",
-        sequence: 2,
-        type: "MESSAGE_DELETE",
-        data: { id: "message-1", guild_id: "guild-1" },
-        nowMs: nowMs + 1,
-      });
-      await store.dispatch({
-        identityId: "standard",
-        botUserId: "bot-1",
-        lease,
-        sessionId: "session-1",
-        sequence: 3,
-        type: "GUILD_MEMBER_UPDATE",
-        data: {
-          guild_id: "guild-1",
-          user: { id: "member-1" },
-          roles: ["role-1"],
-          nick: "One",
-        },
-        nowMs: nowMs + 2,
-      });
-      const memberUpdate = await store.dispatch({
-        identityId: "standard",
-        botUserId: "bot-1",
-        lease,
-        sessionId: "session-1",
-        sequence: 4,
-        type: "GUILD_MEMBER_UPDATE",
-        data: {
-          guild_id: "guild-1",
-          user: { id: "member-1" },
-          roles: ["role-2"],
-          nick: "Two",
-        },
-        nowMs: nowMs + 3,
-      });
+      await store.dispatch(
+        gatewayEnvelope({
+          identityId: "standard",
+          botUserId: "bot-1",
+          lease,
+          sessionId: "session-1",
+          sequence: 2,
+          type: "MESSAGE_DELETE",
+          data: { id: "message-1", guild_id: "guild-1" },
+          nowMs: nowMs + 1,
+        }),
+      );
+      await store.dispatch(
+        gatewayEnvelope({
+          identityId: "standard",
+          botUserId: "bot-1",
+          lease,
+          sessionId: "session-1",
+          sequence: 3,
+          type: "GUILD_MEMBER_UPDATE",
+          data: {
+            guild_id: "guild-1",
+            user: { id: "member-1" },
+            roles: ["role-1"],
+            nick: "One",
+          },
+          nowMs: nowMs + 2,
+        }),
+      );
+      const memberUpdate = await store.dispatch(
+        gatewayEnvelope({
+          identityId: "standard",
+          botUserId: "bot-1",
+          lease,
+          sessionId: "session-1",
+          sequence: 4,
+          type: "GUILD_MEMBER_UPDATE",
+          data: {
+            guild_id: "guild-1",
+            user: { id: "member-1" },
+            roles: ["role-2"],
+            nick: "Two",
+          },
+          nowMs: nowMs + 3,
+        }),
+      );
       assert.deepEqual(memberUpdate?.previousRoleIds, ["role-1"]);
       assert.equal(memberUpdate?.previousNick, "One");
 
-      await store.dispatch({
-        identityId: "standard",
-        botUserId: "bot-1",
-        lease,
-        sessionId: "session-1",
-        sequence: 5,
-        type: "VOICE_STATE_UPDATE",
-        data: { guild_id: "guild-1", user_id: "member-1", channel_id: "voice-1" },
-        nowMs: nowMs + 4,
-      });
-      const voiceMove = await store.dispatch({
-        identityId: "standard",
-        botUserId: "bot-1",
-        lease,
-        sessionId: "session-1",
-        sequence: 6,
-        type: "VOICE_STATE_UPDATE",
-        data: { guild_id: "guild-1", user_id: "member-1", channel_id: "voice-2" },
-        nowMs: nowMs + 5,
-      });
+      await store.dispatch(
+        gatewayEnvelope({
+          identityId: "standard",
+          botUserId: "bot-1",
+          lease,
+          sessionId: "session-1",
+          sequence: 5,
+          type: "VOICE_STATE_UPDATE",
+          data: { guild_id: "guild-1", user_id: "member-1", channel_id: "voice-1" },
+          nowMs: nowMs + 4,
+        }),
+      );
+      const voiceMove = await store.dispatch(
+        gatewayEnvelope({
+          identityId: "standard",
+          botUserId: "bot-1",
+          lease,
+          sessionId: "session-1",
+          sequence: 6,
+          type: "VOICE_STATE_UPDATE",
+          data: { guild_id: "guild-1", user_id: "member-1", channel_id: "voice-2" },
+          nowMs: nowMs + 5,
+        }),
+      );
       assert.equal(voiceMove?.emptiedVoiceChannelId, "voice-1");
 
       const claimed = await jobs.claim({
@@ -920,16 +937,18 @@ test(
       );
       assert.ok(replacement);
       await assert.rejects(
-        store.dispatch({
-          identityId: "standard",
-          botUserId: "bot-1",
-          lease,
-          sessionId: "session-1",
-          sequence: 7,
-          type: "MESSAGE_CREATE",
-          data: { id: "stale", guild_id: "guild-1", author: { id: "author-1" } },
-          nowMs: nowMs + 1_002,
-        }),
+        store.dispatch(
+          gatewayEnvelope({
+            identityId: "standard",
+            botUserId: "bot-1",
+            lease,
+            sessionId: "session-1",
+            sequence: 7,
+            type: "MESSAGE_CREATE",
+            data: { id: "stale", guild_id: "guild-1", author: { id: "author-1" } },
+            nowMs: nowMs + 1_002,
+          }),
+        ),
         GatewayLeaseLostError,
       );
     } finally {
@@ -1091,10 +1110,7 @@ function createTestDatabase(url: string): PostgresDatabaseCapability {
 
 async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-  await applyPostgresMigrations(
-    database,
-    await readPostgresMigrations(resolve("migrations/postgres")),
-  );
+  await initializePostgresSchema(database);
 }
 
 async function waitFor(

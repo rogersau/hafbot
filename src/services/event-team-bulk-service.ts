@@ -38,9 +38,8 @@ export interface EventTeamBulkPreview {
   fillPartialTeams: boolean;
   includeIncomplete: boolean;
   namePrefix: string;
-  /** Stable current-state revision and its compatibility alias. */
+  /** Stable current-state revision used to reject stale commits. */
   revision: string;
-  fingerprint: string;
   proposals: EventTeamBulkFormationProposal[];
   unassignedUserIds: string[];
   consideredSignupUserIds: string[];
@@ -107,11 +106,6 @@ export class EventTeamBulkService {
     return this.buildPreview(input, state);
   }
 
-  /** Verbose alias for callers that expose the operation as a preview endpoint. */
-  async generatePreview(input: EventTeamBulkPreviewInput): Promise<EventTeamBulkPreview> {
-    return this.preview(input);
-  }
-
   async commit(preview: EventTeamBulkPreview, actorUserId = "admin"): Promise<unknown> {
     const state = await this.readState(preview);
     const refreshed = this.buildPreview(
@@ -128,7 +122,7 @@ export class EventTeamBulkService {
       state,
     );
     if (
-      refreshed.fingerprint !== preview.fingerprint ||
+      refreshed.revision !== preview.revision ||
       stableSerialize(allocationShape(refreshed.proposals)) !==
         stableSerialize(allocationShape(preview.proposals)) ||
       stableSerialize(refreshed.unassignedUserIds) !== stableSerialize(preview.unassignedUserIds)
@@ -146,11 +140,6 @@ export class EventTeamBulkService {
       expectedRevision: preview.revision,
       actorUserId,
     });
-  }
-
-  /** Verbose alias matching the preview/commit workflow used by admin clients. */
-  async commitPreview(preview: EventTeamBulkPreview, actorUserId = "admin"): Promise<unknown> {
-    return this.commit(preview, actorUserId);
   }
 
   private async readState(
@@ -256,7 +245,6 @@ export class EventTeamBulkService {
       includeIncomplete,
       namePrefix,
       revision: fingerprint,
-      fingerprint,
       proposals,
       unassignedUserIds,
       consideredSignupUserIds,

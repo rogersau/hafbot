@@ -8,14 +8,14 @@ import {
   type CommercePurchasePolicy,
 } from "../src/commerce/buyer-checkout";
 import {
-  createCloudflareGameAccessStore,
+  createSqliteGameAccessStore,
   createGameAccessRuntime,
   handleCommerceGameQueueBatch,
-} from "../src/runtime/commerce/game-access-runtime";
-import { CloudflareCommerceBuyerCheckoutStore } from "../src/runtime/commerce/cloudflare-buyer-checkout-store";
-import { createCloudflareCommerceStore } from "../src/runtime/cloudflare-commerce-store";
-import { CloudflareCommerceReconciliationStore } from "../src/runtime/commerce/cloudflare-reconciliation-store";
-import { StripeCommerceSnapshotProvider } from "../src/runtime/commerce/stripe-snapshot-provider";
+} from "./support/sqlite/runtime/commerce/game-access-runtime";
+import { SqliteCommerceBuyerCheckoutStore } from "./support/sqlite/runtime/commerce/sqlite-buyer-checkout-store";
+import { createSqliteCommerceStore } from "./support/sqlite/runtime/sqlite-commerce-store";
+import { SqliteCommerceReconciliationStore } from "./support/sqlite/runtime/commerce/sqlite-reconciliation-store";
+import { StripeCommerceSnapshotProvider } from "./support/sqlite/runtime/commerce/stripe-snapshot-provider";
 import {
   processCommerceReconciliationMessage,
   type CommerceSellerSnapshot,
@@ -29,7 +29,7 @@ import type { CommerceSubscription, CommerceEntitlement } from "../src/commerce/
 import { createWebhookCredentialKeyRing } from "../src/security/webhook-credentials";
 import type { NetworkPolicy } from "../src/wardogs/model";
 import { WardogsService } from "../src/wardogs/service";
-import { createCloudflareWardogsStore } from "../src/runtime/cloudflare-wardogs-store";
+import { createSqliteWardogsStore } from "./support/sqlite/runtime/sqlite-wardogs-store";
 const NOW = 1_900_000_000_000;
 const OFFERING_ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_OFFERING = "22222222-2222-4222-8222-222222222222";
@@ -75,15 +75,13 @@ async function workflow(options: { realWardogs?: boolean; policy?: CommercePurch
       {
         id: "fixture",
         origin: "https://fixture.example",
-        runtime: "cloudflare",
         securePathEvidence: "Synthetic only",
       },
     ],
     approvals: [],
   };
   const wardogs = new WardogsService({
-    store: createCloudflareWardogsStore(db.d1),
-    runtime: "cloudflare",
+    store: createSqliteWardogsStore(db.d1),
     ...(options.realWardogs
       ? {
           policy,
@@ -155,7 +153,7 @@ async function workflow(options: { realWardogs?: boolean; policy?: CommercePurch
       roster: false,
     });
   }
-  const store = createCloudflareGameAccessStore(db.d1);
+  const store = createSqliteGameAccessStore(db.d1);
   const premium = { isPremium: async () => control.premium };
   const provider: GameAccessProvider = {
     async readiness(guildId, targetId) {
@@ -232,7 +230,7 @@ async function workflow(options: { realWardogs?: boolean; policy?: CommercePurch
       acceptingSales: true,
       actorId: "seller",
     });
-  const buyerStore = new CloudflareCommerceBuyerCheckoutStore(db.d1, premium);
+  const buyerStore = new SqliteCommerceBuyerCheckoutStore(db.d1, premium);
   const stripe: CommerceBuyerCheckoutProvider = {
     async createCustomer() {
       stripeCalls.push("customer");
@@ -283,8 +281,8 @@ async function workflow(options: { realWardogs?: boolean; policy?: CommercePurch
         roleManageable: true,
       },
     });
-  const finance = createCloudflareCommerceStore(db.d1);
-  const sync = new CloudflareCommerceReconciliationStore(db.d1, () => now);
+  const finance = createSqliteCommerceStore(db.d1);
+  const sync = new SqliteCommerceReconciliationStore(db.d1, () => now);
   const subscriptions: CommerceSubscription[] = [];
   const entitlements: CommerceEntitlement[] = [];
   let serial = 0;

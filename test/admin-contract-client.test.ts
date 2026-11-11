@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { z } from "zod";
@@ -82,17 +83,13 @@ test("managed message client exposes the stable Admin error envelope", async (t)
     globalThis.fetch = originalFetch;
   });
   globalThis.fetch = async () =>
-    Response.json(
-      {
-        error: "Fix the highlighted fields.",
-        code: "invalid_request",
-        correlationId: "corr-1",
-        retryable: false,
-        action: "fix_fields",
-        fieldIssues: [{ path: "channelId", code: "too_small", message: "Required" }],
-      },
-      { status: 400 },
-    );
+    adminErrorResponse("Fix the highlighted fields.", 400, {
+      code: "invalid_request",
+      correlationId: "corr-1",
+      retryable: false,
+      action: "fix_fields",
+      fieldIssues: [{ path: "channelId", code: "too_small", message: "Required" }],
+    });
   await assert.rejects(managedMessagesClient.capabilities({ guildId: "guild" }), (error) => {
     assert.ok(error instanceof AdminApiError);
     assert.equal(error.code, "invalid_request");
@@ -107,7 +104,7 @@ test("generated clients reject malformed Admin error envelopes", async (t) => {
   t.after(() => {
     globalThis.fetch = originalFetch;
   });
-  globalThis.fetch = async () => Response.json({ error: "legacy" }, { status: 400 });
+  globalThis.fetch = async () => Response.json({ error: "Invalid response" }, { status: 400 });
   await assert.rejects(
     ticketsClient.panel({ guildId: "guild" }),
     (error) =>
@@ -122,16 +119,12 @@ test("Admin API clients parse only bounded stale-preview reasons", async (t) => 
     globalThis.fetch = originalFetch;
   });
   globalThis.fetch = async () =>
-    Response.json(
-      {
-        error: "Discord channel state changed after preview.",
-        code: "stale_preview",
-        correlationId: "corr-stale",
-        retryable: false,
-        staleReason: "source",
-      },
-      { status: 409 },
-    );
+    adminErrorResponse("Discord channel state changed after preview.", 409, {
+      code: "stale_preview",
+      correlationId: "corr-stale",
+      retryable: false,
+      staleReason: "source",
+    });
   const contract = {
     operationId: "test.stalePreview",
     method: "POST",
@@ -159,19 +152,15 @@ test("Admin API clients parse only bounded stale-preview reasons", async (t) => 
   });
 
   const malformed = await parseAdminApiError(
-    Response.json(
-      {
-        error: "Discord channel state changed after preview.",
-        code: "stale_preview",
-        correlationId: "corr-stale",
-        retryable: false,
-        staleReason: "raw-provider-detail",
-      },
-      { status: 409 },
-    ),
+    adminErrorResponse("Discord channel state changed after preview.", 409, {
+      code: "stale_preview",
+      correlationId: "corr-stale",
+      retryable: false,
+      staleReason: "raw-provider-detail" as never,
+    }),
     "Conflict",
   );
-  assert.equal(malformed.code, "legacy_error");
+  assert.equal(malformed.code, "internal_error");
   assert.equal(malformed.staleReason, undefined);
 });
 
@@ -201,12 +190,12 @@ test("generated Tickets client serializes pagination and validates responses", a
   );
 });
 
-test("generated Tickets client preserves legacy modal fields that exceed current write limits", async (t) => {
+test("generated Tickets client rejects modal fields that exceed current write limits", async (t) => {
   const originalFetch = globalThis.fetch;
   t.after(() => {
     globalThis.fetch = originalFetch;
   });
-  const legacyQuestion = {
+  const invalidQuestion = {
     id: "q".repeat(101),
     label: "L".repeat(46),
     style: "short" as const,
@@ -236,19 +225,16 @@ test("generated Tickets client preserves legacy modal fields that exceed current
         buttonStyle: "primary" as const,
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        questions: [legacyQuestion],
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
+        questions: [invalidQuestion],
         participantManagementEnabled: false,
         limitExclusion: false,
+        responseRules: [],
       },
     ],
   };
   globalThis.fetch = async () => Response.json({ panel, panels: [panel] });
 
-  const result = await ticketsClient.panel({ guildId: "guild-1" });
-
-  assert.deepEqual(result.panel?.ticketTypes[0]?.questions[0], legacyQuestion);
+  await assert.rejects(ticketsClient.panel({ guildId: "guild-1" }), AdminContractViolationError);
 });
 
 test("generated Webhook Proxy client serializes configuration and validates the response", async (t) => {
@@ -300,15 +286,11 @@ test("generated clients reject an undeclared Webhook Proxy error code and emit s
     return true;
   }) as typeof globalThis.dispatchEvent;
   globalThis.fetch = async () =>
-    Response.json(
-      {
-        error: "Unexpected",
-        code: "provider_unavailable",
-        correlationId: "corr-webhook",
-        retryable: true,
-      },
-      { status: 400 },
-    );
+    adminErrorResponse("Unexpected", 400, {
+      code: "provider_unavailable",
+      correlationId: "corr-webhook",
+      retryable: true,
+    });
 
   await assert.rejects(
     webhookProxyClient.get({ guildId: "guild" }),

@@ -1,3 +1,9 @@
+import type {
+  MentionProtectionStore,
+  GuildEntitlementStore,
+  TimedRoleStore,
+  GuildAuditLogStore,
+} from "./contracts";
 import { allowUserMentions } from "../discord";
 import { DiscordApiError } from "../discord/client";
 import type { Env } from "../env";
@@ -9,25 +15,20 @@ import type {
 import { assignTimedRole } from "../services/timed-roles/assign-timed-role";
 import { postMessageAuditEvent } from "../services/guild-audit-log-service";
 import type { MentionProtectionMessageDependencies } from "../services/mention-protection/message-handler";
-import { createCloudflareMentionProtectionStore } from "./cloudflare-mention-protection-store";
-import { createCloudflareGuildEntitlementStore } from "./cloudflare-guild-entitlement-store";
-import { createCloudflareGuildAuditLogStore } from "./cloudflare-guild-audit-log-store";
-import { createCloudflareTimedRoleStore } from "./cloudflare-timed-role-store";
 import type { GatewayDiscordCapabilities } from "./gateway-events/discord-capabilities";
 
-type MentionProtectionRuntimeEnv = Pick<Env, "HAF_DB" | "BOT_USER_ID" | "DISCORD_BOT_TOKEN">;
+type MentionProtectionRuntimeEnv = Pick<Env, "BOT_USER_ID" | "DISCORD_BOT_TOKEN">;
 
 export function createMentionProtectionMessageDependencies(
   env: MentionProtectionRuntimeEnv,
   stores: {
-    mentionProtection: ReturnType<typeof createCloudflareMentionProtectionStore>;
-    entitlement: ReturnType<typeof createCloudflareGuildEntitlementStore>;
-    timedRole: ReturnType<typeof createCloudflareTimedRoleStore>;
-    audit: ReturnType<typeof createCloudflareGuildAuditLogStore>;
+    mentionProtection: MentionProtectionStore;
+    entitlement: GuildEntitlementStore;
+    timedRole: TimedRoleStore;
+    audit: GuildAuditLogStore;
   },
   discord: GatewayDiscordCapabilities,
 ): MentionProtectionMessageDependencies {
-  if (!env.HAF_DB) throw new Error("Mention Protection requires HAF_DB.");
   const store = stores.mentionProtection;
   const entitlementStore = stores.entitlement;
   const timedRoleStore = stores.timedRole;
@@ -107,7 +108,7 @@ export function createMentionProtectionMessageDependencies(
 async function postMentionProtectionAuditEvent(
   breaches: MentionProtectionBreach[],
   outcomes: Array<{ action: MentionProtectionActionKey; status: MentionProtectionActionStatus }>,
-  store: ReturnType<typeof createCloudflareGuildAuditLogStore>,
+  store: GuildAuditLogStore,
   botToken: string,
   botUserId: string,
 ): Promise<void> {

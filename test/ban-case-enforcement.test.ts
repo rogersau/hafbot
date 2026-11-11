@@ -3,9 +3,9 @@ import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import test from "node:test";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
 import {
-  createCloudflareBanEnforcementStore,
-  createCloudflareWardogsStore,
-} from "../src/runtime/cloudflare-wardogs-store";
+  createSqliteBanEnforcementStore,
+  createSqliteWardogsStore,
+} from "./support/sqlite/runtime/sqlite-wardogs-store";
 import { BanCaseEnforcement } from "../src/ban-case-enforcement/service";
 import { createWardogsBanProvider, decodeBanPresence } from "../src/ban-case-enforcement/provider";
 import { WardogsService } from "../src/wardogs/service";
@@ -35,17 +35,15 @@ async function setup() {
       {
         id: "test",
         origin: "https://wardogs.example.com",
-        runtime: "cloudflare",
         securePathEvidence: "Synthetic recording only",
       },
     ],
     approvals: [],
   };
-  const targetStore = createCloudflareWardogsStore(fixture.database.d1);
+  const targetStore = createSqliteWardogsStore(fixture.database.d1);
   const options = {
     store: targetStore,
     policy,
-    runtime: "cloudflare" as const,
     mutationsEnabled: true,
     keyRing: () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) }),
     now: () => clock.now,
@@ -130,7 +128,7 @@ async function setup() {
     updatedAtMs: 1,
   };
   await fixture.stores.banCases.createBanCase(c);
-  const store = createCloudflareBanEnforcementStore(fixture.database.d1);
+  const store = createSqliteBanEnforcementStore(fixture.database.d1);
   const provider = createWardogsBanProvider(wardogs);
   const serviceOptions = {
     store,
@@ -654,8 +652,8 @@ test("admin requests bind confirmation to the authenticated account and enforce 
   const f = await setup();
   try {
     await f.fixture.database.d1
-      .prepare("INSERT INTO guild_entitlements(guild_id,tier,plan,updated_at_ms) VALUES(?,?,?,?)")
-      .bind("guild-1", "premium", "premium", 1)
+      .prepare("INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES(?,?,?)")
+      .bind("guild-1", "premium", 1)
       .run();
     const handler = createAdminApiHandler({
       stores: f.fixture.stores,
@@ -692,7 +690,7 @@ test("admin requests bind confirmation to the authenticated account and enforce 
     assert.equal((await request("confirm", { guildId: "guild-1", id })).status, 200);
     assert.equal((await f.store.list("guild-1")).length, 1);
     await f.fixture.database.d1
-      .prepare("UPDATE guild_entitlements SET tier='free',plan='free' WHERE guild_id='guild-1'")
+      .prepare("UPDATE guild_entitlements SET plan='free' WHERE guild_id='guild-1'")
       .run();
     assert.notEqual((await request("prepare", input)).status, 200);
     assert.equal(f.requests.length, 0);
@@ -715,8 +713,8 @@ test("runtime authorization refetches Ban Case staff roles before execution", as
       updatedAtMs: 1,
     });
     await f.fixture.database.d1
-      .prepare("INSERT INTO guild_entitlements(guild_id,tier,plan,updated_at_ms) VALUES(?,?,?,?)")
-      .bind("guild-1", "premium", "premium", 1)
+      .prepare("INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES(?,?,?)")
+      .bind("guild-1", "premium", 1)
       .run();
     const discordCalls: string[] = [];
     let roles = ["staff-role"];
@@ -748,12 +746,12 @@ test("runtime authorization refetches Ban Case staff roles before execution", as
 });
 
 test("feature-owned incidents persist uncertainty without changing shared incident tables", async () => {
-  const { createCloudflareOperationalIncidentStore } =
-    await import("../src/runtime/cloudflare-operational-incident-store");
+  const { createSqliteOperationalIncidentStore } =
+    await import("./support/sqlite/runtime/sqlite-operational-incident-store");
   const { OperationalIncidentService } = await import("../src/operations/incidents");
   const f = await setup();
   try {
-    const store = createCloudflareOperationalIncidentStore(f.fixture.database.d1, "ban-cases");
+    const store = createSqliteOperationalIncidentStore(f.fixture.database.d1, "ban-cases");
     const reporter = new OperationalIncidentService(store);
     const key = {
       feature: "ban-cases" as const,
@@ -772,7 +770,7 @@ test("feature-owned incidents persist uncertainty without changing shared incide
     assert.equal((await reporter.get("guild-1", incident.id))?.status, "open");
     assert.equal(
       (
-        await createCloudflareOperationalIncidentStore(f.fixture.database.d1).listByGuild({
+        await createSqliteOperationalIncidentStore(f.fixture.database.d1).listByGuild({
           guildId: "guild-1",
           status: "open",
           limit: 25,
@@ -1008,36 +1006,34 @@ test("roles, entitlement and expiry are rechecked at the final unsent mutation b
   }
 });
 
-for (const runtime of ["cloudflare", "portable"] as const)
-  test(`${runtime} management adapter defaults off and does not invent a complete-list contract`, async () => {
-    const f = await setup();
-    try {
-      f.policy.origins = f.policy.origins.map((origin) => ({ ...origin, runtime }));
-      const disabled = new WardogsService({ ...f.options, runtime, mutationsEnabled: undefined });
-      const intent = {
-        ...f.input,
-        id: "fixture",
-        draft: false,
-        subject: "76561198000000001",
-        targetLabel: "Synthetic",
-        generation: f.target.generation,
-        physicalTarget: "synthetic-physical-server",
-        approvalIdentity: "fixture",
-        createdAtMs: f.clock.now,
-        expiresAtMs: f.clock.now + 300000,
-      };
-      await assert.rejects(
-        createWardogsBanProvider(disabled).mutate(intent, async () => {}),
-        { code: "disabled" },
-      );
-      const enabled = new WardogsService({ ...f.options, runtime });
-      delete f.policy.approvals[0]!.banContract;
-      await assert.rejects(createWardogsBanProvider(enabled).observe(intent), { code: "disabled" });
-      assert.equal(f.requests.length, 0);
-    } finally {
-      f.fixture.close();
-    }
-  });
+test("management adapter defaults off and requires an explicit complete-list contract", async () => {
+  const f = await setup();
+  try {
+    const disabled = new WardogsService({ ...f.options, mutationsEnabled: undefined });
+    const intent = {
+      ...f.input,
+      id: "fixture",
+      draft: false,
+      subject: "76561198000000001",
+      targetLabel: "Synthetic",
+      generation: f.target.generation,
+      physicalTarget: "synthetic-physical-server",
+      approvalIdentity: "fixture",
+      createdAtMs: f.clock.now,
+      expiresAtMs: f.clock.now + 300000,
+    };
+    await assert.rejects(
+      createWardogsBanProvider(disabled).mutate(intent, async () => {}),
+      { code: "disabled" },
+    );
+    const enabled = new WardogsService({ ...f.options });
+    delete f.policy.approvals[0]!.banContract;
+    await assert.rejects(createWardogsBanProvider(enabled).observe(intent), { code: "disabled" });
+    assert.equal(f.requests.length, 0);
+  } finally {
+    f.fixture.close();
+  }
+});
 
 test("runtime notification recovery edits one Discord item after a lost create response", async () => {
   const { createBanCaseEnforcementRuntime } =
@@ -1053,8 +1049,8 @@ test("runtime notification recovery edits one Discord item after a lost create r
       updatedAtMs: 1,
     });
     await f.fixture.database.d1
-      .prepare("INSERT INTO guild_entitlements(guild_id,tier,plan,updated_at_ms) VALUES(?,?,?,?)")
-      .bind("guild-1", "premium", "premium", 1)
+      .prepare("INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES(?,?,?)")
+      .bind("guild-1", "premium", 1)
       .run();
     const messages: { id: string; content: string }[] = [];
     let creates = 0;
@@ -1258,8 +1254,8 @@ for (const recovery of ["retry", "expiry", "attempt limit"] as const)
         updatedAtMs: 1,
       });
       await f.fixture.database.d1
-        .prepare("INSERT INTO guild_entitlements(guild_id,tier,plan,updated_at_ms) VALUES(?,?,?,?)")
-        .bind("guild-1", "premium", "premium", 1)
+        .prepare("INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES(?,?,?)")
+        .bind("guild-1", "premium", 1)
         .run();
       let slow = true;
       globalThis.fetch = async (input) => {
@@ -1330,10 +1326,8 @@ for (const action of ["ban", "unban"] as const)
           updatedAtMs: 1,
         });
         await f.fixture.database.d1
-          .prepare(
-            "INSERT INTO guild_entitlements(guild_id,tier,plan,updated_at_ms) VALUES(?,?,?,?)",
-          )
-          .bind("guild-1", "premium", "premium", 1)
+          .prepare("INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES(?,?,?)")
+          .bind("guild-1", "premium", 1)
           .run();
         globalThis.fetch = async (input) => {
           assert.match(String(input), /\/guilds\/guild-1\/members\/moderator$/);

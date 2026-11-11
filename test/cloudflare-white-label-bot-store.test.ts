@@ -5,12 +5,12 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareWhiteLabelBotStore } from "../src/runtime/cloudflare-white-label-bot-store";
+import { createSqliteWhiteLabelBotStore } from "./support/sqlite/runtime/sqlite-white-label-bot-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("createCloudflareWhiteLabelBotStore upserts and reads White-Label Bot metadata", async () => {
+test("createSqliteWhiteLabelBotStore upserts and reads White-Label Bot metadata", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareWhiteLabelBotStore(database as unknown as D1Database);
+  const store = createSqliteWhiteLabelBotStore(database as unknown as D1Database);
 
   await store.upsertWhiteLabelBot({
     guildId: "guild-1",
@@ -37,9 +37,9 @@ test("createCloudflareWhiteLabelBotStore upserts and reads White-Label Bot metad
   });
 });
 
-test("createCloudflareWhiteLabelBotStore lists only active White-Label Bots for gateway startup", async () => {
+test("createSqliteWhiteLabelBotStore lists only active White-Label Bots for gateway startup", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareWhiteLabelBotStore(database as unknown as D1Database);
+  const store = createSqliteWhiteLabelBotStore(database as unknown as D1Database);
   await database
     .prepare(
       "INSERT INTO billing_customer_bindings(owner_id, stripe_customer_id, created_at_ms) VALUES (?, ?, ?)",
@@ -111,9 +111,9 @@ test("createCloudflareWhiteLabelBotStore lists only active White-Label Bots for 
   );
 });
 
-test("createCloudflareWhiteLabelBotStore preserves decommissioned records when a replacement is stored", async () => {
+test("createSqliteWhiteLabelBotStore preserves decommissioned records when a replacement is stored", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareWhiteLabelBotStore(database as unknown as D1Database);
+  const store = createSqliteWhiteLabelBotStore(database as unknown as D1Database);
 
   await store.upsertWhiteLabelBot({
     guildId: "guild-1",

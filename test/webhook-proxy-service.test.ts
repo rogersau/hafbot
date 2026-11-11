@@ -1,3 +1,8 @@
+import {
+  testWebhookCredential,
+  testWebhookResolver,
+  webhookTargets,
+} from "./support/webhook-credentials";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -21,11 +26,19 @@ const baseConfig: WebhookProxyConfig = {
   name: "Server alerts",
   enabled: true,
   banLookupEnabled: false,
-  banLookupNotificationUrl: null,
+  banLookupCredentialId: null,
   banLookupAppIds: [],
   destinations: [
-    { id: "main", label: "Main", url: "https://discord.com/api/webhooks/1/main" },
-    { id: "errors", label: "Errors", url: "https://discord.com/api/webhooks/2/errors" },
+    {
+      id: "main",
+      label: "Main",
+      credentialId: testWebhookCredential("https://discord.com/api/webhooks/1/main"),
+    },
+    {
+      id: "errors",
+      label: "Errors",
+      credentialId: testWebhookCredential("https://discord.com/api/webhooks/2/errors"),
+    },
   ],
   defaultDestinationIds: ["main"],
   routingRules: [
@@ -135,6 +148,7 @@ test("evaluateWebhookProxyPayload rejects invalid JSON even without content repl
 test("WebhookProxyService keeps retained webhook configs dormant for Free Guilds", async () => {
   let forwarded = false;
   const service = new WebhookProxyService(createStore(baseConfig), {
+    credentialService: testWebhookResolver,
     guildEntitlements: {
       readGuildEntitlement: async (guildId) => ({ guildId, tier: "free", updatedAtMs: 0 }),
     },
@@ -155,6 +169,7 @@ test("WebhookProxyService keeps retained webhook configs dormant for Free Guilds
 test("WebhookProxyService suppresses inbound and already-queued delivery for a suspended paid Guild", async () => {
   let forwarded = false;
   const service = new WebhookProxyService(createStore(baseConfig), {
+    credentialService: testWebhookResolver,
     guildEntitlements: {
       readGuildEntitlement: async (guildId) => ({ guildId, tier: "premium", updatedAtMs: 0 }),
     },
@@ -171,8 +186,9 @@ test("WebhookProxyService suppresses inbound and already-queued delivery for a s
   );
   assert.equal(await service.hasInboundWebhookSource(baseConfig.publicId), false);
   await service.deliverQueuedWebhook({
+    version: 2,
     config: { guildId: baseConfig.guildId, publicId: baseConfig.publicId },
-    destinations: baseConfig.destinations,
+    destinations: webhookTargets(baseConfig.destinations),
     body: "{}",
     contentType: "application/json",
   });
@@ -182,6 +198,7 @@ test("WebhookProxyService suppresses inbound and already-queued delivery for a s
 test("WebhookProxyService drops queued deliveries after a Guild downgrades", async () => {
   let forwarded = false;
   const service = new WebhookProxyService(createStore(baseConfig), {
+    credentialService: testWebhookResolver,
     guildEntitlements: {
       readGuildEntitlement: async (guildId) => ({ guildId, tier: "free", updatedAtMs: 0 }),
     },
@@ -192,8 +209,9 @@ test("WebhookProxyService drops queued deliveries after a Guild downgrades", asy
   });
 
   await service.deliverQueuedWebhook({
+    version: 2,
     config: { guildId: baseConfig.guildId, publicId: baseConfig.publicId },
-    destinations: baseConfig.destinations,
+    destinations: webhookTargets(baseConfig.destinations),
     body: "{}",
     contentType: "application/json",
   });
@@ -205,6 +223,7 @@ test("WebhookProxyService forwards payloads and logs successful attempts", async
   const calls: Array<{ input: string; body: string | undefined }> = [];
   const store = createStore(baseConfig);
   const service = new WebhookProxyService(store, {
+    credentialService: testWebhookResolver,
     fetch: (async (input, init) => {
       calls.push({ input: String(input), body: init?.body as string | undefined });
       return new Response("ok", { status: 200 });
@@ -234,6 +253,7 @@ test("WebhookProxyService forwards payloads and logs successful attempts", async
 test("WebhookProxyService queues payload delivery when a delivery queue is configured", async () => {
   const deliveries: unknown[] = [];
   const service = new WebhookProxyService(createStore(baseConfig), {
+    credentialService: testWebhookResolver,
     fetch: (async () => {
       throw new Error("delivery should be queued");
     }) as typeof fetch,
@@ -253,8 +273,9 @@ test("WebhookProxyService queues payload delivery when a delivery queue is confi
   assert.deepEqual(result, { publicId: baseConfig.publicId, acceptedDestinations: 1 });
   assert.deepEqual(deliveries, [
     {
+      version: 2,
       config: { guildId: baseConfig.guildId, publicId: baseConfig.publicId },
-      destinations: [baseConfig.destinations[0]],
+      destinations: webhookTargets([baseConfig.destinations[0]]),
       body: JSON.stringify({ content: "hello" }),
       contentType: "application/json",
     },
@@ -266,10 +287,11 @@ test("WebhookProxyService enqueues Steam ban lookups from enabled webhook proxy 
   const config: WebhookProxyConfig = {
     ...baseConfig,
     banLookupEnabled: true,
-    banLookupNotificationUrl: "https://example.com/ban-reports",
+    banLookupCredentialId: testWebhookCredential("https://example.com/ban-reports"),
     banLookupAppIds: [221100],
   };
   const service = new WebhookProxyService(createStore(config), {
+    credentialService: testWebhookResolver,
     fetch: (async () => new Response("ok", { status: 200 })) as typeof fetch,
     steamBanLookupQueue: {
       async send(message) {
@@ -289,7 +311,9 @@ test("WebhookProxyService enqueues Steam ban lookups from enabled webhook proxy 
     {
       guildId: baseConfig.guildId,
       steamIds: ["76561198000000001"],
-      notificationUrl: "https://example.com/ban-reports",
+      version: 2,
+      publicId: baseConfig.publicId,
+      notificationCredentialId: config.banLookupCredentialId,
       banLookupAppIds: [221100],
     },
   ]);
@@ -299,6 +323,7 @@ test("WebhookProxyService delivers queued webhook payloads with retry logging", 
   const fetchCalls: string[] = [];
   const store = createStore(null);
   const service = new WebhookProxyService(store, {
+    credentialService: testWebhookResolver,
     fetch: (async (input) => {
       fetchCalls.push(String(input));
       return new Response("ok", { status: 200 });
@@ -306,8 +331,9 @@ test("WebhookProxyService delivers queued webhook payloads with retry logging", 
   });
 
   await service.deliverQueuedWebhook({
+    version: 2,
     config: { guildId: baseConfig.guildId, publicId: baseConfig.publicId },
-    destinations: [baseConfig.destinations[0]!],
+    destinations: webhookTargets([baseConfig.destinations[0]!]),
     body: "{}",
     contentType: "application/json",
   });
@@ -323,26 +349,30 @@ test("WebhookProxyService delivers queued webhook payloads with retry logging", 
 test("WebhookProxyService redacts destination secrets and provider bodies from forward logs", async () => {
   const store = createStore(null);
   const service = new WebhookProxyService(store, {
+    credentialService: testWebhookResolver,
     maxAttempts: 1,
     fetch: async () => new Response("echoed-message-secret", { status: 400 }),
   });
 
   const outcome = await service.deliverQueuedWebhook({
+    version: 2,
     config: { guildId: "guild-1", publicId: "public-1" },
-    destinations: [
+    destinations: webhookTargets([
       {
         id: "main",
         label: "Main",
-        url: "https://discord.com/api/webhooks/123/super-secret-token",
+        credentialId: testWebhookCredential(
+          "https://discord.com/api/webhooks/123/super-secret-token",
+        ),
       },
-    ],
+    ]),
     body: "message-secret",
     contentType: "application/json",
   });
 
   assert.deepEqual(outcome, { status: "terminal", reasonCode: "provider_rejected" });
   const logs = await store.listWebhookProxyForwardLogs("guild-1", "public-1");
-  assert.equal(logs[0]?.destinationUrl, undefined);
+  assert.equal((logs[0] as unknown as Record<string, unknown>)?.destinationUrl, undefined);
   assert.equal(logs[0]?.error, "HTTP 400");
   assert.doesNotMatch(
     JSON.stringify(logs),
@@ -355,6 +385,7 @@ test("WebhookProxyService retries Discord rate limits with retry-after", async (
   const statuses = [429, 200];
   const store = createStore(baseConfig);
   const service = new WebhookProxyService(store, {
+    credentialService: testWebhookResolver,
     fetch: (async () => {
       const status = statuses.shift() ?? 204;
       return new Response("", {
@@ -380,6 +411,7 @@ test("WebhookProxyService retries Discord rate limits with retry-after", async (
 test("WebhookProxyService skips delivery log persistence when disabled", async () => {
   const store = createStore(baseConfig);
   const service = new WebhookProxyService(store, {
+    credentialService: testWebhookResolver,
     fetch: (async () => new Response("ok", { status: 200 })) as typeof fetch,
     sleep: async () => {},
     persistDeliveryLogs: false,
@@ -406,6 +438,7 @@ test("WebhookProxyService reuses cached webhook configs for repeated requests", 
       },
     }),
     {
+      credentialService: testWebhookResolver,
       fetch: (async (input) => {
         fetchCalls.push(String(input));
         return new Response("ok", { status: 200 });
@@ -441,6 +474,7 @@ test("WebhookProxyService exposes source existence only after a guarded cache fi
         return baseConfig;
       },
     }),
+    { credentialService: testWebhookResolver },
   );
 
   assert.equal(await service.readCachedInboundWebhookSource(baseConfig.publicId), null);
@@ -458,8 +492,14 @@ test("WebhookProxyService shares a supplied source cache across request-scoped i
       return baseConfig;
     },
   });
-  const first = new WebhookProxyService(store, { configCache });
-  const second = new WebhookProxyService(store, { configCache });
+  const first = new WebhookProxyService(store, {
+    credentialService: testWebhookResolver,
+    configCache,
+  });
+  const second = new WebhookProxyService(store, {
+    credentialService: testWebhookResolver,
+    configCache,
+  });
 
   assert.equal(await first.hasInboundWebhookSource(baseConfig.publicId), true);
   assert.equal(await second.readCachedInboundWebhookSource(baseConfig.publicId), true);
@@ -479,6 +519,7 @@ test("WebhookProxyService deduplicates concurrent config loads for the same webh
       },
     }),
     {
+      credentialService: testWebhookResolver,
       fetch: (async () => new Response("ok", { status: 200 })) as typeof fetch,
       sleep: async () => {},
     },
@@ -517,6 +558,7 @@ test("WebhookProxyService invalidates cached webhook configs", async () => {
       },
     }),
     {
+      credentialService: testWebhookResolver,
       fetch: (async (input) => {
         fetchCalls.push(String(input));
         return new Response("ok", { status: 200 });
@@ -533,7 +575,13 @@ test("WebhookProxyService invalidates cached webhook configs", async () => {
 
   currentConfig = {
     ...baseConfig,
-    destinations: [{ id: "alt", label: "Alt", url: "https://discord.com/api/webhooks/9/alt" }],
+    destinations: [
+      {
+        id: "alt",
+        label: "Alt",
+        credentialId: testWebhookCredential("https://discord.com/api/webhooks/9/alt"),
+      },
+    ],
     defaultDestinationIds: ["alt"],
     routingRules: [],
     updatedAtMs: 2,

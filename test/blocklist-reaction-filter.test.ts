@@ -1,3 +1,4 @@
+import { deleteReaction } from "../src/discord";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -7,9 +8,8 @@ import test from "node:test";
 
 import { moderateReactionAdd } from "../src/services/blocklist/reaction-filter";
 
-test("moderateReactionAdd uses the per-Guild reader when one is provided", async () => {
+test("moderateReactionAdd reads configuration for the selected Guild", async () => {
   const targetedGuilds: string[] = [];
-  let fullConfigReads = 0;
   const calls: Array<{ input: string; method: string }> = [];
   const { restore } = interceptDiscordFetch(async (input, init) => {
     calls.push({ input: String(input), method: init?.method ?? "GET" });
@@ -27,10 +27,8 @@ test("moderateReactionAdd uses the per-Guild reader when one is provided", async
       },
       { DISCORD_BOT_TOKEN: "bot-token", BOT_USER_ID: "bot-1" },
       {
-        readBlocklist: async () => {
-          fullConfigReads += 1;
-          throw new Error("full config should not be read");
-        },
+        deleteReaction,
+
         readBlocklistForGuild: async (guildId) => {
           targetedGuilds.push(guildId);
           return {
@@ -47,7 +45,6 @@ test("moderateReactionAdd uses the per-Guild reader when one is provided", async
   }
 
   assert.deepEqual(targetedGuilds, ["guild-1"]);
-  assert.equal(fullConfigReads, 0);
   assert.equal(calls.length, 1);
 });
 
@@ -72,7 +69,8 @@ test("moderateReactionAdd skips blocked emoji reactions in excluded channels", a
         BOT_USER_ID: "bot-1",
       },
       {
-        readBlocklist: async () => ({
+        deleteReaction,
+        readBlocklistForGuild: async () => ({
           guilds: {
             "guild-1": {
               enabled: true,

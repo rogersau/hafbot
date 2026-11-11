@@ -1,3 +1,4 @@
+import type { GuildNotificationChannelStore } from "../src/runtime/contracts";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -8,7 +9,7 @@ import test from "node:test";
 import type { CreateChannelMessageInput } from "../src/discord/messages";
 import type { BlocklistStore, GuildEntitlementStore } from "../src/runtime/contracts";
 import { BlocklistService } from "../src/services/blocklist-service";
-import type { GuildNotificationChannelStore } from "../src/services/activity-log";
+
 import { afterStoreSeed, createProductionRuntimeStores } from "./support/production-runtime-stores";
 
 type TestBlocklistStore = BlocklistStore &
@@ -225,7 +226,7 @@ function createBlocklistFixture(
   const fixture = createProductionRuntimeStores({ botUserId: "bot-1" });
   if (tier === "premium") {
     fixture.database.execRaw(
-      "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', 'premium', 'premium', 1)",
+      "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', 'premium', 1)",
     );
   }
   const rawStore = fixture.stores.blocklist as TestBlocklistStore;

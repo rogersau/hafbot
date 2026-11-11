@@ -1,3 +1,4 @@
+import type { Cache } from "../discord-json-cache";
 import { createBanEnforcementRoutes } from "./ban-case-enforcement";
 import { createAttendanceObservationRoutes } from "./attendance-observations";
 import { createWardogsAdminRoutes } from "./wardogs";
@@ -100,7 +101,7 @@ export interface AdminRoutesOptions {
     botGuilds?: Promise<BotGuild[]>,
   ) => Promise<string[] | Response | null>;
   discordSupportInvite?: string;
-  discordCacheKv?: KVNamespace;
+  discordCache?: Cache<string>;
   turnstileSiteKey?: string;
   turnstileSecretKey?: string;
   services?: Partial<ServiceFactory>;

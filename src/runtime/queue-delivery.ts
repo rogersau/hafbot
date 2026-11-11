@@ -1,3 +1,5 @@
+import type { QueueMessage } from "./queue-types";
+import { isDatabaseUnavailable } from "./database-availability";
 import type { QueueBatch } from "./queue-types";
 import { DiscordApiError } from "../discord/client";
 import { reportOperationalEvent } from "../observability/operational-reporter";
@@ -109,15 +111,15 @@ export function classifyQueueDeliveryError(
     }
     return { status: "terminal", reasonCode: "provider_rejected" };
   }
-  if (isD1Error(error)) {
-    return { status: "retry", reasonCode: "d1_unavailable" };
+  if (isDatabaseUnavailable(error)) {
+    return { status: "retry", reasonCode: "database_unavailable" };
   }
   return { status: "retry", reasonCode: "unexpected_error" };
 }
 
 export function beginQueueMessageDelivery(
   queue: string,
-  message: Message<unknown>,
+  message: QueueMessage<unknown>,
   options: QueueMessageDeliveryOptions,
 ): QueueMessageDelivery {
   const nowMs = options.nowMs ?? Date.now;
@@ -219,7 +221,7 @@ export async function deliverQueueBatch<T>(
 function reportQueueOutcome(
   report: typeof reportOperationalEvent,
   queue: string,
-  message: Message<unknown>,
+  message: QueueMessage<unknown>,
   outcome: Exclude<QueueDeliveryOutcome, { status: "complete" }>,
   cause: unknown,
   maxAttempts: number,
@@ -255,7 +257,7 @@ function reportQueueEvent(
   report: typeof reportOperationalEvent,
   severity: OperationalSeverity,
   queue: string,
-  message: Message<unknown>,
+  message: QueueMessage<unknown>,
   reasonCode: string,
   cause?: unknown,
   extraContext: Record<string, unknown> = {},
@@ -283,18 +285,10 @@ function reportQueueEvent(
   }
 }
 
-function isD1Error(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return (
-    error.name === "D1Error" ||
-    /\bD1(?:_ERROR| unavailable| failure| failed)\b/i.test(error.message)
-  );
-}
-
 function buildEvent(
   event: QueueDeliveryEvent["event"],
   queue: string,
-  message: Message<unknown>,
+  message: QueueMessage<unknown>,
   durationMs: number,
   reasonCode?: string,
 ): QueueDeliveryEvent {

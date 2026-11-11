@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareEventStore } from "../src/runtime/cloudflare-event-store";
+import { createSqliteEventStore } from "./support/sqlite/runtime/sqlite-event-store";
 import {
   EventTeamBulkService,
   type EventTeamBulkStore,
@@ -24,9 +24,9 @@ import type {
 } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("createCloudflareEventStore persists templates, events, signups, reminders, and lifecycle queries", async () => {
+test("createSqliteEventStore persists templates, events, signups, reminders, and lifecycle queries", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database as unknown as D1Database);
+  const store = createSqliteEventStore(database as unknown as D1Database);
   const template = createTemplate();
   const event = createEvent();
   const signup: EventSignup = {
@@ -81,9 +81,9 @@ test("createCloudflareEventStore persists templates, events, signups, reminders,
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareEventStore round-trips team Event configuration", async () => {
+test("createSqliteEventStore round-trips team Event configuration", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database as unknown as D1Database);
+  const store = createSqliteEventStore(database as unknown as D1Database);
   const event = {
     ...createEvent(),
     participationMode: "team" as const,
@@ -102,9 +102,9 @@ test("createCloudflareEventStore round-trips team Event configuration", async ()
   );
 });
 
-test("createCloudflareEventStore atomically advances Event Team rate-limit windows", async () => {
+test("createSqliteEventStore atomically advances Event Team rate-limit windows", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database as unknown as D1Database);
+  const store = createSqliteEventStore(database as unknown as D1Database);
   const first = await store.consumeEventTeamRateLimit!({
     guildId: "guild-1",
     eventId: "event-1",
@@ -151,9 +151,9 @@ test("createCloudflareEventStore atomically advances Event Team rate-limit windo
   assert.deepEqual(reset, { allowed: true, remaining: 1, retryAfterMs: 1_000 });
 });
 
-test("createCloudflareEventStore round-trips team Event Template configuration", async () => {
+test("createSqliteEventStore round-trips team Event Template configuration", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database as unknown as D1Database);
+  const store = createSqliteEventStore(database as unknown as D1Database);
   const template = {
     ...createTemplate(),
     participationMode: "team" as const,
@@ -172,9 +172,9 @@ test("createCloudflareEventStore round-trips team Event Template configuration",
   );
 });
 
-test("createCloudflareEventStore rejects Event Team membership from another Signup Group", async () => {
+test("createSqliteEventStore rejects Event Team membership from another Signup Group", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database as unknown as D1Database);
+  const store = createSqliteEventStore(database as unknown as D1Database);
   const team = {
     guildId: "guild-1",
     eventId: "event-1",
@@ -244,7 +244,7 @@ test("createCloudflareEventStore rejects Event Team membership from another Sign
 
 test("proposal acceptance creates signup before membership and rejects a raced stale proposal atomically", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database.d1);
+  const store = createSqliteEventStore(database.d1);
   const event = createTeamEvent();
   const team = createTeam();
   const captainSignup = createSignup("captain-1");
@@ -315,7 +315,7 @@ test("proposal acceptance creates signup before membership and rejects a raced s
 
 test("migrated database prevents deleting or moving a signup required by active membership", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database.d1);
+  const store = createSqliteEventStore(database.d1);
   await store.createEvent(createTeamEvent());
   await store.upsertSignup(createSignup("captain-1"));
   await store.createEventTeamWithCaptain({
@@ -367,7 +367,7 @@ test("migrated database prevents deleting or moving a signup required by active 
 
 test("bulk commit rejects terminal Events and concurrent full-revision changes at its transaction boundary", async () => {
   const terminalDatabase = new SqliteD1Database();
-  const terminalStore = createCloudflareEventStore(terminalDatabase.d1);
+  const terminalStore = createSqliteEventStore(terminalDatabase.d1);
   await terminalStore.createEvent({ ...createTeamEvent(), status: "ended", endedAtMs: 900 });
   await terminalStore.upsertSignup(createSignup("member-1"));
   await terminalStore.upsertSignup(createSignup("member-2", 101));
@@ -388,7 +388,7 @@ test("bulk commit rejects terminal Events and concurrent full-revision changes a
   );
 
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database.d1);
+  const store = createSqliteEventStore(database.d1);
   await store.createEvent(createTeamEvent());
   await store.upsertSignup(createSignup("member-1"));
   await store.upsertSignup(createSignup("member-2", 101));
@@ -419,7 +419,7 @@ test("bulk commit rejects terminal Events and concurrent full-revision changes a
 
 test("atomic Team mutation and disband batches roll back authoritative state with audit and outbox", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database.d1);
+  const store = createSqliteEventStore(database.d1);
   const event = createTeamEvent();
   const team = { ...createTeam(), openToRequests: true };
   const captain = createMembership("membership-captain", "captain-1");
@@ -497,7 +497,7 @@ test("atomic Team mutation and disband batches roll back authoritative state wit
 
 test("lifecycle transition rolls back live state when history or snapshots cannot commit", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database.d1);
+  const store = createSqliteEventStore(database.d1);
   const event = createTeamEvent();
   await store.createEvent(event);
   const history: EventLifecycleHistoryRecord = {
@@ -552,9 +552,9 @@ test("lifecycle transition rolls back live state when history or snapshots canno
   assert.equal((await store.readEvent(event.guildId, event.id))?.status, "scheduled");
 });
 
-test("createCloudflareEventStore persists immutable Event Team audit, snapshots, outbox, and lifecycle history", async () => {
+test("createSqliteEventStore persists immutable Event Team audit, snapshots, outbox, and lifecycle history", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database as unknown as D1Database);
+  const store = createSqliteEventStore(database as unknown as D1Database);
   const event = createEvent();
   await store.createEvent(event);
 

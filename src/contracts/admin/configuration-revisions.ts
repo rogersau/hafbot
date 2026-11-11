@@ -51,7 +51,7 @@ export const revisionSummarySchema = z.object({
   resourceKey: z.string(),
   schemaVersion: z.number().int().positive(),
   operation: z.enum(["baseline", "create", "update", "delete", "restore", "clone"]),
-  source: z.enum(["dashboard-save", "restore", "clone", "system-migration"]),
+  source: z.enum(["dashboard-save", "restore", "clone", "system-snapshot"]),
   actorUserId: z.string().nullable(),
   operationId: z.string(),
   correlationId: z.string().nullable(),

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareTicketStore } from "../src/runtime/cloudflare-ticket-store";
+import { createSqliteTicketStore } from "./support/sqlite/runtime/sqlite-ticket-store";
 import type { TicketInstance, TicketPanelConfig } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
@@ -56,8 +56,7 @@ test("legacy ticket panel rows are normalized into responseRules on read", async
     ticketTypes: [
       {
         ...legacyTicketType,
-        autoReplyEnabled: true,
-        autoReplyMessage: "Please link Steam first.",
+        responseRules: [{ id: "welcome", conditions: [], message: "Please link Steam first." }],
       },
     ],
   });
@@ -65,7 +64,7 @@ test("legacy ticket panel rows are normalized into responseRules on read", async
   const stored = await store.readTicketPanelConfig("guild-1");
   assert.deepEqual(stored?.ticketTypes[0]?.responseRules, [
     {
-      id: "legacy-auto-reply",
+      id: "welcome",
       conditions: [],
       message: "Please link Steam first.",
     },
@@ -495,7 +494,7 @@ test("cleanupStaffMessages removes all messages for a ticket channel", async () 
   assert.deepEqual(mapping3, { staffUserId: "staff-3", staffDisplayName: "Staff Three" });
 });
 
-test("createCloudflareTicketStore lists closed tickets by guild with cursor pagination", async () => {
+test("createSqliteTicketStore lists closed tickets by guild with cursor pagination", async () => {
   const store = createStore();
   await store.createTicketInstance(createTicket("guild-1", "closed-older", "closed", 100));
   await store.createTicketInstance(createTicket("guild-1", "open-ticket", "open", 400));
@@ -715,7 +714,7 @@ test("stale participant notification workers cannot mutate a replacement lease",
 
 function createStore() {
   const database = new SqliteD1Database();
-  return createCloudflareTicketStore(database as unknown as D1Database);
+  return createSqliteTicketStore(database as unknown as D1Database);
 }
 
 function createPanel(): TicketPanelConfig {
@@ -745,10 +744,7 @@ function createPanel(): TicketPanelConfig {
         supportRoleId: "role-1",
         allowedCreatorRoleIds: [],
         channelNamePrefix: "support",
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
         responseRules: [],
-        anonymousEnabled: false,
         anonymousSupportEnabled: false,
         staffDiscussionThreadEnabled: false,
         ticketHistoryPromptVisibility: "off",
@@ -765,10 +761,7 @@ function createPanel(): TicketPanelConfig {
         supportRoleId: "role-1",
         allowedCreatorRoleIds: [],
         channelNamePrefix: "appeal",
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
         responseRules: [],
-        anonymousEnabled: false,
         anonymousSupportEnabled: false,
         staffDiscussionThreadEnabled: false,
         ticketHistoryPromptVisibility: "off",

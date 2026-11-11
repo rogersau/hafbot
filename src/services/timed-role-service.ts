@@ -1,3 +1,4 @@
+import type { GuildNotificationChannelStore } from "../runtime/contracts";
 import type { TimedRoleStore, GuildAuditLogStore } from "../runtime/contracts";
 import type { TimedRoleAssignment, TimedRoleAutomationRule } from "../types";
 import { DiscordApiError } from "../discord";
@@ -21,7 +22,6 @@ import {
   buildTimedRoleRestorationFailureMessage,
   postGuildActivityUpdate,
   type ChannelMessageSender,
-  type GuildNotificationChannelStore,
   type ActionActor,
 } from "./activity-log";
 

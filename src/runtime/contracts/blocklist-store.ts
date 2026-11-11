@@ -1,6 +1,7 @@
+import type { GuildNotificationChannelStore } from "./guild-notification-channel-store";
 import type { BlocklistConfig, ChannelFilterMode } from "../../types";
 
-export interface BlocklistStore {
+export interface BlocklistStore extends GuildNotificationChannelStore {
   setGuildEnabled?(guildId: string, enabled: boolean): Promise<void>;
   readConfig(): Promise<BlocklistConfig>;
   readGuildConfig(guildId: string): Promise<BlocklistConfig>;

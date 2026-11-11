@@ -7,7 +7,7 @@ import {
   type CommerceOfferingProvider,
   type CommerceOfferingStore,
 } from "../src/commerce/offering-service";
-import { CloudflareCommerceOfferingStore } from "../src/runtime/commerce/cloudflare-offering-store";
+import { SqliteCommerceOfferingStore } from "./support/sqlite/runtime/commerce/sqlite-offering-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 const NOW = 1_900_000_000_000;
@@ -16,7 +16,7 @@ test("approved seller can create and publish a subscription offering", async () 
   const database = await createTestDatabase();
   try {
     database.execRaw(`
-      INSERT INTO guild_entitlements(guild_id,tier,plan,updated_at_ms) VALUES ('guild-1','premium','premium',${NOW});
+      INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES ('guild-1','premium',${NOW});
       INSERT INTO commerce_connected_accounts(id,guild_id,stripe_account_id,status,country,default_currency,charges_enabled,payouts_enabled,details_submitted,created_at_ms,updated_at_ms)
         VALUES ('acct_1','guild-1','acct_1','active','AU','AUD',1,1,1,${NOW},${NOW});
       INSERT INTO commerce_seller_profiles(connected_account_id,guild_id,lifecycle_state,approval_state,support_contact,adult_attested_at_ms,two_factor_evidence,guild_created_at_ms,guild_good_standing,seller_good_standing,reviewed_by_user_id,reviewed_at_ms,created_at_ms,updated_at_ms)
@@ -24,7 +24,7 @@ test("approved seller can create and publish a subscription offering", async () 
       INSERT INTO commerce_seller_acceptances(id,connected_account_id,terms_version,accepted_by_user_id,accepted_at_ms,created_at_ms)
         VALUES ('accept-1','acct_1','v1','seller',${NOW},${NOW});
     `);
-    const store = new CloudflareCommerceOfferingStore(database.d1, {
+    const store = new SqliteCommerceOfferingStore(database.d1, {
       async isPremium() {
         return true;
       },

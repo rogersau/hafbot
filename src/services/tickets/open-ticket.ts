@@ -97,10 +97,8 @@ export async function openTicket(
   options: TicketServiceOptions,
 ): Promise<TicketInstance> {
   const config = await store.readConfig();
-  const anonymousSupportEnabled =
-    options.ticketType.anonymousSupportEnabled ?? options.ticketType.anonymousEnabled ?? false;
-  const staffDiscussionThreadEnabled =
-    options.ticketType.staffDiscussionThreadEnabled ?? options.ticketType.anonymousEnabled ?? false;
+  const anonymousSupportEnabled = options.ticketType.anonymousSupportEnabled ?? false;
+  const staffDiscussionThreadEnabled = options.ticketType.staffDiscussionThreadEnabled ?? false;
   const staffThreadEnabled = anonymousSupportEnabled || staffDiscussionThreadEnabled;
   if (options.panel.ticketCreationLimit !== null && !options.ticketType.limitExclusion) {
     const openTicketCount = await store.countOpenTicketsByUser(
@@ -216,7 +214,7 @@ export async function openTicket(
     }
 
     const matchingResponseRules = selectMatchingResponseRules(
-      resolveTicketResponseRules(options.ticketType),
+      options.ticketType.responseRules,
       options.openerRoleIds ?? [],
       {
         defaultTicketLinkPlatform: options.ticketType.defaultTicketLinkPlatform ?? null,
@@ -306,18 +304,6 @@ function resolveResponseRuleLinkPlatform(
     return null;
   }
   return condition.platform ?? ticketType.defaultTicketLinkPlatform ?? null;
-}
-
-function resolveTicketResponseRules(ticketType: TicketTypeConfig): TicketResponseRule[] {
-  if (Array.isArray(ticketType.responseRules)) {
-    return ticketType.responseRules;
-  }
-
-  if (!ticketType.autoReplyEnabled || ticketType.autoReplyMessage === null) {
-    return [];
-  }
-
-  return [{ id: "legacy-auto-reply", conditions: [], message: ticketType.autoReplyMessage }];
 }
 
 function buildOpeningMessageContent(

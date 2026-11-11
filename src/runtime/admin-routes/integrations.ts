@@ -44,13 +44,9 @@ import {
   setPlayerLinkEnabled,
   testPlayerCount,
   getPlayerLink,
-  getSteamLink,
   publishPlayerLink as publishPlayerLinkOperation,
-  publishSteamLink as publishSteamLinkOperation,
   savePlayerLink as savePlayerLinkOperation,
-  saveSteamLink as saveSteamLinkOperation,
   syncPlayerLinkRoles as syncPlayerLinkRolesOperation,
-  syncSteamLinkRoles as syncSteamLinkRolesOperation,
 } from "../../contracts/admin";
 
 const publicIdFieldSchema = z
@@ -558,34 +554,18 @@ async function adminWebhookProxyConfig(
   service: WebhookCredentialService,
   config: WebhookProxyConfig,
 ) {
-  const destinations = config.destinationsV2
-    ? await Promise.all(
-        config.destinationsV2.map(async (destination) => ({
-          id: destination.id,
-          label: destination.label,
-          credential: await service.masked(destination.credentialId, {
-            kind: "proxy_destination",
-            guildId: config.guildId,
-            publicId: config.publicId,
-            destinationId: destination.id,
-          }),
-        })),
-      )
-    : await Promise.all(
-        config.destinations.map(async (destination) => ({
-          id: destination.id,
-          label: destination.label,
-          credential: await service.replace(
-            {
-              kind: "proxy_destination",
-              guildId: config.guildId,
-              publicId: config.publicId,
-              destinationId: destination.id,
-            },
-            destination.url,
-          ),
-        })),
-      );
+  const destinations = await Promise.all(
+    config.destinations.map(async (destination) => ({
+      id: destination.id,
+      label: destination.label,
+      credential: await service.masked(destination.credentialId, {
+        kind: "proxy_destination",
+        guildId: config.guildId,
+        publicId: config.publicId,
+        destinationId: destination.id,
+      }),
+    })),
+  );
   const banLookupCredential = config.banLookupCredentialId
     ? await service.masked(config.banLookupCredentialId, {
         kind: "ban_lookup_notification",
@@ -629,7 +609,6 @@ async function saveWebhookProxyConfig(
   }
 
   const destinations = [];
-  const destinationsV2 = [];
   for (const destination of body.destinations) {
     const owner = {
       kind: "proxy_destination" as const,
@@ -641,9 +620,7 @@ async function saveWebhookProxyConfig(
       destination.credential.action === "replace"
         ? await credentials.replace(owner, destination.credential.url)
         : await credentials.preserve(destination.credential.credentialId, owner);
-    const revealed = await credentials.reveal(masked.credentialId, owner);
-    destinations.push({ id: destination.id, label: destination.label, url: revealed.url });
-    destinationsV2.push({
+    destinations.push({
       id: destination.id,
       label: destination.label,
       credentialId: masked.credentialId,
@@ -656,15 +633,12 @@ async function saveWebhookProxyConfig(
     publicId,
   };
   let banLookupCredentialId: string | null = null;
-  let banLookupNotificationUrl: string | null = null;
   if (body.banLookupCredential.action !== "clear") {
     const masked =
       body.banLookupCredential.action === "replace"
         ? await credentials.replace(banOwner, body.banLookupCredential.url)
         : await credentials.preserve(body.banLookupCredential.credentialId, banOwner);
-    const revealed = await credentials.reveal(masked.credentialId, banOwner);
     banLookupCredentialId = masked.credentialId;
-    banLookupNotificationUrl = revealed.url;
   }
 
   const config: WebhookProxyConfig = {
@@ -673,18 +647,15 @@ async function saveWebhookProxyConfig(
     name: body.name,
     enabled: body.enabled,
     banLookupEnabled: body.banLookupEnabled,
-    banLookupNotificationUrl,
     banLookupCredentialId,
     banLookupAppIds: body.banLookupAppIds,
     destinations,
-    destinationsV2,
     defaultDestinationIds: body.defaultDestinationIds,
     routingRules: body.routingRules.map((rule) => ({ ...rule, flags: rule.flags ?? "" })),
     contentReplacements: (body.contentReplacements ?? []).map((entry) => ({
       ...entry,
       flags: entry.flags ?? "",
     })),
-    credentialMigratedAtMs: now,
     createdAtMs: existing?.createdAtMs ?? now,
     updatedAtMs: now,
   };
@@ -703,8 +674,8 @@ async function saveWebhookProxyConfig(
     commitFree: () => options.stores.webhookProxy.upsertWebhookProxyConfig(config),
   });
 
-  const retainedIds = new Set(destinationsV2.map((destination) => destination.credentialId));
-  for (const old of existing?.destinationsV2 ?? []) {
+  const retainedIds = new Set(destinations.map((destination) => destination.credentialId));
+  for (const old of existing?.destinations ?? []) {
     if (!retainedIds.has(old.credentialId)) {
       await credentials.remove(old.credentialId, {
         kind: "proxy_destination",
@@ -867,9 +838,7 @@ export function createIntegrationsAdminRoutes(
           return Response.json({ error: "Not found" }, { status: 404 });
         }
         const config = await options.stores.webhookProxy.readWebhookProxyConfig(body.publicId);
-        const destination = config?.destinationsV2?.find(
-          (entry) => entry.id === body.destinationId,
-        );
+        const destination = config?.destinations.find((entry) => entry.id === body.destinationId);
         if (!config || config.guildId !== body.guildId || !destination) {
           return Response.json({ error: "Not found" }, { status: 404 });
         }
@@ -978,7 +947,7 @@ export function createIntegrationsAdminRoutes(
         });
         const credentials = options.webhookCredentialService;
         if (credentials) {
-          for (const destination of existing.destinationsV2 ?? []) {
+          for (const destination of existing.destinations) {
             await credentials.remove(destination.credentialId, {
               kind: "proxy_destination",
               guildId: body.guildId,
@@ -1274,25 +1243,7 @@ export function createIntegrationsAdminRoutes(
         return Response.json(result);
       },
     }),
-    defineRoute({
-      ...getSteamLink,
-      method: "GET",
-      path: "/admin/api/steam-link",
-      feature: "steamLink",
-      query: getSteamLink.query,
-      access: guildScopedAccess("read"),
-      success: getSteamLink.success.schema,
-      errors: adminErrorEnvelopeSchema,
-      handler: async ({ query }) => {
-        const guildId = requireGuildQueryId(query);
-        const [config, links] = await Promise.all([
-          options.stores.platformLink.readPlatformLinkConfig(guildId, "steam"),
-          options.stores.platformLink.listPlatformLinks(guildId, "steam"),
-        ]);
 
-        return Response.json({ guildId, config, links });
-      },
-    }),
     defineRoute({
       ...getPlayerLink,
       method: "GET",
@@ -1345,44 +1296,6 @@ export function createIntegrationsAdminRoutes(
       success: syncPlayerLinkRolesOperation.success.schema,
       errors: adminErrorEnvelopeSchema,
       handler: ({ body }) => syncPlayerLinkRoles(options, body),
-    }),
-    defineRoute({
-      ...saveSteamLinkOperation,
-      method: "POST",
-      path: "/admin/api/steam-link/config",
-      feature: "steamLink",
-      body: saveSteamLinkOperation.body,
-      access: bodyGuildScopedAccess("write"),
-      success: saveSteamLinkOperation.success.schema,
-      errors: adminErrorEnvelopeSchema,
-      handler: ({ body }) =>
-        savePlayerLinkConfig(options, {
-          ...body,
-          platform: "steam",
-          linkedRoleId: body.steamLinkedRoleId,
-        }),
-    }),
-    defineRoute({
-      ...publishSteamLinkOperation,
-      method: "POST",
-      path: "/admin/api/steam-link/publish",
-      feature: "steamLink",
-      body: publishSteamLinkOperation.body,
-      access: bodyGuildScopedAccess("write"),
-      success: publishSteamLinkOperation.success.schema,
-      errors: adminErrorEnvelopeSchema,
-      handler: ({ body }) => publishPlayerLinkPanel(options, { ...body, platform: "steam" }),
-    }),
-    defineRoute({
-      ...syncSteamLinkRolesOperation,
-      method: "POST",
-      path: "/admin/api/steam-link/sync-roles",
-      feature: "steamLink",
-      body: syncSteamLinkRolesOperation.body,
-      access: bodyGuildScopedAccess("write"),
-      success: syncSteamLinkRolesOperation.success.schema,
-      errors: adminErrorEnvelopeSchema,
-      handler: ({ body }) => syncPlayerLinkRoles(options, { ...body, platform: "steam" }),
     }),
   ];
 }

@@ -1,3 +1,4 @@
+import { testWebhookCredential } from "./support/webhook-credentials";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -82,9 +83,15 @@ test("Webhook setup checks validate locally without contacting destinations", ()
     name: "Alerts",
     enabled: true,
     banLookupEnabled: false,
-    banLookupNotificationUrl: null,
+    banLookupCredentialId: null,
     banLookupAppIds: [],
-    destinations: [{ id: "main", label: "Main", url: "https://example.com/webhook" }],
+    destinations: [
+      {
+        id: "main",
+        label: "Main",
+        credentialId: testWebhookCredential("https://example.com/webhook"),
+      },
+    ],
     defaultDestinationIds: ["main"],
     routingRules: [],
     contentReplacements: [],

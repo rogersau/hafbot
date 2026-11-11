@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CloudflareCommerceBuyerCheckoutStore } from "../src/runtime/commerce/cloudflare-buyer-checkout-store";
+import { SqliteCommerceBuyerCheckoutStore } from "./support/sqlite/runtime/commerce/sqlite-buyer-checkout-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 const NOW = 1_900_000_000_000;
@@ -10,7 +10,7 @@ const OFFERING_ID = "11111111-1111-4111-8111-111111111111";
 test("D1 buyer checkout store reads only the seller-scoped published price and reserves once", async () => {
   const database = await createTestDatabase();
   await seedStorefront(database);
-  const store = new CloudflareCommerceBuyerCheckoutStore(
+  const store = new SqliteCommerceBuyerCheckoutStore(
     database.d1,
     {
       async isPremium() {
@@ -98,7 +98,7 @@ test("D1 buyer checkout store reads only the seller-scoped published price and r
 
 test("D1 checkout rate limit resets after its window", async () => {
   const database = await createTestDatabase();
-  const store = new CloudflareCommerceBuyerCheckoutStore(database.d1, {
+  const store = new SqliteCommerceBuyerCheckoutStore(database.d1, {
     async isPremium() {
       return true;
     },

@@ -41,9 +41,8 @@ test("buildTicketModalResponse uses modal questions and Discord text input rows"
     buttonStyle: "primary",
     supportRoleId: "role-1",
     channelNamePrefix: "appeal",
-    autoReplyEnabled: true,
-    autoReplyMessage: null,
-    anonymousEnabled: false,
+    anonymousSupportEnabled: false,
+    staffDiscussionThreadEnabled: false,
     limitExclusion: false,
     questions: [
       {
@@ -54,6 +53,7 @@ test("buildTicketModalResponse uses modal questions and Discord text input rows"
         required: true,
       },
     ],
+    responseRules: [],
   });
 
   assert.equal(response.type, 9);
@@ -73,8 +73,6 @@ test("buildTicketModalResponse preserves configured modal question order", () =>
     buttonStyle: "primary",
     supportRoleId: "role-1",
     channelNamePrefix: "support",
-    autoReplyEnabled: false,
-    autoReplyMessage: null,
     limitExclusion: false,
     questions: [
       {
@@ -99,6 +97,7 @@ test("buildTicketModalResponse preserves configured modal question order", () =>
         required: true,
       },
     ],
+    responseRules: [],
   });
 
   assert.deepEqual(
@@ -137,61 +136,14 @@ test("buildTicketChannelName prefixes and zero-pads ticket numbers", () => {
   assert.equal(formatTicketNumber(1000), "1000");
 });
 
-test("parseTicketPanelStorage enables legacy auto-replies with existing message content", () => {
-  const parsed = parseTicketPanelStorage(
-    JSON.stringify({
-      ticketTypes: [
-        {
-          id: "appeals",
-          label: "Appeal",
-          emoji: "🧾",
-          buttonStyle: "primary",
-          supportRoleId: "role-1",
-          channelNamePrefix: "appeal",
-          autoReplyMessage: "Thanks {{answer.reason}}.",
-          anonymousEnabled: false,
-          questions: [],
-        },
-      ],
-      panelEmoji: null,
-      panelTitle: null,
-      panelDescription: null,
-      panelFooter: null,
-    }),
+test("parseTicketPanelStorage rejects retired array-only payloads", () => {
+  assert.throws(
+    () => parseTicketPanelStorage(JSON.stringify([])),
+    /Invalid stored ticket panel payload/,
   );
-
-  assert.equal(parsed.ticketTypes[0]?.autoReplyEnabled, true);
-  assert.equal(parsed.ticketTypes[0]?.autoReplyMessage, "Thanks {{answer.reason}}.");
 });
 
-test("parseTicketPanelStorage leaves legacy auto-replies disabled when message content is empty", () => {
-  const parsed = parseTicketPanelStorage(
-    JSON.stringify({
-      ticketTypes: [
-        {
-          id: "appeals",
-          label: "Appeal",
-          emoji: "🧾",
-          buttonStyle: "primary",
-          supportRoleId: "role-1",
-          channelNamePrefix: "appeal",
-          autoReplyMessage: "   ",
-          anonymousEnabled: false,
-          questions: [],
-        },
-      ],
-      panelEmoji: null,
-      panelTitle: null,
-      panelDescription: null,
-      panelFooter: null,
-    }),
-  );
-
-  assert.equal(parsed.ticketTypes[0]?.autoReplyEnabled, false);
-  assert.equal(parsed.ticketTypes[0]?.autoReplyMessage, null);
-});
-
-test("serializeTicketPanelStorage preserves explicit auto-reply enabled state", () => {
+test("serializeTicketPanelStorage preserves current response rules", () => {
   const serialized = serializeTicketPanelStorage({
     guildId: "guild-1",
     panelChannelId: "panel",
@@ -213,76 +165,16 @@ test("serializeTicketPanelStorage preserves explicit auto-reply enabled state", 
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "appeal",
-        autoReplyEnabled: false,
-        autoReplyMessage: "Thanks {{answer.reason}}.",
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         questions: [],
+        responseRules: [],
       },
     ],
   });
 
-  assert.equal(JSON.parse(serialized).ticketTypes[0]?.autoReplyEnabled, false);
-});
-
-test("parseTicketPanelStorage synthesizes responseRules from legacy auto-reply fields", () => {
-  const parsed = parseTicketPanelStorage(
-    JSON.stringify({
-      ticketTypes: [
-        {
-          id: "appeals",
-          label: "Appeal",
-          emoji: null,
-          buttonStyle: "primary",
-          supportRoleId: "role-1",
-          channelNamePrefix: "appeal",
-          autoReplyEnabled: true,
-          autoReplyMessage: "Please link Steam first.",
-          anonymousEnabled: false,
-          questions: [],
-        },
-      ],
-      panelEmoji: null,
-      panelTitle: null,
-      panelDescription: null,
-      panelFooter: null,
-    }),
-  );
-
-  assert.deepEqual(parsed.ticketTypes[0]?.responseRules, [
-    {
-      id: "legacy-auto-reply",
-      conditions: [],
-      message: "Please link Steam first.",
-    },
-  ]);
-});
-
-test("parseTicketPanelStorage drops disabled legacy auto-reply text from responseRules", () => {
-  const parsed = parseTicketPanelStorage(
-    JSON.stringify({
-      ticketTypes: [
-        {
-          id: "appeals",
-          label: "Appeal",
-          emoji: null,
-          buttonStyle: "primary",
-          supportRoleId: "role-1",
-          channelNamePrefix: "appeal",
-          autoReplyEnabled: false,
-          autoReplyMessage: "Draft reply",
-          anonymousEnabled: false,
-          questions: [],
-        },
-      ],
-      panelEmoji: null,
-      panelTitle: null,
-      panelDescription: null,
-      panelFooter: null,
-    }),
-  );
-
-  assert.deepEqual(parsed.ticketTypes[0]?.responseRules, []);
+  assert.deepEqual(JSON.parse(serialized).ticketTypes[0]?.responseRules, []);
 });
 
 test("parseTicketPanelStorage keeps stored responseRules and condition order", () => {
@@ -296,8 +188,6 @@ test("parseTicketPanelStorage keeps stored responseRules and condition order", (
           buttonStyle: "primary",
           supportRoleId: "role-1",
           channelNamePrefix: "appeal",
-          autoReplyEnabled: true,
-          autoReplyMessage: "legacy",
           responseRules: [
             {
               id: "rule-1",
@@ -313,7 +203,8 @@ test("parseTicketPanelStorage keeps stored responseRules and condition order", (
               message: "Welcome!",
             },
           ],
-          anonymousEnabled: false,
+          anonymousSupportEnabled: false,
+          staffDiscussionThreadEnabled: false,
           questions: [],
         },
       ],
@@ -341,62 +232,6 @@ test("parseTicketPanelStorage keeps stored responseRules and condition order", (
   ]);
 });
 
-test("parseTicketPanelStorage correctly parses anonymousEnabled from stored JSON", () => {
-  const parsed = parseTicketPanelStorage(
-    JSON.stringify({
-      ticketTypes: [
-        {
-          id: "support",
-          label: "Support",
-          emoji: null,
-          buttonStyle: "primary",
-          supportRoleId: "role-1",
-          channelNamePrefix: "support",
-          autoReplyEnabled: false,
-          autoReplyMessage: null,
-          anonymousEnabled: true,
-          questions: [],
-        },
-      ],
-      panelEmoji: null,
-      panelTitle: null,
-      panelDescription: null,
-      panelFooter: null,
-    }),
-  );
-
-  assert.equal(parsed.ticketTypes[0]?.anonymousEnabled, true);
-});
-
-test("parseTicketPanelStorage normalizes legacy anonymous support into separate staff settings", () => {
-  const parsed = parseTicketPanelStorage(
-    JSON.stringify({
-      ticketTypes: [
-        {
-          id: "support",
-          label: "Support",
-          emoji: null,
-          buttonStyle: "primary",
-          supportRoleId: "role-1",
-          channelNamePrefix: "support",
-          autoReplyEnabled: false,
-          autoReplyMessage: null,
-          anonymousEnabled: true,
-          questions: [],
-        },
-      ],
-      panelEmoji: null,
-      panelTitle: null,
-      panelDescription: null,
-      panelFooter: null,
-    }),
-  );
-
-  assert.equal(parsed.ticketTypes[0]?.anonymousSupportEnabled, true);
-  assert.equal(parsed.ticketTypes[0]?.staffDiscussionThreadEnabled, true);
-  assert.equal(parsed.ticketTypes[0]?.ticketHistoryPromptVisibility, "off");
-});
-
 test("parseTicketPanelStorage preserves independent anonymous support and staff discussion settings", () => {
   const parsed = parseTicketPanelStorage(
     JSON.stringify({
@@ -408,13 +243,11 @@ test("parseTicketPanelStorage preserves independent anonymous support and staff 
           buttonStyle: "primary",
           supportRoleId: "role-1",
           channelNamePrefix: "support",
-          autoReplyEnabled: false,
-          autoReplyMessage: null,
-          anonymousEnabled: true,
           anonymousSupportEnabled: false,
           staffDiscussionThreadEnabled: true,
           ticketHistoryPromptVisibility: "staff-thread",
           questions: [],
+          responseRules: [],
         },
       ],
       panelEmoji: null,
@@ -429,32 +262,6 @@ test("parseTicketPanelStorage preserves independent anonymous support and staff 
   assert.equal(parsed.ticketTypes[0]?.ticketHistoryPromptVisibility, "staff-thread");
 });
 
-test("parseTicketPanelStorage defaults anonymousEnabled to false for legacy stored ticket types", () => {
-  const parsed = parseTicketPanelStorage(
-    JSON.stringify({
-      ticketTypes: [
-        {
-          id: "support",
-          label: "Support",
-          emoji: null,
-          buttonStyle: "primary",
-          supportRoleId: "role-1",
-          channelNamePrefix: "support",
-          autoReplyEnabled: false,
-          autoReplyMessage: null,
-          questions: [],
-        },
-      ],
-      panelEmoji: null,
-      panelTitle: null,
-      panelDescription: null,
-      panelFooter: null,
-    }),
-  );
-
-  assert.equal(parsed.ticketTypes[0]?.anonymousEnabled, false);
-});
-
 test("parseTicketPanelStorage defaults mentionSupportRole to false for legacy stored ticket types", () => {
   const parsed = parseTicketPanelStorage(
     JSON.stringify({
@@ -466,9 +273,8 @@ test("parseTicketPanelStorage defaults mentionSupportRole to false for legacy st
           buttonStyle: "primary",
           supportRoleId: "role-1",
           channelNamePrefix: "support",
-          autoReplyEnabled: false,
-          autoReplyMessage: null,
           questions: [],
+          responseRules: [],
         },
       ],
       panelEmoji: null,
@@ -492,9 +298,8 @@ test("parseTicketPanelStorage defaults participant management to disabled", () =
           buttonStyle: "primary",
           supportRoleId: "role-1",
           channelNamePrefix: "support",
-          autoReplyEnabled: false,
-          autoReplyMessage: null,
           questions: [],
+          responseRules: [],
         },
       ],
       panelEmoji: null,
@@ -594,12 +399,12 @@ test("serializeTicketPanelStorage preserves mentionSupportRole", () => {
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         mentionSupportRole: true,
         questions: [],
+        responseRules: [],
       },
     ],
   });
@@ -1356,12 +1161,18 @@ test("openTicket sends auto-reply message when autoReplyMessage is configured", 
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: true,
-        autoReplyMessage: "Thanks {{answer.ign}}! An agent will be with you shortly.",
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         questions: [
           { id: "ign", label: "In-game Name", style: "short", placeholder: null, required: true },
+        ],
+        responseRules: [
+          {
+            id: "welcome",
+            conditions: [],
+            message: "Thanks {{answer.ign}}! An agent will be with you shortly.",
+          },
         ],
       },
       answers: [{ questionId: "ign", label: "In-game Name", value: "Alice" }],
@@ -1433,8 +1244,6 @@ test("openTicket sends all matching response rules in configured order", async (
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: true,
-        autoReplyMessage: "legacy message",
         responseRules: [
           {
             id: "rule-1",
@@ -1452,7 +1261,8 @@ test("openTicket sends all matching response rules in configured order", async (
             message: "Already linked.",
           },
         ],
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         questions: [],
       },
@@ -1518,8 +1328,6 @@ test("openTicket sends a link reminder response with the platform link button", 
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: true,
-        autoReplyMessage: "legacy message",
         defaultTicketLinkPlatform: "steam",
         responseRules: [
           {
@@ -1528,7 +1336,8 @@ test("openTicket sends a link reminder response with the platform link button", 
             message: "Please link your Steam account, {{who}}.",
           },
         ],
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         questions: [],
       },
@@ -1618,8 +1427,6 @@ test("openTicket skips response messages when no response rules match", async ()
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: true,
-        autoReplyMessage: "legacy message",
         responseRules: [
           {
             id: "rule-1",
@@ -1627,7 +1434,8 @@ test("openTicket skips response messages when no response rules match", async ()
             message: "Please run /steamlink.",
           },
         ],
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         questions: [],
       },
@@ -1683,12 +1491,12 @@ test("openTicket mentions support role when ticket type enables it", async () =>
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         mentionSupportRole: true,
         questions: [],
+        responseRules: [],
       },
       answers: [],
     },
@@ -1756,11 +1564,11 @@ test("openTicket skips auto-reply when autoReplyMessage is null", async () => {
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: true,
-        autoReplyMessage: null,
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         questions: [],
+        responseRules: [],
       },
       answers: [{ questionId: "ign", label: "In-game Name", value: "Bob" }],
     },
@@ -1834,11 +1642,11 @@ test("openTicket rejects before creating a channel when the opener is at the con
           buttonStyle: "primary",
           supportRoleId: "role-1",
           channelNamePrefix: "support",
-          autoReplyEnabled: true,
-          autoReplyMessage: null,
-          anonymousEnabled: false,
+          anonymousSupportEnabled: false,
+          staffDiscussionThreadEnabled: false,
           limitExclusion: false,
           questions: [],
+          responseRules: [],
         },
         answers: [],
       },
@@ -1906,11 +1714,11 @@ test("openTicket bypasses the creation limit when the requested ticket type is e
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "appeal",
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: true,
         questions: [],
+        responseRules: [],
       },
       answers: [],
     },
@@ -1973,13 +1781,13 @@ test("openTicket skips auto-reply when autoReplyEnabled is false", async () => {
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: false,
-        autoReplyMessage: "Thanks {{answer.ign}}! An agent will be with you shortly.",
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         questions: [
           { id: "ign", label: "In-game Name", style: "short", placeholder: null, required: true },
         ],
+        responseRules: [],
       },
       answers: [{ questionId: "ign", label: "In-game Name", value: "Bob" }],
     },
@@ -2059,13 +1867,11 @@ test("openTicket creates a staff thread and helper when Anonymous Support is ena
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
-        anonymousEnabled: false,
         anonymousSupportEnabled: true,
         staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         questions: [],
+        responseRules: [],
       },
       answers: [],
     },
@@ -2133,13 +1939,12 @@ test("openTicket posts Ticket History Prompt only in the configured staff discus
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
         anonymousSupportEnabled: false,
         staffDiscussionThreadEnabled: true,
         ticketHistoryPromptVisibility: "staff-thread",
         limitExclusion: false,
         questions: [],
+        responseRules: [],
       },
       answers: [],
     },
@@ -2206,13 +2011,13 @@ test("openTicket keeps the ticket open when auto-reply delivery fails", async ()
         buttonStyle: "primary",
         supportRoleId: "role-1",
         channelNamePrefix: "support",
-        autoReplyEnabled: true,
-        autoReplyMessage: "Thanks {{answer.ign}}!",
-        anonymousEnabled: false,
+        anonymousSupportEnabled: false,
+        staffDiscussionThreadEnabled: false,
         limitExclusion: false,
         questions: [
           { id: "ign", label: "In-game Name", style: "short", placeholder: null, required: true },
         ],
+        responseRules: [{ id: "welcome", conditions: [], message: "Thanks {{answer.ign}}!" }],
       },
       answers: [{ questionId: "ign", label: "In-game Name", value: "Alice" }],
     },
@@ -2280,11 +2085,11 @@ test("openTicket deletes the created channel when persistence fails", async () =
           buttonStyle: "primary",
           supportRoleId: "role-1",
           channelNamePrefix: "support",
-          autoReplyEnabled: true,
-          autoReplyMessage: null,
-          anonymousEnabled: false,
+          anonymousSupportEnabled: false,
+          staffDiscussionThreadEnabled: false,
           limitExclusion: false,
           questions: [],
+          responseRules: [],
         },
         answers: [],
       },
@@ -2361,11 +2166,11 @@ test("openTicket deletes staff thread when anonymous ticket persistence fails", 
           buttonStyle: "primary",
           supportRoleId: "role-1",
           channelNamePrefix: "support",
-          autoReplyEnabled: true,
-          autoReplyMessage: null,
-          anonymousEnabled: true,
+          anonymousSupportEnabled: true,
+          staffDiscussionThreadEnabled: true,
           limitExclusion: false,
           questions: [],
+          responseRules: [],
         },
         answers: [],
       },

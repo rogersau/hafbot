@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -6,8 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createLegacyAdminSessionCookie as createAdminSessionCookie } from "./support/legacy-admin-session";
 
-import { ALL_SLASH_COMMAND_DEFINITIONS } from "../src/discord-commands";
-import worker from "../src/index";
+import worker from "./support/application";
 import { createAdminRoutes as createBaseAdminRoutes } from "../src/routes/admin-routes";
 import type { AdminAccessRequirement } from "../src/runtime/admin-access";
 import type { AdminSpaRouteOptions } from "../src/runtime/admin-spa-routes";
@@ -39,32 +39,6 @@ test("worker redirects unauthenticated nested dashboard routes to Discord login"
   assert.equal(response.headers.get("location"), "/admin/login?next=%2Fadmin%2Fguild-1%2Ftickets");
 });
 
-test("worker maintenance mode fails closed before application storage is touched", async () => {
-  let databaseReads = 0;
-  const database = createMockD1Database();
-  database.prepare = () => {
-    databaseReads += 1;
-    throw new Error("maintenance must not reach D1");
-  };
-
-  const response = await worker.fetch(
-    new Request("https://worker.example/admin"),
-    createEnv({ HAF_MAINTENANCE_MODE: "true", HAF_DB: database }),
-    {} as ExecutionContext,
-  );
-  const health = await worker.fetch(
-    new Request("https://worker.example/health"),
-    createEnv({ HAF_MAINTENANCE_MODE: "true", HAF_DB: database }),
-    {} as ExecutionContext,
-  );
-
-  assert.equal(response.status, 503);
-  assert.equal(response.headers.get("x-haf-maintenance"), "migration-freeze");
-  assert.equal(response.headers.get("retry-after"), "60");
-  assert.equal(health.status, 200);
-  assert.equal(databaseReads, 0);
-});
-
 test("worker redirects the unauthenticated admin home route to Discord login", async () => {
   const response = await worker.fetch(
     new Request("https://worker.example/admin"),
@@ -85,216 +59,6 @@ test("worker redirects the unauthenticated billing dashboard route to Discord lo
 
   assert.equal(response.status, 302);
   assert.equal(response.headers.get("location"), "/admin/login?next=%2Fadmin%2Fbilling");
-});
-
-test("worker scheduled handler bootstraps the gateway session durable object", async () => {
-  const gatewayFetches: Array<{ input: string; method: string }> = [];
-  const waitUntils: Promise<unknown>[] = [];
-  const scheduledWorker = worker as {
-    scheduled?: (controller: ScheduledController, env: never, ctx: ExecutionContext) => void;
-  };
-
-  scheduledWorker.scheduled?.(
-    {} as ScheduledController,
-    createEnv({
-      gatewayFetch(input, init) {
-        gatewayFetches.push({
-          input: String(input),
-          method: init?.method ?? "GET",
-        });
-        return Response.json({ status: "connecting" });
-      },
-    }),
-    {
-      waitUntil(promise) {
-        waitUntils.push(promise);
-      },
-    } as ExecutionContext,
-  );
-
-  await Promise.all(waitUntils);
-
-  assert.deepEqual(gatewayFetches, [
-    {
-      input: "https://gateway-session/start",
-      method: "POST",
-    },
-  ]);
-});
-
-test("worker maintenance schedule stops Gateway and skips ordinary producers", async () => {
-  const gatewayFetches: Array<{ input: string; method: string }> = [];
-  const waitUntils: Promise<unknown>[] = [];
-  const scheduledWorker = worker as {
-    scheduled?: (controller: ScheduledController, env: never, ctx: ExecutionContext) => void;
-  };
-
-  scheduledWorker.scheduled?.(
-    {} as ScheduledController,
-    createEnv({
-      HAF_MAINTENANCE_MODE: "true",
-      gatewayFetch(input, init) {
-        gatewayFetches.push({ input: String(input), method: init?.method ?? "GET" });
-        return Response.json({ status: "idle" });
-      },
-    }),
-    {
-      waitUntil(promise) {
-        waitUntils.push(promise);
-      },
-    } as ExecutionContext,
-  );
-
-  await Promise.all(waitUntils);
-  assert.deepEqual(gatewayFetches, [{ input: "https://gateway-session/stop", method: "POST" }]);
-});
-
-test("worker scheduled handler syncs slash commands before starting the gateway session", async () => {
-  const gatewayFetches: Array<{ input: string; method: string }> = [];
-  const bootstrapSequence: string[] = [];
-  const discordRequests: Array<{
-    input: string;
-    method: string;
-    authorization: string | null;
-    body: unknown;
-  }> = [];
-  const waitUntils: Promise<unknown>[] = [];
-  const scheduledWorker = worker as {
-    scheduled?: (controller: ScheduledController, env: never, ctx: ExecutionContext) => void;
-  };
-  const originalFetch = globalThis.fetch;
-
-  globalThis.fetch = (async (input: Request | URL | string, init?: RequestInit) => {
-    bootstrapSequence.push("sync");
-    discordRequests.push({
-      input: String(input),
-      method: init?.method ?? "GET",
-      authorization:
-        init?.headers instanceof Headers
-          ? init.headers.get("Authorization")
-          : Array.isArray(init?.headers)
-            ? new Headers(init.headers).get("Authorization")
-            : new Headers(init?.headers).get("Authorization"),
-      body: init?.body ? JSON.parse(String(init.body)) : null,
-    });
-
-    return new Response(null, { status: 200 });
-  }) as typeof fetch;
-
-  try {
-    scheduledWorker.scheduled?.(
-      {} as ScheduledController,
-      createEnv({
-        DISCORD_APPLICATION_ID: "application-id",
-        HAF_DB: createMockD1Database(),
-        gatewayFetch(input, init) {
-          bootstrapSequence.push(new URL(String(input)).pathname.slice(1));
-          gatewayFetches.push({
-            input: String(input),
-            method: init?.method ?? "GET",
-          });
-          return Response.json({ status: "connecting" });
-        },
-      }),
-      {
-        waitUntil(promise) {
-          waitUntils.push(promise);
-        },
-      } as ExecutionContext,
-    );
-
-    await Promise.all(waitUntils);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-
-  assert.deepEqual(discordRequests, [
-    {
-      input: "https://discord.com/api/v10/applications/application-id/commands",
-      method: "PUT",
-      authorization: "Bot bot-token",
-      body: ALL_SLASH_COMMAND_DEFINITIONS.filter((command) => command.name !== "haf-admin"),
-    },
-  ]);
-  assert.deepEqual(gatewayFetches, [
-    {
-      input: "https://gateway-session/start",
-      method: "POST",
-    },
-  ]);
-  assert.deepEqual(bootstrapSequence, ["sync", "start"]);
-});
-
-test("worker scheduled handler syncs haf-admin only to the configured HAF admin guild", async () => {
-  const discordRequests: Array<{
-    input: string;
-    method: string;
-    authorization: string | null;
-    body: unknown;
-  }> = [];
-  const waitUntils: Promise<unknown>[] = [];
-  const scheduledWorker = worker as {
-    scheduled?: (controller: ScheduledController, env: never, ctx: ExecutionContext) => void;
-  };
-  const originalFetch = globalThis.fetch;
-
-  globalThis.fetch = (async (input: Request | URL | string, init?: RequestInit) => {
-    discordRequests.push({
-      input: String(input),
-      method: init?.method ?? "GET",
-      authorization:
-        init?.headers instanceof Headers
-          ? init.headers.get("Authorization")
-          : Array.isArray(init?.headers)
-            ? new Headers(init.headers).get("Authorization")
-            : new Headers(init?.headers).get("Authorization"),
-      body: init?.body ? JSON.parse(String(init.body)) : null,
-    });
-
-    return new Response(null, { status: 200 });
-  }) as typeof fetch;
-
-  try {
-    scheduledWorker.scheduled?.(
-      {} as ScheduledController,
-      createEnv({
-        DISCORD_APPLICATION_ID: "application-id",
-        HAF_ADMIN_GUILD_ID: "admin-guild",
-        HAF_DB: createMockD1Database(),
-      }),
-      {
-        waitUntil(promise) {
-          waitUntils.push(promise);
-        },
-      } as ExecutionContext,
-    );
-
-    await Promise.all(waitUntils);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-
-  const hafAdminCommand = ALL_SLASH_COMMAND_DEFINITIONS.find(
-    (command) => command.name === "haf-admin",
-  );
-  const globalCommands = ALL_SLASH_COMMAND_DEFINITIONS.filter(
-    (command) => command.name !== "haf-admin",
-  );
-
-  assert.deepEqual(discordRequests, [
-    {
-      input: "https://discord.com/api/v10/applications/application-id/commands",
-      method: "PUT",
-      authorization: "Bot bot-token",
-      body: globalCommands,
-    },
-    {
-      input: "https://discord.com/api/v10/applications/application-id/guilds/admin-guild/commands",
-      method: "PUT",
-      authorization: "Bot bot-token",
-      body: [hafAdminCommand],
-    },
-  ]);
 });
 
 test("worker rejects the legacy signed HTTP reaction ingress path", async () => {
@@ -610,7 +374,7 @@ test("POST /admin/api/workspace-guilds requires an owner or admin", async () => 
       timedRoleService: {} as never,
     },
     workspaceApi: {
-      linkGuild: async () => Response.json({ error: "Forbidden" }, { status: 403 }),
+      linkGuild: async () => adminErrorResponse("Forbidden", 403),
     } as never,
     handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
@@ -665,9 +429,9 @@ test("GET /admin/api/workspace-guilds requires a workspaceId query parameter", a
   const response = await route(new Request("https://example.com/admin/api/workspace-guilds"));
 
   assert.equal(response?.status, 400);
-  const body = (await response?.json()) as { error: string; issues?: Array<{ path: string }> };
+  const body = (await response?.json()) as { error: string; fieldIssues?: Array<{ path: string }> };
   assert.equal(body.error, "Invalid request query");
-  assert.ok(body.issues?.some((issue) => issue.path === "workspaceId"));
+  assert.ok(body.fieldIssues?.some((issue) => issue.path === "workspaceId"));
 });
 
 test("GET /admin/api/workspace-guilds delegates to the workspace API", async () => {

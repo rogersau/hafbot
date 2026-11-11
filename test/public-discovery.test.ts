@@ -6,37 +6,24 @@ import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import type { LandingPriceCatalog } from "../src/runtime/billing/landing-catalog";
 import { renderLandingPage } from "../src/runtime/landing-page";
 
-for (const admission of ["missing", "failed", "closed"] as const) {
-  test(`historical founder admission ${admission} never changes standard pricing copy`, async () => {
-    const catalog: LandingPriceCatalog = {
-      read: async () => [
-        {
-          plan: "premium",
-          frequency: "monthly",
-          unitAmount: 123,
-          currency: "aud",
-          decimalAmount: "1.23",
-          formattedAmount: "$1.23",
-        },
-      ],
-    };
-    if (admission === "failed")
-      catalog.readFounderAdmission = async () => {
-        throw new Error("unavailable");
-      };
-    if (admission === "closed")
-      catalog.readFounderAdmission = async () => ({
-        open: false,
-        historicalCount: 50,
-        publicCount: 50,
-        limit: 50,
-      });
-    const html = await renderLandingPage(catalog);
-    assert.match(html, /\$1\.23/);
-    assert.doesNotMatch(html, /founder|fully claimed|50 of 50|cannot be reclaimed/i);
-    assert.match(html, /Standard subscription prices/);
-  });
-}
+test("the configured catalogue supplies standard pricing copy", async () => {
+  const catalog: LandingPriceCatalog = {
+    read: async () => [
+      {
+        plan: "premium",
+        frequency: "monthly",
+        unitAmount: 123,
+        currency: "aud",
+        decimalAmount: "1.23",
+        formattedAmount: "$1.23",
+      },
+    ],
+  };
+  const html = await renderLandingPage(catalog);
+  assert.match(html, /\$1\.23/);
+  assert.doesNotMatch(html, /founder|fully claimed|50 of 50|cannot be reclaimed/i);
+  assert.match(html, /Standard subscription prices/);
+});
 
 test("FAQ structured answers exactly match visible homepage answers", async () => {
   const dom = new JSDOM(await renderLandingPage());

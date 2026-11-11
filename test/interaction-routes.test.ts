@@ -1,3 +1,5 @@
+import { afterEach } from "node:test";
+import { createProductionRuntimeStores } from "./support/production-runtime-stores";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -5,327 +7,29 @@ import assert from "node:assert/strict";
 // @ts-ignore -- The worker typecheck config omits Node built-ins and full node:test types conflict with Workers globals; tsconfig.tests provides the runtime test types.
 import test from "node:test";
 
-import worker from "../src/index";
+import worker from "./support/application";
 import { DiscordApiError } from "../src/discord";
 import { buildEphemeralMessage } from "../src/discord-interactions";
 import { buildLfgCloseConfirmation } from "../src/lfg";
+import { signSensitiveComponentId } from "../src/security/sensitive-component-ids";
 import { createComponentIdSigner } from "../src/security/component-id-signer";
 import { formatTimedRoleExpiry } from "../src/timed-roles";
 import { isRecord } from "../src/unknown-parse";
 import { createLegacyCommunityStoreDatabase } from "./helpers/legacy-community-store-d1";
-import { createCloudflarePlatformLinkStore } from "../src/runtime/cloudflare-platform-link-store";
+import { createSqlitePlatformLinkStore } from "./support/sqlite/runtime/sqlite-platform-link-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 import type { RuntimeStores } from "../src/runtime/app-types";
 
-// Helper to convert old RuntimeStore mocks to new grouped RuntimeStores structure
-function createMockRuntimeStores(oldStore: any): RuntimeStores {
-  return {
-    blocklist: {
-      readConfig: oldStore.readConfig || (async () => ({ guilds: {}, botUserId: "bot-user-id" })),
-      readGuildConfig: async () => ({ guilds: {}, botUserId: "bot-user-id" }),
-      applyGuildEmojiMutation:
-        oldStore.applyGuildEmojiMutation ||
-        (async () => ({ guilds: {}, botUserId: "bot-user-id" })),
-    },
-    appConfig: {
-      upsertAppConfig: oldStore.upsertAppConfig || (async () => {}),
-    },
-    guildRbac: {
-      readManageServerAdminEnabled: async () => true,
-      setManageServerAdminEnabled: async () => {},
-      readGuildAdminRoleId: oldStore.readGuildAdminRoleId || (async () => null),
-      listGuildAdminRoleAssignments: oldStore.listGuildAdminRoleAssignments || (async () => []),
-      upsertGuildAdminRoleId: oldStore.upsertGuildAdminRoleId || (async () => {}),
-    },
-    timedRoles: {
-      listTimedRoles: oldStore.listTimedRoles || (async () => []),
-      listTimedRolesByGuild: oldStore.listTimedRolesByGuild || (async () => []),
-      upsertTimedRole: oldStore.upsertTimedRole || (async () => {}),
-      updateTimedRoleSuspension: oldStore.updateTimedRoleSuspension || (async () => {}),
-      updateTimedRoleRestoration: oldStore.updateTimedRoleRestoration || (async () => {}),
-      deleteTimedRole: oldStore.deleteTimedRole || (async () => {}),
-      listExpiredTimedRoles: oldStore.listExpiredTimedRoles || (async () => []),
-    },
-    tickets: {
-      reserveNextTicketNumber: oldStore.reserveNextTicketNumber || (async () => 1),
-      readTicketPanelConfig: oldStore.readTicketPanelConfig || (async () => null),
-      upsertTicketPanelConfig: oldStore.upsertTicketPanelConfig || (async () => {}),
-      countOpenTicketsByUser: oldStore.countOpenTicketsByUser || (async () => 0),
-      createTicketInstance: oldStore.createTicketInstance || (async () => {}),
-      deleteTicketInstance: oldStore.deleteTicketInstance || (async () => {}),
-      readOpenTicketByChannel: oldStore.readOpenTicketByChannel || (async () => null),
-      readTicketParticipant: oldStore.readTicketParticipant || (async () => null),
-      addTicketParticipant:
-        oldStore.addTicketParticipant || (async () => ({ created: false, eventId: "event" })),
-      removeTicketParticipant:
-        oldStore.removeTicketParticipant || (async () => ({ removed: false, eventId: null })),
-      listTicketParticipants: oldStore.listTicketParticipants || (async () => []),
-      listTicketParticipantEvents: oldStore.listTicketParticipantEvents || (async () => []),
-      readLatestTicketParticipantEvent:
-        oldStore.readLatestTicketParticipantEvent || (async () => null),
-      claimTicketParticipantNotification:
-        oldStore.claimTicketParticipantNotification || (async () => false),
-      completeTicketParticipantNotification:
-        oldStore.completeTicketParticipantNotification || (async () => {}),
-      releaseTicketParticipantNotification:
-        oldStore.releaseTicketParticipantNotification || (async () => {}),
-      updateTicketClaim: oldStore.updateTicketClaim || (async () => {}),
-      updateTicketOpeningMessageId: oldStore.updateTicketOpeningMessageId || (async () => {}),
-      claimTicketClaimDelivery: oldStore.claimTicketClaimDelivery || (async () => false),
-      completeTicketClaimDelivery: oldStore.completeTicketClaimDelivery || (async () => {}),
-      releaseTicketClaimDelivery: oldStore.releaseTicketClaimDelivery || (async () => {}),
-      readOpenTicketByStaffThread: oldStore.readOpenTicketByStaffThread || (async () => null),
-      listClosedTicketInstances:
-        oldStore.listClosedTicketInstances ||
-        (async () => ({ tickets: [], total: 0, nextCursor: null })),
-      closeTicketInstance: oldStore.closeTicketInstance || (async () => {}),
-      updateTicketInstanceStaffThreadId:
-        oldStore.updateTicketInstanceStaffThreadId || (async () => {}),
-      recordStaffMessageMapping: oldStore.recordStaffMessageMapping || (async () => {}),
-      readStaffMessageMapping: oldStore.readStaffMessageMapping || (async () => null),
-      readStaffMessageMappingByStaffMessage:
-        oldStore.readStaffMessageMappingByStaffMessage || (async () => null),
-      updateStaffMessageMapping: oldStore.updateStaffMessageMapping || (async () => {}),
-      deleteStaffMessageMapping: oldStore.deleteStaffMessageMapping || (async () => {}),
-      cleanupStaffMessages: oldStore.cleanupStaffMessages || (async () => {}),
-    },
-    marketplace: {
-      readMarketplaceConfig: oldStore.readMarketplaceConfig || (async () => null),
-      upsertMarketplaceConfig: oldStore.upsertMarketplaceConfig || (async () => {}),
-      refreshMarketplaceNotice: oldStore.refreshMarketplaceNotice || (async () => false),
-      listMarketplacePosts: oldStore.listMarketplacePosts || (async () => []),
-      readMarketplacePost: oldStore.readMarketplacePost || (async () => null),
-      readActiveMarketplacePostByOwner:
-        oldStore.readActiveMarketplacePostByOwner || (async () => null),
-      createMarketplacePost: oldStore.createMarketplacePost || (async () => {}),
-      updateMarketplacePostMessage: oldStore.updateMarketplacePostMessage || (async () => {}),
-      closeMarketplacePost:
-        oldStore.closeMarketplacePost ||
-        (async () => {
-          throw new Error("No marketplace post found");
-        }),
-      listMarketplaceLogs: oldStore.listMarketplaceLogs || (async () => []),
-      createMarketplaceLog: oldStore.createMarketplaceLog || (async () => {}),
-    },
-    lfg: {
-      readLfgConfig: oldStore.readLfgConfig || (async () => null),
-      upsertLfgConfig: oldStore.upsertLfgConfig || (async () => {}),
-      refreshLfgNotice: oldStore.refreshLfgNotice || (async () => false),
-      listLfgPosts: oldStore.listLfgPosts || (async () => []),
-      countActiveLfgPosts: oldStore.countActiveLfgPosts || (async () => 0),
-      readLfgPost: oldStore.readLfgPost || (async () => null),
-      readActiveLfgPostByOwner: oldStore.readActiveLfgPostByOwner || (async () => null),
-      createLfgPost: oldStore.createLfgPost || (async () => {}),
-      updateLfgPostMessage: oldStore.updateLfgPostMessage || (async () => {}),
-      updateLfgPost: oldStore.updateLfgPost || (async () => {}),
-      closeLfgPost:
-        oldStore.closeLfgPost ||
-        (async () => {
-          throw new Error("No LFG post found");
-        }),
-      createLfgApplication: oldStore.createLfgApplication || (async () => {}),
-      readLfgApplication: oldStore.readLfgApplication || (async () => null),
-      listLfgApplicationsForPost: oldStore.listLfgApplicationsForPost || (async () => []),
-      updateLfgApplication: oldStore.updateLfgApplication || (async () => {}),
-      readLfgVoiceChannel: oldStore.readLfgVoiceChannel || (async () => null),
-      readLfgVoiceChannelByChannelId: oldStore.readLfgVoiceChannelByChannelId || (async () => null),
-      upsertLfgVoiceChannel: oldStore.upsertLfgVoiceChannel || (async () => {}),
-      deleteLfgVoiceChannel: oldStore.deleteLfgVoiceChannel || (async () => {}),
-      listDueLfgPostExpiries: oldStore.listDueLfgPostExpiries || (async () => []),
-      listDueLfgRenewalReminders: oldStore.listDueLfgRenewalReminders || (async () => []),
-    },
-    events: {
-      createTemplate: oldStore.createEventTemplate || (async () => {}),
-      upsertTemplate: oldStore.upsertEventTemplate || (async () => {}),
-      readTemplate: oldStore.readEventTemplate || (async () => null),
-      listTemplates: oldStore.listEventTemplates || (async () => []),
-      createEvent: oldStore.createEvent || (async () => {}),
-      upsertEvent: oldStore.upsertEvent || (async () => {}),
-      readEvent: oldStore.readEvent || (async () => null),
-      listEvents: oldStore.listEvents || (async () => []),
-      listDueReminders: oldStore.listDueEventReminders || (async () => []),
-      updateReminderSentAt: oldStore.updateEventReminderSentAt || (async () => {}),
-      listDueLifecycleEvents: oldStore.listDueLifecycleEvents || (async () => []),
-      upsertSignup: oldStore.upsertEventSignup || (async () => {}),
-      deleteSignup: oldStore.deleteEventSignup || (async () => {}),
-      listSignups: oldStore.listEventSignups || (async () => []),
-      listUserSignups: oldStore.listUserEventSignups || (async () => []),
-      createEventTeamWithCaptain: async () => {},
-      addEventTeamMembership: async () => {},
-      leaveEventTeamMembership: async () => {},
-      listEventTeams: async () => [],
-      listActiveEventTeamMemberships: async () => [],
-    },
-    webhookProxy: {
-      readWebhookProxyConfig: oldStore.readWebhookProxyConfig || (async () => null),
-      listWebhookProxyConfigs: oldStore.listWebhookProxyConfigs || (async () => []),
-      upsertWebhookProxyConfig: oldStore.upsertWebhookProxyConfig || (async () => {}),
-      deleteWebhookProxyConfig: oldStore.deleteWebhookProxyConfig || (async () => {}),
-      createWebhookProxyForwardLog: oldStore.createWebhookProxyForwardLog || (async () => {}),
-      listWebhookProxyForwardLogs: oldStore.listWebhookProxyForwardLogs || (async () => []),
-    },
-    playerCount: {
-      listPlayerCountServers: oldStore.listPlayerCountServers || (async () => []),
-      listAllPlayerCountServers: oldStore.listAllPlayerCountServers || (async () => []),
-      readPlayerCountServer: oldStore.readPlayerCountServer || (async () => null),
-      upsertPlayerCountServer: oldStore.upsertPlayerCountServer || (async () => {}),
-      deletePlayerCountServer: oldStore.deletePlayerCountServer || (async () => false),
-      updatePlayerCountSnapshot: oldStore.updatePlayerCountSnapshot || (async () => false),
-      updateLastRenamedAt: oldStore.updateLastRenamedAt || (async () => {}),
-      incrementPlayerCountFailure:
-        oldStore.incrementPlayerCountFailure || (async () => ({ consecutiveFailureCount: 1 })),
-      resetPlayerCountFailure: oldStore.resetPlayerCountFailure || (async () => false),
-    },
-    platformLink: {
-      readPlatformLinkConfig: oldStore.readPlatformLinkConfig || (async () => null),
-      upsertPlatformLinkConfig: oldStore.upsertPlatformLinkConfig || (async () => {}),
-      createPendingPlatformLink: oldStore.createPendingPlatformLink || (async () => {}),
-      readPendingPlatformLink: oldStore.readPendingPlatformLink || (async () => null),
-      deletePendingPlatformLink: oldStore.deletePendingPlatformLink || (async () => {}),
-      clearExpiredPendingPlatformLinks:
-        oldStore.clearExpiredPendingPlatformLinks || (async () => {}),
-      readPlatformLink: oldStore.readPlatformLink || (async () => null),
-      readPlatformLinkEntry: oldStore.readPlatformLinkEntry || (async () => null),
-      listPlatformLinksByUser: oldStore.listPlatformLinksByUser || (async () => []),
-      readPlatformLinkByPlatformId: oldStore.readPlatformLinkByPlatformId || (async () => null),
-      upsertPlatformLink: oldStore.upsertPlatformLink || (async () => {}),
-      replacePlatformLinks: oldStore.replacePlatformLinks || (async () => {}),
-      deletePlatformLink: oldStore.deletePlatformLink || (async () => {}),
-      listPlatformLinks: oldStore.listPlatformLinks || (async () => []),
-    },
-    guildEntitlements: {
-      readGuildEntitlement:
-        oldStore.readGuildEntitlement ||
-        (async (guildId: string) => ({ guildId, tier: "free", updatedAtMs: 0 })),
-    },
-    guildR2Objects: {
-      upsertObject: oldStore.upsertGuildR2Object || (async () => {}),
-      deleteObject: oldStore.deleteGuildR2Object || (async () => {}),
-      getGuildUsageBytes: oldStore.getGuildR2UsageBytes || (async () => 0),
-    },
-    reactionLimits: {
-      readReactionLimitConfig: oldStore.readReactionLimitConfig || (async () => null),
-      upsertReactionLimitConfig: oldStore.upsertReactionLimitConfig || (async () => {}),
-      incrementMessageReactionCount: oldStore.incrementMessageReactionCount || (async () => 1),
-      incrementUserMessageReactionCount:
-        oldStore.incrementUserMessageReactionCount || (async () => 1),
-      incrementBreachCounter: oldStore.incrementBreachCounter || (async () => 1),
-      readBreachCounters: oldStore.readBreachCounters || (async () => []),
-      resetBreachCounter: oldStore.resetBreachCounter || (async () => {}),
-      resetAllBreachCounters: oldStore.resetAllBreachCounters || (async () => {}),
-      purgeExpiredCounters: oldStore.purgeExpiredCounters || (async () => 0),
-    },
-    evidenceVault: {
-      readConfig: oldStore.readEvidenceVaultConfig || (async () => null),
-      upsertConfig: oldStore.upsertEvidenceVaultConfig || (async () => {}),
-      createRecord: oldStore.createEvidenceVaultRecord || (async () => {}),
-      readRecord: oldStore.readEvidenceVaultRecord || (async () => null),
-      listRecords: oldStore.listEvidenceVaultRecords || (async () => []),
-      searchRecordsBySubject: oldStore.searchEvidenceVaultRecordsBySubject || (async () => []),
-      updateRecordStatus: oldStore.updateEvidenceVaultRecordStatus || (async () => {}),
-      updateRecordSubjects: oldStore.updateEvidenceVaultRecordSubjects || (async () => {}),
-      updateRecordEvidenceFieldValues:
-        oldStore.updateEvidenceVaultRecordEvidenceFieldValues || (async () => {}),
-      updateRecordPlaceholder: oldStore.updateEvidenceVaultRecordPlaceholder || (async () => {}),
-      readImage: oldStore.readEvidenceVaultImage || (async () => null),
-      listEnabledIdentityPatterns: oldStore.listEnabledIdentityPatterns || (async () => []),
-      listIdentityPatterns: oldStore.listIdentityPatterns || (async () => []),
-      addIdentityPattern:
-        oldStore.addIdentityPattern ||
-        (async (input: any) => ({
-          ...input,
-          id: "pattern",
-          position: 1,
-          disabled: false,
-          createdAtMs: 1,
-        })),
-      disableIdentityPattern: oldStore.disableIdentityPattern || (async () => false),
-    },
-    imageRules: {
-      readConfig: oldStore.readImageRulesConfig || (async () => null),
-      upsertConfig: oldStore.upsertImageRulesConfig || (async () => {}),
-      deleteConfig: oldStore.deleteImageRulesConfig || (async () => {}),
-      createModQueueItem:
-        oldStore.createImageRulesModQueueItem ||
-        ((async (item: any) => ({ ...item, id: "queue-item" })) as any),
-      readModQueueItem: oldStore.readImageRulesModQueueItem || (async () => null),
-      setModQueueItemQueueMessage:
-        oldStore.setImageRulesModQueueItemQueueMessage || (async () => {}),
-      claimModQueueItemRestore: oldStore.claimImageRulesModQueueItemRestore || (async () => null),
-      markModQueueItemApproved: oldStore.markImageRulesModQueueItemApproved || (async () => null),
-      markModQueueItemRestored: oldStore.markImageRulesModQueueItemRestored || (async () => null),
-      markModQueueItemRestoreFailed:
-        oldStore.markImageRulesModQueueItemRestoreFailed || (async () => null),
-    },
-    userPreferences: {
-      readUserPreferences: async () => null,
-      upsertUserPreferences: async () => {},
-    },
-    guildAuditLog: {
-      readConfig: async () => null,
-      upsertConfig: async () => {},
-    },
-    whiteLabelBots: {
-      readWhiteLabelBot: oldStore.readWhiteLabelBot || (async () => null),
-      listActiveWhiteLabelBots: oldStore.listActiveWhiteLabelBots || (async () => []),
-      upsertWhiteLabelBot: oldStore.upsertWhiteLabelBot || (async () => {}),
-    },
-    banCases: oldStore.banCases || {
-      readConfig: async () => null,
-      upsertConfig: async () => {},
-      readBanCaseSourceByPublicId: async () => null,
-      listBanCaseSources: async () => [],
-      upsertBanCaseSource: async () => {},
-      deleteBanCaseSource: async () => {},
-      createBanCase: async () => {},
-      readBanCase: async () => null,
-      readBanCaseBySubject: async () => null,
-      listBanCases: async () => [],
-      updateBanCaseStatus: async () => null,
-      updateBanCaseThread: async () => {},
-    },
-    memberVerification: oldStore.memberVerification || {
-      readConfig: async () => null,
-      upsertConfig: async () => {},
-      readVerificationState: async () => null,
-      upsertVerificationState: async () => {},
-    },
-    managedMessages: oldStore.managedMessages || {
-      listByGuild: async () => [],
-      readById: async () => null,
-      readByCanonicalMessage: async () => null,
-      countByGuild: async () => 0,
-      upsert: async () => {},
-      markMissingByCanonicalMessage: async () => null,
-      delete: async () => {},
-    },
-    botDefense: oldStore.botDefense || {
-      readConfig: async () => null,
-      upsertConfig: async () => {},
-      deleteConfig: async () => {},
-      openBotFlag: async () => null,
-      resolveBotFlag: async () => null,
-      readOpenBotFlag: async () => null,
-      isConfirmedMember: async () => false,
-      setBotFlagQueueMessage: async () => {},
-      recordRateMessage: async () => {},
-      listMatchingMessageChannelsInWindow: async () => [],
-    },
-    mentionProtection: oldStore.mentionProtection || {
-      readConfig: async () => null,
-      upsertConfig: async () => {},
-      deleteConfig: async () => {},
-      clearBurstWindow: async () => {},
-      recordBurstMessage: async () => 0,
-      claimMessageBreaches: async () => [],
-      claimAction: async () => "satisfied",
-      recordActionOutcome: async () => {},
-    },
-    oneTimeTokens: {
-      consume: async () => true,
-    },
-  };
+const runtimeStoreFixtures = new Set<ReturnType<typeof createProductionRuntimeStores>>();
+afterEach(() => {
+  for (const fixture of runtimeStoreFixtures) fixture.close();
+  runtimeStoreFixtures.clear();
+});
+function createTestRuntimeStores(): RuntimeStores {
+  const fixture = createProductionRuntimeStores();
+  runtimeStoreFixtures.add(fixture);
+  return fixture.stores;
 }
 
 test("worker answers Discord PING interactions", async () => {
@@ -339,6 +43,34 @@ test("worker answers Discord PING interactions", async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { type: 1 });
+});
+
+test("public interactions reject unsigned sensitive controls even with private migration settings", async () => {
+  for (const customId of [
+    "ticket:close:ticket-channel-1",
+    "member_verification_verify:guild-1",
+    "bot-defense:confirm:guild-1:user-1",
+  ]) {
+    const { publicKeyHex, request } = await createSignedInteractionRequest(
+      {
+        type: 3,
+        guild_id: "guild-1",
+        member: { user: { id: "user-1" }, roles: [] },
+        data: { custom_id: customId },
+      },
+      { signComponents: false },
+    );
+    const env = Object.assign(createEnv({ DISCORD_PUBLIC_KEY: publicKeyHex }), {
+      COMPONENT_ID_LEGACY_UNTIL: "2099-01-01T00:00:00Z",
+      MEMBER_VERIFICATION_PANEL_LEGACY_UNTIL: "2099-01-01T00:00:00Z",
+    });
+    const response = await worker.fetch(request, env, {} as ExecutionContext);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      type: 4,
+      data: { flags: 64, content: "This action is no longer available." },
+    });
+  }
 });
 
 test("worker rejects interactions with an invalid Discord signature", async () => {
@@ -429,7 +161,6 @@ test("worker returns a ticket modal for a signed open-ticket button click", asyn
                 buttonStyle: "primary",
                 supportRoleId: "role-1",
                 channelNamePrefix: "appeal",
-                autoReplyMessage: null,
                 questions: [
                   {
                     id: "reason",
@@ -439,6 +170,7 @@ test("worker returns a ticket modal for a signed open-ticket button click", asyn
                     required: true,
                   },
                 ],
+                responseRules: [],
               },
             ],
           });
@@ -2029,7 +1761,7 @@ test("worker defers slash command responses when command work is still pending",
 
 test("worker returns a Platform Link limit message for the 101st manual free-tier link", async () => {
   const database = new SqliteD1Database();
-  const platformLinkStore = createCloudflarePlatformLinkStore(database as unknown as D1Database);
+  const platformLinkStore = createSqlitePlatformLinkStore(database as unknown as D1Database);
   await platformLinkStore.upsertPlatformLinkConfig({
     guildId: "guild-123",
     platform: "steam",
@@ -2903,7 +2635,10 @@ function createLfgApplication() {
   };
 }
 
-async function createSignedInteractionRequest(payload: unknown, options?: { timestamp?: string }) {
+async function createSignedInteractionRequest(
+  payload: unknown,
+  options?: { timestamp?: string; signComponents?: boolean },
+) {
   const { publicKeyHex, bodyText, timestamp, signatureHex } =
     await createSignedInteractionRequestBody(payload, options);
 
@@ -2923,13 +2658,41 @@ async function createSignedInteractionRequest(payload: unknown, options?: { time
 
 async function createSignedInteractionRequestBody(
   payload: unknown,
-  options?: { timestamp?: string },
+  options?: { timestamp?: string; signComponents?: boolean },
 ) {
   const keyPair = (await crypto.subtle.generateKey("Ed25519", true, [
     "sign",
     "verify",
   ])) as CryptoKeyPair;
   const timestamp = options?.timestamp ?? String(Math.floor(Date.now() / 1000));
+  if (
+    options?.signComponents !== false &&
+    isRecord(payload) &&
+    (payload.type === 3 || payload.type === 5) &&
+    isRecord(payload.data) &&
+    typeof payload.data.custom_id === "string"
+  ) {
+    const member = isRecord(payload.member) ? payload.member : null;
+    const actor =
+      member && isRecord(member.user) ? member.user : isRecord(payload.user) ? payload.user : null;
+    payload = {
+      ...payload,
+      data: {
+        ...payload.data,
+        custom_id: await signSensitiveComponentId(
+          payload.data.custom_id,
+          createComponentIdSigner({
+            currentSecret: "component-id-signing-secret-for-production-tests",
+          }),
+          {
+            guildId: typeof payload.guild_id === "string" ? payload.guild_id : undefined,
+            actorUserId: typeof actor?.id === "string" ? actor.id : undefined,
+            expiresAtMs: Date.now() + 60_000,
+          },
+        ),
+      },
+    };
+  }
   const bodyText = JSON.stringify(payload);
   const signature = await crypto.subtle.sign(
     "Ed25519",
@@ -2961,7 +2724,6 @@ function createEnv(options?: {
     BOT_USER_ID: "bot-user-id",
     DISCORD_PUBLIC_KEY: options?.DISCORD_PUBLIC_KEY ?? "",
     COMPONENT_ID_SIGNING_SECRET: "component-id-signing-secret-for-production-tests",
-    COMPONENT_ID_LEGACY_UNTIL: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     HAF_ADMIN_GUILD_ID: options?.HAF_ADMIN_GUILD_ID,
     HAF_ADMIN_ROLE_ID: options?.HAF_ADMIN_ROLE_ID,
     GATEWAY_SESSION_DO: {
@@ -2993,7 +2755,6 @@ function createEnv(options?: {
     BOT_USER_ID: string;
     DISCORD_PUBLIC_KEY: string;
     COMPONENT_ID_SIGNING_SECRET: string;
-    COMPONENT_ID_LEGACY_UNTIL: string;
     HAF_ADMIN_GUILD_ID?: string;
     HAF_ADMIN_ROLE_ID?: string;
     GATEWAY_SESSION_DO: DurableObjectNamespace;
@@ -3054,7 +2815,7 @@ test("createInteractionRoutes handles Discord PING interactions through route mo
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
     verifyDiscordRequest: async () => true,
-    stores: createMockRuntimeStores({} as any),
+    stores: createTestRuntimeStores(),
     gateway: {} as never,
     services: {
       timedRoleService: {} as never,
@@ -3082,7 +2843,7 @@ test("createInteractionRoutes handles exhausted Discord rate limits", async () =
   const interactionRoutes = createInteractionRoutes({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
-    stores: createMockRuntimeStores({} as any),
+    stores: createTestRuntimeStores(),
     gateway: {} as never,
     services: {},
     handleInteractionRequest: async () => {
@@ -3109,7 +2870,7 @@ test("createInteractionRoutes maps Marketplace rate limits after feature handlin
   const { createInteractionRoutes } = await import("../src/routes/interaction-routes");
   const { handleMarketplaceModalSubmitInteraction } =
     await import("../src/runtime/marketplace-interaction-handler");
-  const stores = createMockRuntimeStores({} as any);
+  const stores = createTestRuntimeStores();
   const interactionRoutes = createInteractionRoutes({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",

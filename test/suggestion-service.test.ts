@@ -15,11 +15,11 @@ import {
   buildSuggestionPanel,
   buildSuggestionStarter,
 } from "../src/discord/suggestions";
-import { createCloudflareSuggestionStore } from "../src/runtime/cloudflare-suggestion-store";
+import { createSqliteSuggestionStore } from "./support/sqlite/runtime/sqlite-suggestion-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 async function harness(projection: SuggestionProjection = {}) {
-  const store = createCloudflareSuggestionStore(new SqliteD1Database().d1);
+  const store = createSqliteSuggestionStore(new SqliteD1Database().d1);
   await store.upsertConfig({
     ...defaultSuggestionsConfig("guild-1", 1),
     enabled: true,

@@ -1,15 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolve } from "node:path";
 import {
   createPostgresDatabaseCapabilityFromEnvironment,
   type PostgresExecutor,
   type PostgresDatabaseCapability,
 } from "../src/runtime/postgres/postgres-capability";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresObservationStore } from "../src/runtime/attendance-observation-runtime";
 import { createPostgresWardogsStore } from "../src/runtime/postgres/postgres-wardogs-store";
 import { WardogsService } from "../src/wardogs/service";
@@ -31,10 +27,7 @@ test(
       NODE_ENV: "test",
     });
     try {
-      await applyPostgresMigrations(
-        db,
-        await readPostgresMigrations(resolve("migrations/postgres")),
-      );
+      await initializePostgresSchema(db);
       const effectTables = [
         "server_level_earning_sessions",
         "server_level_awards",
@@ -52,7 +45,7 @@ test(
         ),
       );
       const targets = createPostgresWardogsStore(db);
-      const wardogs = new WardogsService({ store: targets, runtime: "portable" });
+      const wardogs = new WardogsService({ store: targets });
       const guildId = crypto.randomUUID();
       const target = await wardogs.create(guildId, "Fixture", null);
       const store = createPostgresObservationStore(db);

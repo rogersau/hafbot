@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EVENT_RECURRENCE_DAY_MS } from "../src/event-recurrence";
-import { createCloudflareEventStore } from "../src/runtime/cloudflare-event-store";
+import { createSqliteEventStore } from "./support/sqlite/runtime/sqlite-event-store";
 import { EventsService, type EventsDiscordApi } from "../src/services/events-service";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 import { createEventsAdminRoutes } from "../src/runtime/admin-routes/events";
@@ -15,7 +15,7 @@ import { testChannel, testRole } from "./helpers/guild-resource-validator";
 
 function fixture(guildResources?: GuildResourceValidator) {
   const database = new SqliteD1Database();
-  const store = createCloudflareEventStore(database.d1);
+  const store = createSqliteEventStore(database.d1);
   let paid = true;
   let posts = 0;
   const removedRoles: string[] = [];

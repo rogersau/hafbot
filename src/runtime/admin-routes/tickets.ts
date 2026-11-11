@@ -2,7 +2,7 @@ import type { z } from "zod";
 
 import { createChannelMessage, DiscordApiError, uploadTranscriptToChannel } from "../../discord";
 import { buildAuditEmbed, suppressMentions } from "../../discord/messages";
-import type { TicketLinkPlatform, TicketPanelConfig, TicketTypeConfig } from "../../types";
+import type { TicketLinkPlatform, TicketPanelConfig } from "../../types";
 import {
   summarizeConfigurationRevision,
   type ConfigurationActorContext,
@@ -503,46 +503,15 @@ function normalizeTicketPanelConfig(
     aiTranscriptSummariesEnabled: body.aiTranscriptSummariesEnabled ?? false,
     ticketTypes: body.ticketTypes.map((ticketType) => ({
       ...ticketType,
-      autoReplyMessage: ticketType.autoReplyMessage ?? null,
-      autoReplyEnabled: ticketType.autoReplyEnabled ?? ticketType.autoReplyMessage !== null,
-      responseRules: normalizeTicketTypeResponseRules(ticketType),
-      anonymousEnabled: ticketType.anonymousEnabled ?? false,
-      anonymousSupportEnabled:
-        ticketType.anonymousSupportEnabled ?? ticketType.anonymousEnabled ?? false,
-      staffDiscussionThreadEnabled:
-        ticketType.staffDiscussionThreadEnabled ?? ticketType.anonymousEnabled ?? false,
+      responseRules: ticketType.responseRules ?? [],
+      anonymousSupportEnabled: ticketType.anonymousSupportEnabled ?? false,
+      staffDiscussionThreadEnabled: ticketType.staffDiscussionThreadEnabled ?? false,
       ticketHistoryPromptVisibility: ticketType.ticketHistoryPromptVisibility ?? "off",
       participantManagementEnabled: ticketType.participantManagementEnabled ?? false,
       limitExclusion: ticketType.limitExclusion ?? false,
       mentionSupportRole: ticketType.mentionSupportRole ?? false,
     })),
   };
-}
-
-function normalizeTicketTypeResponseRules(value: {
-  responseRules?: unknown;
-  autoReplyEnabled?: unknown;
-  autoReplyMessage?: unknown;
-}): NonNullable<TicketTypeConfig["responseRules"]> {
-  if (Array.isArray(value.responseRules)) {
-    return value.responseRules as NonNullable<TicketTypeConfig["responseRules"]>;
-  }
-
-  if (value.autoReplyEnabled === false) {
-    return [];
-  }
-
-  if (typeof value.autoReplyMessage !== "string" || value.autoReplyMessage.trim().length === 0) {
-    return [];
-  }
-
-  return [
-    {
-      id: "legacy-auto-reply",
-      conditions: [],
-      message: value.autoReplyMessage,
-    },
-  ];
 }
 
 async function readConfiguredTicketLinkPlatforms(

@@ -15,8 +15,8 @@ import type { ClanStore } from "../src/runtime/contracts";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("ClanService resumes provisioning after a Discord failure without duplicating resources", async () => {
-  const { createCloudflareClanStore } = await import("../src/runtime/cloudflare-clan-store");
-  const store = createCloudflareClanStore(new SqliteD1Database().d1);
+  const { createSqliteClanStore } = await import("./support/sqlite/runtime/sqlite-clan-store");
+  const store = createSqliteClanStore(new SqliteD1Database().d1);
   let failVoice = true;
   const discord: ClanDiscordApi = {
     async createCategory() {
@@ -91,8 +91,8 @@ test("ClanService resumes provisioning after a Discord failure without duplicati
 });
 
 test("ClanService enforces one pending request per member", async () => {
-  const { createCloudflareClanStore } = await import("../src/runtime/cloudflare-clan-store");
-  const store = createCloudflareClanStore(new SqliteD1Database().d1);
+  const { createSqliteClanStore } = await import("./support/sqlite/runtime/sqlite-clan-store");
+  const store = createSqliteClanStore(new SqliteD1Database().d1);
   const discord = {} as ClanDiscordApi;
   let id = 0;
   const service = new ClanService(
@@ -192,8 +192,8 @@ test("ClanService enforces a Guild member ceiling below the plan allowance", asy
 });
 
 test("ClanService resumes a claimed invitation without removing a successful membership role", async () => {
-  const { createCloudflareClanStore } = await import("../src/runtime/cloudflare-clan-store");
-  const base = createCloudflareClanStore(new SqliteD1Database().d1);
+  const { createSqliteClanStore } = await import("./support/sqlite/runtime/sqlite-clan-store");
+  const base = createSqliteClanStore(new SqliteD1Database().d1);
   let failCompletion = true;
   const store: ClanStore = {
     ...base,
@@ -346,9 +346,9 @@ async function createClanHarness(options?: {
   now?: () => number;
   discordOverrides?: Partial<ClanDiscordApi>;
 }) {
-  const { createCloudflareClanStore } = await import("../src/runtime/cloudflare-clan-store");
+  const { createSqliteClanStore } = await import("./support/sqlite/runtime/sqlite-clan-store");
   const store =
-    options?.store ?? createCloudflareClanStore(new SqliteD1Database() as unknown as D1Database);
+    options?.store ?? createSqliteClanStore(new SqliteD1Database() as unknown as D1Database);
   let id = 0;
   const discord: ClanDiscordApi = {
     async createCategory() {

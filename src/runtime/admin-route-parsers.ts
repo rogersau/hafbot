@@ -114,5 +114,5 @@ export function parseAdminQuery<T>(url: URL, schema: z.ZodType<T>): ParseResult<
 }
 
 export function parseErrorResponse(error: ParseError): Response {
-  return Response.json({ error: error.message, issues: error.issues }, { status: 400 });
+  return Response.json({ error: error.message, fieldIssues: error.issues }, { status: 400 });
 }

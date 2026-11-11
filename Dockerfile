@@ -37,7 +37,7 @@ RUN apt-get update \
 COPY --from=production-dependencies --chown=node:node /runtime/node_modules ./node_modules
 COPY --from=build --chown=node:node /workspace/dist-node ./dist-node
 COPY --from=build --chown=node:node /workspace/dist-admin ./dist-admin
-COPY --from=build --chown=node:node /workspace/migrations/postgres ./migrations/postgres
+COPY --from=build --chown=node:node /workspace/schema ./schema
 COPY --from=production-dependencies --chown=node:node /runtime/package.json ./package.json
 COPY --chown=node:node LICENSE THIRD_PARTY_NOTICES.md ./
 COPY --chown=node:node LICENSES ./LICENSES/

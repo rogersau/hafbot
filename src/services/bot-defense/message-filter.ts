@@ -3,7 +3,6 @@ import type { AuditEventId, DiscordMessageCreate, GuildEntitlement } from "../..
 import { getGuildEntitlementLimits } from "../../types";
 import type { BotDefenseConfig, BotDefenseEvidence, BotFlag } from "../../types";
 import { isRecord } from "../../unknown-parse";
-import { getChannelParent } from "../../discord/channels";
 import {
   buildAuditEmbed,
   formatStaffUserReference,
@@ -12,17 +11,9 @@ import {
   type DiscordEmbed,
   type DiscordAllowedMentions,
 } from "../../discord/messages";
-import { createChannelMessage, deleteChannelMessage } from "../../discord";
-import { DiscordApiError } from "../../discord/client";
-import { createCloudflareBotDefenseStore } from "../../runtime/cloudflare-bot-defense-store";
-import { createCloudflareGuildAuditLogStore } from "../../runtime/cloudflare-guild-audit-log-store";
-import { createCloudflareGuildEntitlementStore } from "../../runtime/cloudflare-guild-entitlement-store";
-import { postMessageAuditEvent, type MessageAuditEventData } from "../guild-audit-log-service";
-import { createComponentIdSigner } from "../../security/component-id-signer";
-import { signSensitiveMessageComponentIds } from "../../security/sensitive-component-ids";
+import type { MessageAuditEventData } from "../guild-audit-log-service";
 import { buildBotDefenseComponentId } from "../../bot-defense-component-id";
 import { deriveGatewayOperationNonce } from "../../runtime/gateway-event-idempotency";
-import { fingerprintImageAttachments } from "./attachment-fingerprint";
 
 const FORUM_CHANNEL_TYPE = 15;
 
@@ -81,85 +72,9 @@ export interface BotDefenseMessageFilterDependencies {
 export async function moderateBotDefenseMessageCreate(
   message: DiscordMessageCreate | null,
   env: BotDefenseEnv,
-  partialDependencies: Partial<BotDefenseMessageFilterDependencies> = {},
-  resolveBotDisplayName?: (guildId: string) => Promise<string>,
+  dependencies: BotDefenseMessageFilterDependencies,
 ): Promise<void> {
-  const componentIdSigner = env.COMPONENT_ID_SIGNING_SECRET
-    ? createComponentIdSigner({
-        currentSecret: env.COMPONENT_ID_SIGNING_SECRET,
-        previousSecret: env.COMPONENT_ID_PREVIOUS_SIGNING_SECRET,
-      })
-    : undefined;
-  const dependencies: BotDefenseMessageFilterDependencies = {
-    fingerprintImageAttachments:
-      partialDependencies.fingerprintImageAttachments ?? fingerprintImageAttachments,
-    readConfig: partialDependencies.readConfig ?? ((guildId) => readConfig(guildId, env)),
-    readGuildEntitlement:
-      partialDependencies.readGuildEntitlement ?? ((guildId) => readGuildEntitlement(guildId, env)),
-    resolveChannelParent: partialDependencies.resolveChannelParent ?? getChannelParent,
-    openBotFlag:
-      partialDependencies.openBotFlag ??
-      ((guildId, userId, detectorType, evidence) =>
-        createCloudflareBotDefenseStore(env.HAF_DB!).openBotFlag(
-          guildId,
-          userId,
-          detectorType,
-          evidence,
-        )),
-    setBotFlagQueueMessage:
-      partialDependencies.setBotFlagQueueMessage ??
-      ((guildId, userId, expectedCreatedAtMs, queueMessageId, nowMs) =>
-        createCloudflareBotDefenseStore(env.HAF_DB!).setBotFlagQueueMessage(
-          guildId,
-          userId,
-          expectedCreatedAtMs,
-          queueMessageId,
-          nowMs,
-        )),
-    recordRateMessage:
-      partialDependencies.recordRateMessage ??
-      ((guildId, userId, channelId, messageFingerprint, messageTimestampMs) =>
-        createCloudflareBotDefenseStore(env.HAF_DB!).recordRateMessage(
-          guildId,
-          userId,
-          channelId,
-          messageFingerprint,
-          messageTimestampMs,
-        )),
-    listMatchingMessageChannelsInWindow:
-      partialDependencies.listMatchingMessageChannelsInWindow ??
-      ((guildId, userId, messageFingerprint, windowMs, nowMs) =>
-        createCloudflareBotDefenseStore(env.HAF_DB!).listMatchingMessageChannelsInWindow(
-          guildId,
-          userId,
-          messageFingerprint,
-          windowMs,
-          nowMs,
-        )),
-    createChannelMessage:
-      partialDependencies.createChannelMessage ??
-      ((channelId, body, botToken) =>
-        signSensitiveMessageComponentIds(body, componentIdSigner).then((signed) =>
-          createChannelMessage(channelId, signed, botToken),
-        )),
-    warnUser:
-      partialDependencies.warnUser ??
-      ((channelId, messageId, userId, detectorType) =>
-        warnBotDefenseUser(channelId, messageId, userId, detectorType, env.DISCORD_BOT_TOKEN)),
-    deleteMessage:
-      partialDependencies.deleteMessage ??
-      ((channelId, messageId) =>
-        deleteBotDefenseMessage(channelId, messageId, env.DISCORD_BOT_TOKEN)),
-    postAuditEvent:
-      partialDependencies.postAuditEvent ?? ((eventId, data) => postAuditEvent(eventId, data, env)),
-    resolveBotDisplayName:
-      resolveBotDisplayName ?? partialDependencies.resolveBotDisplayName ?? (async () => "HAF Bot"),
-    nowMs: partialDependencies.nowMs ?? (() => Date.now()),
-  };
-
-  if (!message?.guild_id || !env.HAF_DB) {
-    return;
-  }
+  if (!message?.guild_id) return;
 
   const guildId = message.guild_id;
   const authorId = message.author?.id;
@@ -209,33 +124,7 @@ export async function moderateBotDefenseMessageCreate(
   }
 }
 
-type BotDefenseEnv = Pick<
-  Env,
-  | "HAF_DB"
-  | "BOT_USER_ID"
-  | "DISCORD_BOT_TOKEN"
-  | "COMPONENT_ID_SIGNING_SECRET"
-  | "COMPONENT_ID_PREVIOUS_SIGNING_SECRET"
-  | "HAF_DEPLOYMENT_MODE"
->;
-
-async function readConfig(guildId: string, env: BotDefenseEnv): Promise<BotDefenseConfig | null> {
-  if (!env.HAF_DB) return null;
-  return createCloudflareBotDefenseStore(env.HAF_DB).readConfig(guildId);
-}
-
-async function readGuildEntitlement(
-  guildId: string,
-  env: BotDefenseEnv,
-): Promise<GuildEntitlement> {
-  if (!env.HAF_DB) {
-    return { guildId, tier: "free", updatedAtMs: 0 };
-  }
-  return createCloudflareGuildEntitlementStore(
-    env.HAF_DB,
-    env.HAF_DEPLOYMENT_MODE,
-  ).readGuildEntitlement(guildId);
-}
+type BotDefenseEnv = Pick<Env, "DISCORD_BOT_TOKEN">;
 
 async function runHoneypotDetector(
   message: DiscordMessageCreate,
@@ -428,54 +317,6 @@ function isRetryableActionError(error: unknown): boolean {
   return typeof status !== "number" || status === 429 || status >= 500;
 }
 
-async function warnBotDefenseUser(
-  channelId: string,
-  messageId: string,
-  userId: string,
-  detectorType: "honeypot" | "rate",
-  botToken: string,
-): Promise<void> {
-  const detectorLabel = detectorType === "honeypot" ? "Honeypot Detector" : "Rate Detector";
-  const content = `Your message triggered Bot Defense's ${detectorLabel}.`;
-  try {
-    await createChannelMessage(
-      channelId,
-      {
-        content,
-        message_reference: { message_id: messageId, channel_id: channelId },
-        allowed_mentions: { parse: [], replied_user: true },
-        nonce: `bot-defense:${messageId}:${detectorType}`,
-        enforce_nonce: true,
-      },
-      botToken,
-    );
-  } catch {
-    await createChannelMessage(
-      channelId,
-      {
-        content: `<@${userId}> ${content}`,
-        allowed_mentions: { parse: [], users: [userId] },
-        nonce: `bot-defense:${messageId}:${detectorType}`,
-        enforce_nonce: true,
-      },
-      botToken,
-    );
-  }
-}
-
-async function deleteBotDefenseMessage(
-  channelId: string,
-  messageId: string,
-  botToken: string,
-): Promise<void> {
-  try {
-    await deleteChannelMessage(channelId, messageId, botToken);
-  } catch (error) {
-    if (error instanceof DiscordApiError && error.status === 404) return;
-    throw error;
-  }
-}
-
 async function postBotFlagQueueMessage(
   guildId: string,
   userId: string,
@@ -659,21 +500,6 @@ export async function fingerprintRateMessage(content: string): Promise<string | 
   const bytes = new TextEncoder().encode(normalized);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function postAuditEvent(
-  eventId: AuditEventId,
-  data: MessageAuditEventData,
-  env: BotDefenseEnv,
-): Promise<void> {
-  if (!env.HAF_DB) return;
-  await postMessageAuditEvent(
-    eventId,
-    data,
-    createCloudflareGuildAuditLogStore(env.HAF_DB),
-    env.DISCORD_BOT_TOKEN,
-    env.BOT_USER_ID,
-  );
 }
 
 function allowRoleMentions(roleIds: string[]): DiscordAllowedMentions {

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Env } from "../src/env";
+import type { Env } from "./support/test-env";
 import { createPublicRoutes } from "../src/routes/public-routes";
 import { createRuntimeApp } from "../src/runtime/app";
-import { createCloudflareContext } from "../src/runtime/cloudflare-context";
+import { createSqliteContext } from "./support/sqlite/runtime/sqlite-context";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { readSelfHostedSite } from "../src/runtime/self-hosted-site";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
@@ -151,7 +151,7 @@ test("Microsoft domain verification identifies only a configured independent app
 test("runtime context carries independent identity through the public and verified interaction routes", async () => {
   const database = new SqliteD1Database();
   try {
-    const context = createCloudflareContext({
+    const context = createSqliteContext({
       ...environment,
       HAF_DB: database.d1,
       STAGING_MODE: "true",

@@ -518,9 +518,12 @@ test("dispatcher parses the route body schema and returns 400 on parse failure",
   });
   const response = await dispatchAdminRoute([route], request, createDispatchOptions());
   assert.equal(response?.status, 400);
-  const payload = (await response?.json()) as { error: string; issues: Array<{ path: string }> };
+  const payload = (await response?.json()) as {
+    error: string;
+    fieldIssues: Array<{ path: string }>;
+  };
   assert.equal(payload.error, "Invalid request body");
-  assert.ok(payload.issues.length > 0);
+  assert.ok(payload.fieldIssues.length > 0);
 });
 
 test("dispatcher parses the route query schema and returns 400 on parse failure", async () => {
@@ -535,9 +538,12 @@ test("dispatcher parses the route query schema and returns 400 on parse failure"
   const request = new Request("https://example.com/admin/api/example");
   const response = await dispatchAdminRoute([route], request, createDispatchOptions());
   assert.equal(response?.status, 400);
-  const payload = (await response?.json()) as { error: string; issues: Array<{ path: string }> };
+  const payload = (await response?.json()) as {
+    error: string;
+    fieldIssues: Array<{ path: string }>;
+  };
   assert.equal(payload.error, "Invalid request query");
-  assert.equal(payload.issues[0]?.path, "guildId");
+  assert.equal(payload.fieldIssues[0]?.path, "guildId");
 });
 
 test("dispatcher passes the parsed body to the route handler", async () => {

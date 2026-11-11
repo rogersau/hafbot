@@ -400,10 +400,8 @@ function createPlatformLinkFixture(
   const ready = (async () => {
     if (tier !== "free") {
       await fixture.database.d1
-        .prepare(
-          "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES (?, ?, ?, ?)",
-        )
-        .bind("guild-1", tier, tier, 1)
+        .prepare("INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES (?, ?, ?)")
+        .bind("guild-1", tier, 1)
         .run();
     }
     for (const config of configs) await rawStore.upsertPlatformLinkConfig(config);

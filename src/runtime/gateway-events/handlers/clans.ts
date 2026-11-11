@@ -8,7 +8,7 @@ export const clanGatewayHandler = defineGatewayEventHandler(
     key: "clan-reconciliation",
     eventTypes: ["GUILD_MEMBER_REMOVE", "GUILD_ROLE_DELETE", "CHANNEL_DELETE"],
     order: 9,
-    isEnabled: ({ env, features }) => Boolean(env.HAF_DB && features.clans !== false),
+    isEnabled: ({ clanService, features }) => Boolean(clanService && features.clans !== false),
     async handle({ clanService, operations }, envelope) {
       if (!clanService || !isRecord(envelope.data)) return;
       const data = envelope.data;

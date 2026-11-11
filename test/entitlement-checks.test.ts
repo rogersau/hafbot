@@ -11,7 +11,7 @@ import { createProductionRuntimeStores } from "./support/production-runtime-stor
 test("assertGuildPremiumTier treats premium plus as premium for one Guild without upgrading another", async () => {
   const fixture = createProductionRuntimeStores();
   fixture.database.execRaw(
-    "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-plus', 'premium_plus', 'premium_plus', 1)",
+    "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-plus', 'premium_plus', 1)",
   );
 
   assert.deepEqual(await assertGuildPremiumTier(fixture.stores.guildEntitlements, "guild-plus"), {

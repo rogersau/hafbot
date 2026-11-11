@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -102,9 +103,7 @@ for (const failure of ["resources", "route", "apply"] as const) {
         if (path.includes("/preview")) return previewResponse("target", "token");
         if (path.includes("/apply")) {
           applies++;
-          return failure === "apply"
-            ? Response.json({ error: "Response lost" }, { status: 502 })
-            : Response.json({});
+          return failure === "apply" ? adminErrorResponse("Response lost", 502) : Response.json({});
         }
         reads++;
         if (failure === "resources" && reads === 1) throw new Error("Read unavailable");

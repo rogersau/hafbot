@@ -8,7 +8,7 @@ export interface PlatformLinkCustomLink {
 }
 
 export interface PlatformLinkConfig {
-  /** Omitted legacy values are enabled. */
+  /** Defaults to enabled when omitted from a new configuration. */
   enabled?: boolean;
   guildId: string;
   platform: PlatformLinkPlatform;
@@ -83,7 +83,7 @@ export interface PlatformLinkStore {
     platformId: string,
   ): Promise<PlatformLink | null>;
   upsertPlatformLink(link: PlatformLink): Promise<void>;
-  /** Atomically replace this user's links for one platform, including legacy Steam rows. */
+  /** Atomically replace this user's links for one platform. */
   replacePlatformLinks(link: PlatformLink): Promise<void>;
   deletePlatformLink(
     guildId: string,
@@ -92,4 +92,12 @@ export interface PlatformLinkStore {
     platformId?: string,
   ): Promise<void>;
   listPlatformLinks(guildId: string, platform?: PlatformLinkPlatform): Promise<PlatformLink[]>;
+}
+
+export interface GameOwnership {
+  appId: string;
+  name: string;
+  owned: boolean;
+  playtimeHours: number | null;
+  note: string;
 }

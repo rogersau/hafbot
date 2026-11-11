@@ -10,7 +10,6 @@ import {
   buildBlocklistUpdateMessage,
   postGuildActivityUpdate,
   type ChannelMessageSender,
-  type GuildNotificationChannelStore,
   type ActionActor,
 } from "./activity-log";
 
@@ -22,7 +21,7 @@ export interface BlocklistMutation {
 
 export class BlocklistService {
   constructor(
-    private readonly store: BlocklistStore & Partial<GuildNotificationChannelStore>,
+    private readonly store: BlocklistStore,
     private readonly sendChannelMessage?: ChannelMessageSender,
     private readonly guildEntitlementStore?: GuildEntitlementStore,
     private readonly auditLogStore?: GuildAuditLogStore,
@@ -54,10 +53,6 @@ export class BlocklistService {
   }
 
   async getGuildNotificationChannel(guildId: string): Promise<string | null> {
-    if (typeof this.store.readGuildNotificationChannel !== "function") {
-      return null;
-    }
-
     return this.store.readGuildNotificationChannel(guildId, "blocklist");
   }
 
@@ -65,10 +60,6 @@ export class BlocklistService {
     guildId: string,
     notificationChannelId: string | null,
   ): Promise<void> {
-    if (typeof this.store.upsertGuildNotificationChannel !== "function") {
-      return;
-    }
-
     await this.store.upsertGuildNotificationChannel({
       guildId,
       feature: "blocklist",

@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -24,9 +25,9 @@ test("unexpected Admin failures do not expose their cause", async () => {
   assert.equal(response.headers.get("x-correlation-id"), body.correlationId);
 });
 
-test("legacy Admin errors are upgraded at the central boundary", async () => {
+test("Admin errors receive the request correlation and cache policy at the central boundary", async () => {
   const response = await normalizeAdminErrorResponse(
-    Response.json({ error: "Forbidden" }, { status: 403 }),
+    adminErrorResponse("Forbidden", 403),
     context(),
   );
   const body = (await response.json()) as Record<string, unknown>;
@@ -68,32 +69,23 @@ test("AdminRouteError preserves a bounded stale-preview reason", async () => {
   assert.equal(body.staleReason, "target");
 });
 
-test("legacy stale-preview details are normalized to bounded reasons", async () => {
+test("stale-preview responses preserve only bounded current reasons", async () => {
   const response = await normalizeAdminErrorResponse(
-    Response.json(
-      {
-        error: "Discord channel state changed after preview.",
-        code: "stale_preview",
-        stale: "stale_source_and_target",
-      },
-      { status: 409 },
-    ),
+    adminErrorResponse("Discord channel state changed after preview.", 409, {
+      code: "stale_preview",
+      staleReason: "source_and_target",
+    }),
     context(),
   );
   const body = (await response.json()) as Record<string, unknown>;
   assert.equal(body.code, "stale_preview");
   assert.equal(body.staleReason, "source_and_target");
-  assert.equal(body.stale, undefined);
 
   const unsafeResponse = await normalizeAdminErrorResponse(
-    Response.json(
-      {
-        error: "Discord channel state changed after preview.",
-        code: "stale_preview",
-        stale: "raw",
-      },
-      { status: 409 },
-    ),
+    adminErrorResponse("Discord channel state changed after preview.", 409, {
+      code: "stale_preview",
+      staleReason: "untrusted-detail" as never,
+    }),
     context(),
   );
   const unsafeBody = (await unsafeResponse.json()) as Record<string, unknown>;

@@ -8,13 +8,13 @@ import {
   listCurrentServerLevelLeaderboard,
 } from "../src/runtime/application-command-handler";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
-import { createCloudflareServerLevelStore } from "../src/runtime/cloudflare-server-level-store";
+import { createSqliteServerLevelStore } from "./support/sqlite/runtime/sqlite-server-level-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
 
 test("Server Levels leaderboard rechecks current Guild membership across stale pages", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     for (let index = 0; index < 30; index += 1) {
       await appendTotal(store, `former-${String(index).padStart(2, "0")}`, 10_000 - index);
@@ -133,7 +133,7 @@ test("a restricted support interaction completes Server Levels personal-data era
 });
 
 async function appendTotal(
-  store: ReturnType<typeof createCloudflareServerLevelStore>,
+  store: ReturnType<typeof createSqliteServerLevelStore>,
   userId: string,
   xpUnits: number,
 ) {

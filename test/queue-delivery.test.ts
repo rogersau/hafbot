@@ -88,13 +88,13 @@ test("Queue Delivery identifies the final retry that Cloudflare will move to the
   await deliverQueueBatch(fakeBatch("test-queue", [message]), {
     maxAttempts: 4,
     parse: (body) => ({ ok: true, value: body }),
-    handle: async () => ({ status: "retry", reasonCode: "d1_unavailable" }),
+    handle: async () => ({ status: "retry", reasonCode: "database_unavailable" }),
     emit: (event) => events.push(event),
   });
 
   assert.deepEqual(message.actions, [{ action: "retry", delaySeconds: undefined }]);
   assert.equal(events.at(-1)?.event, "dead_lettered");
-  assert.equal(events.at(-1)?.reasonCode, "d1_unavailable");
+  assert.equal(events.at(-1)?.reasonCode, "database_unavailable");
 });
 
 test("Queue Delivery reports one caught failure without changing retry settlement", async () => {
@@ -192,10 +192,15 @@ test("Queue Delivery classifies provider rate limits and permanent configuration
     status: "retry",
     reasonCode: "provider_timeout",
   });
-  assert.deepEqual(classifyQueueDeliveryError(new Error("D1_ERROR: database unavailable")), {
-    status: "retry",
-    reasonCode: "d1_unavailable",
-  });
+  assert.deepEqual(
+    classifyQueueDeliveryError(
+      Object.assign(new Error("database unavailable"), { code: "ECONNREFUSED" }),
+    ),
+    {
+      status: "retry",
+      reasonCode: "database_unavailable",
+    },
+  );
   assert.deepEqual(
     classifyQueueDeliveryError(new QueueTerminalError("invalid_runtime_configuration")),
     { status: "terminal", reasonCode: "invalid_runtime_configuration" },

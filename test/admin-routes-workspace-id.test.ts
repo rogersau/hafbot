@@ -277,7 +277,7 @@ test("GET /admin/api/player-count preserves workspaceId in the access requiremen
   ]);
 });
 
-test("GET /admin/api/steam-link preserves workspaceId in the access requirement", async () => {
+test("GET /admin/api/player-link preserves workspaceId in the access requirement", async () => {
   const { capture, access } = createCapturingAccess();
   const handler = createAdminApiHandler({
     stores: createStores(),
@@ -286,8 +286,8 @@ test("GET /admin/api/steam-link preserves workspaceId in the access requirement"
   });
 
   const response = await handler(
-    new Request("https://example.com/admin/api/steam-link?workspaceId=ws-1&guildId=guild-1"),
-    new URL("https://example.com/admin/api/steam-link?workspaceId=ws-1&guildId=guild-1"),
+    new Request("https://example.com/admin/api/player-link?workspaceId=ws-1&guildId=guild-1"),
+    new URL("https://example.com/admin/api/player-link?workspaceId=ws-1&guildId=guild-1"),
   );
 
   assert.equal(response?.status, 403);

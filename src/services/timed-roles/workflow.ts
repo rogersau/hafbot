@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // These fields map to the existing Timed Role Assignment columns. The state name
-// is derived on read so existing assignments need no data migration.
+// is derived from the current assignment.
 const progressSchema = z.object({
   suspendedRoleIds: z.array(z.string()),
   pendingSuspensionRoleIds: z.array(z.string()),

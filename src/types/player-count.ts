@@ -1,7 +1,7 @@
 export type PlayerCountProvider = "steam-web" | "wardogs-rcon";
 
 export interface PlayerCountServer {
-  /** Omitted legacy values are enabled. */
+  /** Defaults to enabled when omitted from a new configuration. */
   enabled?: boolean;
   readiness?: "ready" | "dormant";
   readinessMessage?: string;

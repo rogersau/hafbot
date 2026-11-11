@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -27,19 +28,15 @@ import { createDefaultMentionProtectionConfig } from "../src/services/mention-pr
 test("Guild Settings isolates privacy read errors but preserves authorization failures", async () => {
   const originalFetch = globalThis.fetch;
   let status = 500;
-  let code = "internal_error";
+  let code: import("../src/contracts/admin/errors").AdminErrorCode = "internal_error";
   globalThis.fetch = async (input) =>
     String(input).startsWith("/admin/api/product-analytics/")
-      ? Response.json(
-          {
-            error: "Unavailable",
-            code,
-            correlationId: "fictional-ref",
-            retryable: true,
-            action: "retry",
-          },
-          { status },
-        )
+      ? adminErrorResponse("Unavailable", status, {
+          code,
+          correlationId: "fictional-ref",
+          retryable: true,
+          action: "retry",
+        })
       : Response.json({
           guildId: "guild-1",
           adminRoleId: "admin-role-1",
@@ -78,16 +75,12 @@ test("Overview omits an empty workspace, accepts attention cards, and exposes fe
     assert.equal(url.searchParams.has("workspaceId"), false);
     if (url.pathname === "/admin/api/guild-overview") {
       return fail
-        ? Response.json(
-            {
-              error: "Unavailable",
-              code: "internal_error",
-              correlationId: "fictional-ref",
-              retryable: true,
-              action: "retry",
-            },
-            { status: 500 },
-          )
+        ? adminErrorResponse("Unavailable", 500, {
+            code: "internal_error",
+            correlationId: "fictional-ref",
+            retryable: true,
+            action: "retry",
+          })
         : Response.json({
             guildId: "guild-1",
             tier: "free",

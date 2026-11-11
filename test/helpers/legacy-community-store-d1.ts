@@ -1594,7 +1594,7 @@ export function createLegacyCommunityStoreDatabase(
 
     if (
       sql.includes(
-        "INSERT INTO guild_entitlements(guild_id, tier, updated_at_ms) VALUES(?, ?, ?)",
+        "INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES(?, ?, ?)",
       ) ||
       normalizedSql.includes("insert into guild_entitlements")
     ) {

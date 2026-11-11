@@ -1,7 +1,6 @@
 import type { GuildPlan } from "../../types";
 
 export type BillingFrequency = "monthly" | "yearly";
-export type BillingPricingCohort = "founder" | "standard";
 
 export interface BillingAuditIdentity {
   discordUserId: string;
@@ -26,8 +25,6 @@ export interface BillingCatalogEntry {
   productId: string;
   plan: Exclude<GuildPlan, "free">;
   frequency: BillingFrequency;
-  cohort: BillingPricingCohort;
-  legacy?: true;
 }
 
 export interface StripeOwnerState {
@@ -48,10 +45,6 @@ export interface StripeSubscriptionState {
   cancelledAtMs: number | null;
   latestInvoiceId: string | null;
   scheduleId: string | null;
-  livemode?: boolean;
-  latestInvoicePaid?: boolean;
-  latestInvoiceAmountPaid?: number | null;
-  latestInvoiceBillingReason?: string | null;
 }
 
 export interface BillingSubscriptionProjection {
@@ -74,15 +67,6 @@ export interface BillingSubscriptionProjection {
   graceStartedAtMs?: number | null;
   graceEndsAtMs?: number | null;
   graceExpiredAtMs?: number | null;
-  pricingCohort?: BillingPricingCohort | null;
-  founderAwardedAtMs?: number | null;
-}
-
-export interface FounderAdmission {
-  historicalCount: number;
-  publicCount: number;
-  limit: number;
-  open: boolean;
 }
 
 export interface BillingLedgerOperation {

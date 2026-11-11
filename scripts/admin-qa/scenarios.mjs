@@ -181,7 +181,7 @@ export const scenarios = [
     apiOptions: {
       responses: {
         "/admin/api/workspaces": { workspaces: [] },
-        "/admin/api/steam-link": { guildId: GUILD, config: null, links: [] },
+
         "/admin/api/player-link": { guildId: GUILD, platform: "steam", config: null, links: [] },
       },
     },

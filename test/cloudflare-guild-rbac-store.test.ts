@@ -5,20 +5,20 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareGuildRbacStore } from "../src/runtime/cloudflare-guild-rbac-store";
+import { createSqliteGuildRbacStore } from "./support/sqlite/runtime/sqlite-guild-rbac-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("createCloudflareGuildRbacStore reads missing role ids as null", async () => {
+test("createSqliteGuildRbacStore reads missing role ids as null", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildRbacStore(database as unknown as D1Database);
+  const store = createSqliteGuildRbacStore(database as unknown as D1Database);
 
   assert.equal(await store.readGuildAdminRoleId("guild-1"), null);
 });
 
-test("createCloudflareGuildRbacStore upserts, replaces, and deletes role ids", async () => {
+test("createSqliteGuildRbacStore upserts, replaces, and deletes role ids", async () => {
   const database = new SqliteD1Database();
-  const firstStore = createCloudflareGuildRbacStore(database as unknown as D1Database);
-  const secondStore = createCloudflareGuildRbacStore(database as unknown as D1Database);
+  const firstStore = createSqliteGuildRbacStore(database as unknown as D1Database);
+  const secondStore = createSqliteGuildRbacStore(database as unknown as D1Database);
 
   assert.strictEqual(firstStore, secondStore);
 
@@ -43,7 +43,7 @@ test("createCloudflareGuildRbacStore upserts, replaces, and deletes role ids", a
 
 test("manager policy defaults on, is guild scoped, and survives role changes", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildRbacStore(database as unknown as D1Database);
+  const store = createSqliteGuildRbacStore(database as unknown as D1Database);
   assert.equal(await store.readManageServerAdminEnabled("guild-1"), true);
   await store.setManageServerAdminEnabled("guild-1", false);
   await store.upsertGuildAdminRoleId("guild-1", "role-1");

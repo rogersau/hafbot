@@ -1,7 +1,7 @@
 import type { QueueBatch } from "./queue-types";
-import type { Env } from "../env";
+
 import type { GuildR2ObjectStore } from "./contracts";
-import { createCloudflareContext } from "./cloudflare-context";
+
 import { isRecord } from "../unknown-parse";
 import {
   DEFAULT_QUEUE_MAX_ATTEMPTS,
@@ -14,15 +14,6 @@ export const R2_QUOTA_QUEUE_NAME = "haf-bot-r2-quota";
 export interface R2QuotaQueueLogger {
   error(...args: unknown[]): void;
   info?(...args: unknown[]): void;
-}
-
-export async function handleR2QuotaQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-  logger: R2QuotaQueueLogger = console,
-): Promise<void> {
-  const context = createCloudflareContext(env);
-  await deliverR2QuotaQueueBatch(batch, context.stores.guildR2Objects, logger);
 }
 
 export async function deliverR2QuotaQueueBatch(

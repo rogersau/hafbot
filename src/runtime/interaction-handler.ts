@@ -95,7 +95,7 @@ export async function handleInteractionRequest(
     ...createServiceFactory({
       stores: options.stores,
       discordBotToken: options.discordBotToken,
-      discordCacheKv: options.discordCacheKv,
+      discordCache: options.discordCache,
       steamWebApiKey: options.steamWebApiKey,
       wardogs: options.wardogs,
       banEnforcementStore: options.banEnforcementStore,
@@ -184,19 +184,6 @@ export async function handleInteractionRequest(
       });
       if (verification.kind === "invalid") {
         return Response.json(buildEphemeralMessage("This action is no longer available."));
-      }
-      if (verification.kind === "legacy") {
-        const legacyUntilMs =
-          verification.purpose === "member-verification-panel"
-            ? (options.memberVerificationPanelLegacyUntilMs ?? options.componentIdLegacyUntilMs)
-            : options.componentIdLegacyUntilMs;
-        if (!legacyUntilMs || Date.now() > legacyUntilMs) {
-          return Response.json(buildEphemeralMessage("This action is no longer available."));
-        }
-        console.info("Legacy sensitive component ID accepted", { purpose: verification.purpose });
-        if (verification.customId) {
-          interaction = replaceInteractionCustomId(interaction, verification.customId);
-        }
       }
       if (verification.kind === "valid") {
         interaction = replaceInteractionCustomId(interaction, verification.customId);

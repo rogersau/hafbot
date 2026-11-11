@@ -10,7 +10,7 @@ import type {
   CommercePrice,
   CommerceSubscription,
 } from "../src/commerce";
-import { createCloudflareCommerceStore } from "../src/runtime/cloudflare-commerce-store";
+import { createSqliteCommerceStore } from "./support/sqlite/runtime/sqlite-commerce-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 const NOW = 1_800_000_000_000;
@@ -18,7 +18,7 @@ const NOW = 1_800_000_000_000;
 test("notified seller reviews do not consume the pending notification batch", async () => {
   const database = await createTestDatabase();
   try {
-    const store = createCloudflareCommerceStore(database.d1);
+    const store = createSqliteCommerceStore(database.d1);
     for (let index = 0; index < 3; index += 1) {
       const connectedAccountId = `acct_review_${index}`;
       await store.ensureSellerReviewRequest({
@@ -67,7 +67,7 @@ test("notified seller reviews do not consume the pending notification batch", as
 test("seller review decisions remain retryable until the seller approval is persisted", async () => {
   const database = await createTestDatabase();
   try {
-    const store = createCloudflareCommerceStore(database.d1);
+    const store = createSqliteCommerceStore(database.d1);
     const connectedAccountId = "acct_review_1";
     await store.ensureSellerReviewRequest({
       id: `seller-review:${connectedAccountId}`,
@@ -133,7 +133,7 @@ test("seller review decisions remain retryable until the seller approval is pers
 test("commerce store keeps seller consent, catalog, buyers, and provider events isolated", async () => {
   const database = await createTestDatabase();
   try {
-    const store = createCloudflareCommerceStore(database.d1);
+    const store = createSqliteCommerceStore(database.d1);
     const account = connectedAccount();
     await store.saveConnectedAccount(account);
     assert.deepEqual(await store.readConnectedAccountByGuild(account.guildId), account);
@@ -236,7 +236,7 @@ test("commerce store keeps seller consent, catalog, buyers, and provider events 
 test("a buyer can subscribe to several offerings but not twice to the same offering", async () => {
   const database = await createTestDatabase();
   try {
-    const store = createCloudflareCommerceStore(database.d1);
+    const store = createSqliteCommerceStore(database.d1);
     await seedBuyerCatalog(store);
 
     const first = subscription("subscription-1", "offering-monthly", "price-aud-month");
@@ -284,7 +284,7 @@ test("a buyer can subscribe to several offerings but not twice to the same offer
 test("sales panel publication claims serialize and retain interrupted provider intent", async () => {
   const database = await createTestDatabase();
   try {
-    const store = createCloudflareCommerceStore(database.d1);
+    const store = createSqliteCommerceStore(database.d1);
     await store.saveConnectedAccount(connectedAccount());
     const claim = (leaseToken: string, createNonce: string, targetChannelId = "channel-1") =>
       store.claimSalesPanelPublication({
@@ -354,7 +354,7 @@ test("sales panel publication claims serialize and retain interrupted provider i
 test("commerce role delivery is a separate projection and seller archive retains history", async () => {
   const database = await createTestDatabase();
   try {
-    const store = createCloudflareCommerceStore(database.d1);
+    const store = createSqliteCommerceStore(database.d1);
     await seedBuyerCatalog(store);
     await store.saveSubscription(
       subscription("subscription-1", "offering-monthly", "price-aud-month"),
@@ -454,7 +454,7 @@ test("entitlement provider identity is scoped to the connected seller", async ()
 test("Commerce manager capabilities are seller scoped and revocable", async () => {
   const database = await createTestDatabase();
   try {
-    const store = createCloudflareCommerceStore(database.d1);
+    const store = createSqliteCommerceStore(database.d1);
     await store.saveConnectedAccount(connectedAccount());
     await store.saveAuthorityGrant({
       connectedAccountId: "seller-1",
@@ -486,7 +486,7 @@ test("Commerce manager capabilities are seller scoped and revocable", async () =
 test("migration enforces explicit supported currencies and immutable price economics", async () => {
   const database = await createTestDatabase();
   try {
-    const store = createCloudflareCommerceStore(database.d1);
+    const store = createSqliteCommerceStore(database.d1);
     await store.saveConnectedAccount(connectedAccount());
     await store.saveOffering(offering("offering-monthly", "role-monthly", "subscription"));
     await store.createPrice(price("price-aud-month", "offering-monthly", "AUD", "month"));
@@ -605,7 +605,7 @@ function subscription(id: string, offeringId: string, priceId: string): Commerce
   };
 }
 
-async function seedBuyerCatalog(store: ReturnType<typeof createCloudflareCommerceStore>) {
+async function seedBuyerCatalog(store: ReturnType<typeof createSqliteCommerceStore>) {
   await store.saveConnectedAccount(connectedAccount());
   await store.saveOffering(offering("offering-monthly", "role-monthly", "subscription"));
   await store.saveOffering(offering("offering-yearly", "role-yearly", "subscription"));
