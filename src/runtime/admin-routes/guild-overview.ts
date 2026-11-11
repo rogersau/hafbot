@@ -935,11 +935,7 @@ export function createGuildOverviewAdminRoutes(
           options.stores.timedRoles
             .readTimedRoleConfigRules(guildId, "manual-assignment")
             .then((roles) => ({ guildId, roles })),
-          options.stores.tickets.listTicketPanelConfigs
-            ? options.stores.tickets.listTicketPanelConfigs(guildId)
-            : options.stores.tickets
-                .readTicketPanelConfig(guildId)
-                .then((panel) => (panel ? [panel] : [])),
+          options.stores.tickets.listTicketPanelConfigs(guildId),
           options.stores.lfg.readLfgConfig(guildId),
           options.stores.clans?.readConfig(guildId) ?? Promise.resolve(null),
           options.stores.suggestions?.readConfig(guildId) ?? Promise.resolve(null),
