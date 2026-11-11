@@ -173,7 +173,9 @@ export class PostgresCommerceOfferingStore implements CommerceOfferingStore {
     const row = await this.database
       .query<{ count: number }>(
         `SELECT COUNT(*) AS count FROM commerce_offerings o
-         WHERE o.guild_id = $1 AND o.purchase_type = 'subscription' AND o.state = 'published'`,
+         WHERE o.guild_id = $1 AND o.purchase_type = 'subscription'
+           AND (o.state = 'published'
+             OR (o.state = 'repair_required' AND o.repair_previous_state = 'published'))`,
         [guildId],
       )
       .then((rows) => rows[0] ?? null);

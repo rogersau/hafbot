@@ -15,6 +15,7 @@ import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schem
 import { PostgresCommerceBuyerCheckoutStore } from "../src/runtime/postgres/postgres-commerce-buyer-checkout-store";
 import { PostgresCommerceOfferingStore } from "../src/runtime/postgres/postgres-commerce-offering-store";
 import { PostgresPaidRoleStore } from "../src/runtime/postgres/postgres-commerce-paid-role-store";
+import { PostgresCommerceSafeguardStore } from "../src/runtime/postgres/postgres-commerce-safeguard-store";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 const NOW = 1_900_000_000_000;
@@ -443,6 +444,80 @@ test(
       assert.equal(unpublishedRow?.offering.state, "unpublished");
       assert.equal(unpublishedRow?.offering.publishedAtMs, NOW);
       assert.equal(unpublishedRow?.offering.discordRoleId, "role-unpublished-2");
+    });
+  },
+);
+
+test(
+  "published Offering repairs retain capacity so completing repair cannot block seller checkout",
+  { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
+  async () => {
+    await withPostgres(async (database) => {
+      const seller = await seedSeller(database, "repair-capacity");
+      const service = offeringService(database);
+      const store = new PostgresCommerceOfferingStore(database, {
+        async isPremium() {
+          return true;
+        },
+      });
+      const publishedIds: string[] = [];
+      for (let index = 0; index < 5; index++) {
+        const created = await createDraftFor(
+          service,
+          seller,
+          `role-capacity-${index}`,
+          `Published ${index}`,
+        );
+        await service.publish(created.offering.id);
+        publishedIds.push(created.offering.id);
+      }
+      await seedAssignment(database, seller, publishedIds[0]!, "role-capacity-0", "ent-capacity");
+      const repairing = await service.replaceRole({
+        offeringId: publishedIds[0]!,
+        discordRoleId: "role-capacity-replacement",
+      });
+      assert.equal(repairing.offering.repairPreviousState, "published");
+      const sixth = await createDraftFor(service, seller, "role-capacity-sixth", "Sixth");
+
+      await assert.rejects(
+        () => service.publish(sixth.offering.id),
+        /commerce_offering_subscription_limit/,
+      );
+      assert.equal(await store.countPublishedSubscriptions(seller.guildId), 5);
+      assert.equal((await store.readOffering(sixth.offering.id))?.state, "draft");
+
+      const paidRole = new PostgresPaidRoleStore(database);
+      const repair = (await paidRole.listPendingRoleRepairs()).find(
+        (candidate) => candidate.offeringId === publishedIds[0],
+      );
+      assert.ok(repair);
+      await paidRole.completeRoleRepair({ ...repair, repairedCount: 1 }, NOW + 1);
+      assert.equal((await store.readOffering(publishedIds[0]!))?.state, "published");
+      assert.equal(await store.countPublishedSubscriptions(seller.guildId), 5);
+      assert.equal(
+        await new PostgresCommerceSafeguardStore(database).claimCapacity({
+          id: "checkout-after-capacity-repair",
+          checkoutKind: "subscription",
+          connectedAccountId: seller.accountId,
+          guildId: seller.guildId,
+          offeringId: publishedIds[1]!,
+          currency: "AUD",
+          amountMinor: 500,
+          expiresAtMs: NOW + 60_000,
+          nowMs: NOW + 1,
+        }),
+        true,
+      );
+
+      await service.unpublish(publishedIds[0]!);
+      const unpublishedRepair = await service.replaceRole({
+        offeringId: publishedIds[0]!,
+        discordRoleId: "role-capacity-unpublished-replacement",
+      });
+      assert.equal(unpublishedRepair.offering.repairPreviousState, "unpublished");
+      assert.equal(await store.countPublishedSubscriptions(seller.guildId), 4);
+      assert.equal((await service.publish(sixth.offering.id)).state, "published");
+      assert.equal(await store.countPublishedSubscriptions(seller.guildId), 5);
     });
   },
 );

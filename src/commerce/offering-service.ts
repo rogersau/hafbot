@@ -42,6 +42,7 @@ export interface CommerceOfferingStore {
     guildId: string,
     offeringId: string,
   ): Promise<CommerceOfferingPublishContext>;
+  /** Published subscriptions retain their publication slot while a role repair is pending. */
   countPublishedSubscriptions(guildId: string): Promise<number>;
   hasPublishedRoleMapping(
     guildId: string,

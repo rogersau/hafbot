@@ -180,7 +180,9 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
     const row = await this.database
       .prepare(
         `SELECT COUNT(*) AS count FROM commerce_offerings o
-         WHERE o.guild_id = ? AND o.purchase_type = 'subscription' AND o.state = 'published'`,
+         WHERE o.guild_id = ? AND o.purchase_type = 'subscription'
+           AND (o.state = 'published'
+             OR (o.state = 'repair_required' AND o.repair_previous_state = 'published'))`,
       )
       .bind(guildId)
       .first<{ count: number }>();
