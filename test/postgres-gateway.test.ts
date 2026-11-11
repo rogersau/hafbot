@@ -134,7 +134,7 @@ for (const rollback of [true, false]) {
       const release = deferred();
       const pending: Promise<unknown>[] = [];
       try {
-        await resetAndMigrate(database);
+        await initializeFreshTestSchema(database);
         const jobs = createPostgresJobQueue(database);
         const leases = createPostgresLeaseStore(database);
         const store = createPostgresGatewayStateStore(database, {
@@ -219,7 +219,7 @@ for (const rollback of [false, true]) {
       const pending: Promise<unknown>[] = [];
       let replacement: ReturnType<typeof createPostgresGatewaySupervisor> | undefined;
       try {
-        await resetAndMigrate(database);
+        await initializeFreshTestSchema(database);
         const jobs = createPostgresJobQueue(database);
         const leases = createPostgresLeaseStore(database);
         const store = createPostgresGatewayStateStore(database, {
@@ -333,7 +333,7 @@ test(
     const unhandledRelease = deferred();
     let supervisor: ReturnType<typeof createPostgresGatewaySupervisor> | undefined;
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const jobs = createPostgresJobQueue(database);
       const leases = createPostgresLeaseStore(database);
       const store = createPostgresGatewayStateStore(database, jobs);
@@ -438,7 +438,7 @@ for (const trigger of ["invalid session", "non-resumable close"] as const) {
       const release = deferred();
       let supervisor: ReturnType<typeof createPostgresGatewaySupervisor> | undefined;
       try {
-        await resetAndMigrate(database);
+        await initializeFreshTestSchema(database);
         const jobs = createPostgresJobQueue(database);
         const leases = createPostgresLeaseStore(database);
         const store = createPostgresGatewayStateStore(database, jobs);
@@ -757,7 +757,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const jobs = createPostgresJobQueue(database);
       const leases = createPostgresLeaseStore(database);
       const store = createPostgresGatewayStateStore(database, jobs);
@@ -965,7 +965,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const jobs = createPostgresJobQueue(database);
       const leases = createPostgresLeaseStore(database);
       const store = createPostgresGatewayStateStore(database, jobs);
@@ -1108,7 +1108,7 @@ function createTestDatabase(url: string): PostgresDatabaseCapability {
   });
 }
 
-async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
+async function initializeFreshTestSchema(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
   await initializePostgresSchema(database);
 }

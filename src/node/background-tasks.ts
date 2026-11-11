@@ -9,8 +9,7 @@ export interface BackgroundDrainResult {
 }
 
 /**
- * Node equivalent of ExecutionContext.waitUntil with an explicit capacity and
- * bounded shutdown drain. Rejections are observed so they cannot become
+ * Tracks background work with an explicit capacity and bounded shutdown drain. Rejections are observed so they cannot become
  * process-level unhandled rejections.
  */
 export class BackgroundTaskTracker {

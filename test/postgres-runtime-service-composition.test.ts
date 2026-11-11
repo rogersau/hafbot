@@ -36,7 +36,7 @@ function handlerContext(
   };
 }
 
-async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
+async function initializeFreshTestSchema(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
   await initializePostgresSchema(database);
 }
@@ -70,7 +70,7 @@ test(
       return new Response("ok", { status: 200 });
     }) as typeof fetch;
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const jobs = createPostgresJobQueue(database);
       const environment = {
         NODE_ENV: "test",
@@ -268,7 +268,7 @@ test(
       PG_POOL_MAX: "8",
     });
     try {
-      await resetAndMigrate(writableDatabase);
+      await initializeFreshTestSchema(writableDatabase);
       const readOnlyDatabase = createPostgresDatabaseCapabilityFromEnvironment(
         { DATABASE_URL: postgresUrl, NODE_ENV: "test", PG_POOL_MAX: "4" },
         { readOnly: true },

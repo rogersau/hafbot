@@ -28,7 +28,7 @@ test(
       PG_POOL_MAX: "6",
     });
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const objects = new InMemoryObjectStore();
       const accounting = createPostgresGuildObjectStore(database);
       const nowMs = 4_000_000_000;
@@ -155,7 +155,7 @@ test(
       PG_POOL_MAX: "6",
     });
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       await verifyEntitlements(database);
       await verifyAtomicQuota(database);
       await verifyRecoveryAndPortableBlobs(database);
@@ -348,7 +348,7 @@ async function verifyTtlCaches(database: PostgresDatabaseCapability): Promise<vo
   await streaks.clearStreakReported("guild:server");
 }
 
-async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
+async function initializeFreshTestSchema(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
   await initializePostgresSchema(database);
 }

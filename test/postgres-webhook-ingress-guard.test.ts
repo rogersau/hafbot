@@ -18,7 +18,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       let leaseId = 0;
       const guard = createPostgresWebhookIngressGuard(database, {
         randomId: () => `guard-lease-${++leaseId}`,
@@ -136,7 +136,7 @@ function createTestDatabase(url: string): PostgresDatabaseCapability {
   });
 }
 
-async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
+async function initializeFreshTestSchema(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
   await initializePostgresSchema(database);
 }

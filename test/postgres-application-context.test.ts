@@ -46,7 +46,7 @@ test(
       PG_POOL_MAX: "8",
     });
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const jobs = createPostgresJobQueue(database);
       const queues = runtimeTesting.createQueueBindings(database, jobs);
       const environment = {
@@ -312,7 +312,7 @@ test(
   },
 );
 
-async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
+async function initializeFreshTestSchema(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
   await initializePostgresSchema(database);
 }
