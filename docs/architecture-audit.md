@@ -65,13 +65,14 @@ architecture rules, native PostgreSQL contracts and fresh container initializati
 checks use an isolated local PostgreSQL 16 database. Public tests use fictional credentials and
 local service boundaries.
 
-The combined source passed clean builds, all type and contract checks, 3,562 public behavior
+The combined source at `52c509b` passed clean builds, all type and contract checks, 3,562 public behavior
 tests, 19 build/browser checks, 7 architecture checks and 141 native PostgreSQL checks. The
 89 public-suite database skips were covered by the configured native run, which had zero skips.
 Documentation and a production-container fresh install/readiness smoke also passed. Lint has
 no errors and ten existing React Effect advisories; the dependency audit has one low-severity
 transitive Azure XML parser advisory and no moderate/high/critical findings. Exact results,
-accepted source SHAs and remaining advisories are recorded in
+accepted source SHAs, the subsequent fresh-review Offering repair-capacity correction and
+remaining advisories are recorded in
 [`clean-slate-progress.md`](clean-slate-progress.md).
 
 Live Discord, OAuth, provider operations and an independently operated deployment/restore

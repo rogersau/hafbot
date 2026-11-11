@@ -8,7 +8,8 @@ checksum, ledger and historical admission requirements do not apply to this publ
 ## Current checkpoint
 
 All reviewed implementations and integration corrections are committed through
-`cc6feaef65a4e99779878dd4963f3d8678010263`. Final combined acceptance is recorded below.
+`164781fd66cec68f6b5ed8a2a5d200243f75e19e`. Combined baseline acceptance and the
+subsequent fresh pre-merge review are recorded below.
 No implementation delegate is active locally or remotely (global zero). Normal slot reservation
 remains architecture two / task coordinator three, within the global cap of five. Cancelled duplicate
 assignments remain stopped; their worktrees, commits, drafts and evidence are preserved.
@@ -128,7 +129,7 @@ Focused counts above identify their scopes; they are not summed or presented as 
 The task coordinator additionally reviewed C23 on combined source: 108 affected Commerce tests
 and 24 real-PG checks passed with zero skips. Its source and evidence remain preserved.
 
-## Final combined acceptance
+## Combined acceptance at `52c509b`
 
 | Check                                            | Current result                                                               |
 | ------------------------------------------------ | ---------------------------------------------------------------------------- |
@@ -165,6 +166,33 @@ Effects are needed; they are not suppressed.
 The root disposable database used loopback PostgreSQL16, one CPU / 256 MB,
 32 MB shared buffers / 20 connections, and was removed after validation. No live Discord/OAuth/provider
 action, push, PR or deployment is part of this source audit.
+
+## Fresh pre-merge review
+
+A fresh independent agent reviewed `52c509b` against `main` at `e7e4e88`, concentrating on
+runtime composition, native outcomes, fresh initialization, Offering lifecycle/checkout,
+moderation/Event/timed-role transactions, Ticket recovery and Admin boundaries. The selective
+review established one P2 finding and no P0/P1 findings; it did not claim exhaustive coverage
+of all 829 changed files or live providers. Its focused checks passed 27 native PostgreSQL
+and 12 service/injection/error tests, with zero skips.
+
+The finding was a publication-capacity gap: an Offering repairing from `published` temporarily
+stopped counting against the five-Offering limit. Publishing a sixth and completing the repair
+then exceeded the limit and blocked subscription checkout. `164781f` corrects the native and
+SQLite publication count to reserve the slot while `repair_previous_state = 'published'`.
+An unpublished Offering's repair still releases its publication slot.
+
+The new real-PG behavior regression failed before the source fix with `Missing expected rejection`
+when attempting sixth publication. After the fix it passes publication rejection, persisted draft
+state, repair restoration, successful checkout capacity and unpublished-repair slot release.
+Root focused acceptance passed 20 PostgreSQL tests and 30 Commerce tests with zero failures/skips;
+Node/Admin/shared/test types, changed-file lint/format and diff checks passed. The bounded
+disposable PostgreSQL container was removed.
+
+[PR #15](https://github.com/rogersau/hafbot/pull/15) requires Build, types and tests,
+PostgreSQL contracts and Container smoke to pass on its updated head before merging.
+The earlier combined counts above identify their tested commit; the new regression adds one
+PostgreSQL case.
 
 ## Preserved work
 
