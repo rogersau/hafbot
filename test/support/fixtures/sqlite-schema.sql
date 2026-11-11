@@ -2280,7 +2280,7 @@ CREATE TABLE operational_incidents (
   id TEXT PRIMARY KEY NOT NULL,
   guild_id TEXT NOT NULL,
   incident_key TEXT NOT NULL,
-  feature TEXT NOT NULL CHECK (feature IN ('managed-messages', 'webhooks', 'player-count')),
+  feature TEXT NOT NULL CHECK (feature IN ('managed-messages', 'webhooks', 'player-count', 'platform-link')),
   resource_kind TEXT NOT NULL,
   resource_id TEXT NOT NULL,
   condition TEXT NOT NULL,

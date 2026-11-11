@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSqliteOperationalIncidentStore } from "./support/sqlite/runtime/sqlite-operational-incident-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
-import {
-  createMemoryOperationalIncidentStore,
-  OperationalIncidentService,
-} from "../src/operations/incidents";
+import { OperationalIncidentService } from "../src/operations/incidents";
 
 const key = {
   feature: "player-count" as const,
@@ -31,8 +28,10 @@ function failure(service: OperationalIncidentService, observationId: string, now
   });
 }
 
-test("operational incidents deduplicate observations and preserve history across recovery", async () => {
-  const service = new OperationalIncidentService(createMemoryOperationalIncidentStore());
+test("operational incidents deduplicate observations and preserve history across recovery", async (t) => {
+  const database = new SqliteD1Database();
+  t.after(() => database.close());
+  const service = new OperationalIncidentService(createSqliteOperationalIncidentStore(database.d1));
   const first = await failure(service, "attempt-1", 100);
   const duplicate = await failure(service, "attempt-1", 200);
   assert.equal(duplicate.occurrenceCount, 1);
@@ -53,8 +52,10 @@ test("operational incidents deduplicate observations and preserve history across
   assert.equal(reopened.firstSeenAtMs, 100);
 });
 
-test("incident definitions reject arbitrary or secret-bearing safe arguments", async () => {
-  const service = new OperationalIncidentService(createMemoryOperationalIncidentStore());
+test("incident definitions reject arbitrary or secret-bearing safe arguments", async (t) => {
+  const database = new SqliteD1Database();
+  t.after(() => database.close());
+  const service = new OperationalIncidentService(createSqliteOperationalIncidentStore(database.d1));
   await assert.rejects(
     service.observeFailure({
       guildId: "guild_1",

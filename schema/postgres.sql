@@ -2925,7 +2925,7 @@ CREATE TABLE public.operational_incidents (
     version bigint DEFAULT 1 NOT NULL,
     created_at_ms bigint NOT NULL,
     updated_at_ms bigint NOT NULL,
-    CONSTRAINT operational_incidents_feature_check CHECK ((feature = ANY (ARRAY['managed-messages'::text, 'webhooks'::text, 'player-count'::text]))),
+    CONSTRAINT operational_incidents_feature_check CHECK ((feature = ANY (ARRAY['managed-messages'::text, 'webhooks'::text, 'player-count'::text, 'platform-link'::text]))),
     CONSTRAINT operational_incidents_severity_check CHECK ((severity = ANY (ARRAY['warning'::text, 'error'::text, 'critical'::text]))),
     CONSTRAINT operational_incidents_status_check CHECK ((status = ANY (ARRAY['open'::text, 'resolved'::text])))
 );
