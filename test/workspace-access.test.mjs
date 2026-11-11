@@ -4,7 +4,7 @@ import { createHmac } from "node:crypto";
 import { createProductionRuntimeStores } from "../dist-tests/test/support/production-runtime-stores.js";
 import { createCustomerAuth } from "../dist-tests/test/support/sqlite/runtime/auth/auth.js";
 import { createSqliteWorkspaceStore } from "../dist-tests/test/support/sqlite/runtime/sqlite-workspace-store.js";
-import { createRuntimeApp } from "../dist-tests/src/runtime/app.js";
+import { createTestRuntimeApp } from "../dist-tests/test/support/create-runtime-app.js";
 
 async function createWorkspaceLinkFixture(t) {
   const fixture = createProductionRuntimeStores();
@@ -83,7 +83,7 @@ async function createWorkspaceLinkFixture(t) {
   });
   const workspaceStore = createSqliteWorkspaceStore(fixture.database.d1);
   await fixture.stores.guildRbac.setManageServerAdminEnabled(guildId, false);
-  const app = createRuntimeApp({
+  const app = createTestRuntimeApp({
     discordPublicKey: "a".repeat(64),
     discordBotToken: `synthetic-workspace-link-${user.id}`,
     discordAccounts: { readDiscordAccessToken: async () => `synthetic-oauth-${user.id}` },
@@ -271,7 +271,7 @@ test("real Better Auth membership preserves stored workspace grants without work
       linkedAtMs: Date.now(),
     });
     await fixture.stores.guildRbac.setManageServerAdminEnabled("guild-1", false);
-    const app = createRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "synthetic-compatibility",
       customerAuth: auth,
