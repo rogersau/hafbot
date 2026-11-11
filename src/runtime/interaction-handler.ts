@@ -122,11 +122,10 @@ export async function handleInteractionRequest(
   }
 
   if (interaction?.type === DISCORD_APPLICATION_COMMAND_AUTOCOMPLETE_INTERACTION) {
-    return handleTicketReplyAutocompleteInteraction(
-      interaction,
-      options.stores,
-      services.ticketLifecycle,
-    );
+    return handleTicketReplyAutocompleteInteraction(interaction, {
+      stores: options.stores,
+      ticketLifecycle: services.ticketLifecycle,
+    });
   }
 
   if (interaction?.type === DISCORD_APPLICATION_COMMAND_INTERACTION) {
@@ -333,18 +332,17 @@ export async function handleInteractionRequest(
     }
 
     if (features.tickets) {
-      return handleMessageComponentInteraction(
-        interaction,
-        options.stores,
-        options.discordBotToken,
-        new URL(request.url).origin,
-        options.ticketTranscriptBlobs,
-        options.waitUntil,
-        options.aiTranscriptSummarizerEnv,
-        services.ticketLifecycle,
-        options.ticketTranscriptCapabilities,
-        options.componentIdSigner,
-      );
+      return handleMessageComponentInteraction(interaction, {
+        stores: options.stores,
+        ticketLifecycle: services.ticketLifecycle,
+        discordBotToken: options.discordBotToken,
+        requestOrigin: new URL(request.url).origin,
+        ticketTranscriptBlobs: options.ticketTranscriptBlobs,
+        waitUntil: options.waitUntil,
+        aiTranscriptSummarizerEnv: options.aiTranscriptSummarizerEnv,
+        ticketTranscriptCapabilities: options.ticketTranscriptCapabilities,
+        componentIdSigner: options.componentIdSigner,
+      });
     }
 
     return Response.json(buildEphemeralMessage("This feature is currently disabled."));
@@ -398,14 +396,13 @@ export async function handleInteractionRequest(
     }
 
     if (features.tickets) {
-      return handleTicketModalSubmitInteraction(
-        interaction,
-        options.stores,
-        options.discordBotToken,
-        options.waitUntil,
-        services.ticketLifecycle,
-        options.componentIdSigner,
-      );
+      return handleTicketModalSubmitInteraction(interaction, {
+        stores: options.stores,
+        ticketLifecycle: services.ticketLifecycle,
+        discordBotToken: options.discordBotToken,
+        waitUntil: options.waitUntil,
+        componentIdSigner: options.componentIdSigner,
+      });
     }
 
     return Response.json(buildEphemeralMessage("This feature is currently disabled."));

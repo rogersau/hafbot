@@ -13,6 +13,7 @@ import { buildTicketTemplateReplyCustomId } from "../src/tickets";
 import type { DiscordInteraction, RuntimeStores } from "../src/runtime/app-types";
 import type { MessageTemplate, TicketInstance, TicketTemplateReply } from "../src/types";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
+import { createTicketHandlerLifecycle } from "./support/ticket-handler-lifecycle";
 
 const ticket: TicketInstance = {
   guildId: "guild-1",
@@ -113,24 +114,26 @@ function interaction(type: number, channelId = "staff-thread-1"): DiscordInterac
 }
 
 test("Ticket reply autocomplete returns only eligible Guild templates in Ticket context", async () => {
-  const response = await handleTicketReplyAutocompleteInteraction(interaction(4), stores());
+  const runtimeStores = stores();
+  const response = await handleTicketReplyAutocompleteInteraction(interaction(4), {
+    stores: runtimeStores,
+    ticketLifecycle: createTicketHandlerLifecycle(runtimeStores),
+  });
   assert.deepEqual(((await response.json()) as any).data.choices, [
     { name: "Appeal denied", value: "template-1" },
   ]);
 });
 
 test("Ticket reply command previews embeds ephemerally before sending", async () => {
-  const response = await handleTicketSlashCommandInteraction(
-    interaction(2),
-    stores(),
-    "token",
-    "https://runtime.example",
-    "reply",
-    undefined,
-    undefined,
-    undefined,
-    template.id,
-  );
+  const runtimeStores = stores();
+  const response = await handleTicketSlashCommandInteraction(interaction(2), {
+    stores: runtimeStores,
+    ticketLifecycle: createTicketHandlerLifecycle(runtimeStores),
+    discordBotToken: "token",
+    requestOrigin: "https://runtime.example",
+    subcommandName: "reply",
+    templateId: template.id,
+  });
   const body = (await response.json()) as any;
   assert.equal(body.data.flags, 64);
   assert.equal(body.data.embeds[0].description, "Your appeal was denied.");
@@ -147,6 +150,7 @@ test("confirmed Staff Discussion Thread reply is delivered once and records the 
   const claimed: TicketTemplateReply[] = [];
   const completed: Array<{ interactionId: string; botMessageId: string }> = [];
   const runtimeStores = stores({ claimed, completed });
+  const ticketLifecycle = createTicketHandlerLifecycle(runtimeStores);
   const component = interaction(3);
   component.data = {
     custom_id: buildTicketTemplateReplyCustomId(
@@ -156,19 +160,19 @@ test("confirmed Staff Discussion Thread reply is delivered once and records the 
     ),
   };
   try {
-    const first = await handleMessageComponentInteraction(
-      component,
-      runtimeStores,
-      "token",
-      "https://runtime.example",
-    );
+    const first = await handleMessageComponentInteraction(component, {
+      stores: runtimeStores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
     assert.equal(((await first.json()) as any).data.content, "Sent **Appeal denied**.");
-    const second = await handleMessageComponentInteraction(
-      component,
-      runtimeStores,
-      "token",
-      "https://runtime.example",
-    );
+    const second = await handleMessageComponentInteraction(component, {
+      stores: runtimeStores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
     assert.match(((await second.json()) as any).data.content, /already sent/);
   } finally {
     globalThis.fetch = originalFetch;
@@ -200,6 +204,7 @@ test("Ticket Template Reply claim failure never sends or releases an unowned cla
       },
     },
   } as RuntimeStores;
+  const ticketLifecycle = createTicketHandlerLifecycle(runtimeStores);
   const component = interaction(3);
   component.data = {
     custom_id: buildTicketTemplateReplyCustomId(
@@ -210,12 +215,12 @@ test("Ticket Template Reply claim failure never sends or releases an unowned cla
   };
 
   try {
-    const response = await handleMessageComponentInteraction(
-      component,
-      runtimeStores,
-      "token",
-      "https://runtime.example",
-    );
+    const response = await handleMessageComponentInteraction(component, {
+      stores: runtimeStores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
     assert.equal(
       ((await response.json()) as any).data.content,
       "Failed to send this Ticket Template Reply.",
@@ -229,6 +234,7 @@ test("Ticket Template Reply claim failure never sends or releases an unowned cla
 
 test("failed Ticket Template Reply delivery releases its claim so a retry sends once", async () => {
   const fixture = createProductionRuntimeStores();
+  const ticketLifecycle = createTicketHandlerLifecycle(fixture.stores);
   const originalFetch = globalThis.fetch;
   let sends = 0;
   globalThis.fetch = async () => {
@@ -248,12 +254,12 @@ test("failed Ticket Template Reply delivery releases its claim so a retry sends 
   };
 
   try {
-    const first = await handleMessageComponentInteraction(
-      component,
-      fixture.stores,
-      "token",
-      "https://runtime.example",
-    );
+    const first = await handleMessageComponentInteraction(component, {
+      stores: fixture.stores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
     assert.equal(
       ((await first.json()) as any).data.content,
       "Failed to send this Ticket Template Reply.",
@@ -263,20 +269,20 @@ test("failed Ticket Template Reply delivery releases its claim so a retry sends 
       [],
     );
 
-    const retry = await handleMessageComponentInteraction(
-      component,
-      fixture.stores,
-      "token",
-      "https://runtime.example",
-    );
+    const retry = await handleMessageComponentInteraction(component, {
+      stores: fixture.stores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
     assert.equal(((await retry.json()) as any).data.content, "Sent **Appeal denied**.");
 
-    const duplicate = await handleMessageComponentInteraction(
-      component,
-      fixture.stores,
-      "token",
-      "https://runtime.example",
-    );
+    const duplicate = await handleMessageComponentInteraction(component, {
+      stores: fixture.stores,
+      ticketLifecycle,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+    });
     assert.equal(
       ((await duplicate.json()) as any).data.content,
       "This Ticket Template Reply was already sent.",

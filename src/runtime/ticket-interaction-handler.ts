@@ -40,7 +40,6 @@ import {
 import { type AiTranscriptSummarizerEnv } from "../services/tickets/ai-transcript-summarizer-env";
 import {
   buildTicketOpeningMessage,
-  createTicketLifecycle,
   type TicketLifecycle,
 } from "../services/tickets/ticket-lifecycle";
 import { buildAnonymousSupportHelperMessage } from "../services/tickets/anonymous-staff-thread";
@@ -66,18 +65,33 @@ import {
   DISCORD_AUTOCOMPLETE_RESPONSE,
 } from "../discord/constants";
 
+export interface TicketComponentInteractionOptions {
+  stores: RuntimeStores;
+  ticketLifecycle: TicketLifecycle;
+  discordBotToken: string;
+  requestOrigin: string;
+  ticketTranscriptBlobs?: TicketTranscriptBlobStore;
+  waitUntil?: (promise: Promise<unknown>) => void;
+  aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv;
+  ticketTranscriptCapabilities?: TicketTranscriptCapabilityAccess;
+  componentIdSigner?: ComponentIdSigner;
+}
+
 export async function handleMessageComponentInteraction(
   interaction: DiscordInteraction,
-  stores: RuntimeStores,
-  discordBotToken: string,
-  requestOrigin: string,
-  ticketTranscriptBlobs?: TicketTranscriptBlobStore,
-  waitUntil?: (promise: Promise<unknown>) => void,
-  aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv,
-  ticketLifecycle?: TicketLifecycle,
-  ticketTranscriptCapabilities?: TicketTranscriptCapabilityAccess,
-  componentIdSigner?: ComponentIdSigner,
+  options: TicketComponentInteractionOptions,
 ): Promise<Response> {
+  const {
+    stores,
+    ticketLifecycle,
+    discordBotToken,
+    requestOrigin,
+    ticketTranscriptBlobs,
+    waitUntil,
+    aiTranscriptSummarizerEnv,
+    ticketTranscriptCapabilities,
+    componentIdSigner,
+  } = options;
   if (typeof interaction.guild_id !== "string" || interaction.guild_id.length === 0) {
     return Response.json(
       buildEphemeralMessage("This interaction can only be used inside a server."),
@@ -96,7 +110,7 @@ export async function handleMessageComponentInteraction(
   }
 
   if (parsedCustomId.action === "open") {
-    const prepared = await getTicketLifecycle(stores, ticketLifecycle).prepareOpen({
+    const prepared = await ticketLifecycle.prepareOpen({
       guildId,
       panelId: parsedCustomId.panelId ?? "main",
       ticketTypeId: parsedCustomId.ticketTypeId,
@@ -205,7 +219,6 @@ export async function handleMessageComponentInteraction(
         interaction,
         guildId,
         parsedCustomId.channelId,
-        stores,
         discordBotToken,
         ticketLifecycle,
         componentIdSigner,
@@ -228,10 +241,10 @@ export async function handleMessageComponentInteraction(
         stores,
         discordBotToken,
         requestOrigin,
+        ticketLifecycle,
         ticketTranscriptBlobs,
         waitUntil,
         aiTranscriptSummarizerEnv,
-        ticketLifecycle,
         ticketTranscriptCapabilities,
       );
     case "close-decline":
@@ -239,7 +252,6 @@ export async function handleMessageComponentInteraction(
         interaction,
         guildId,
         parsedCustomId.channelId,
-        stores,
         ticketLifecycle,
       );
     case "close":
@@ -250,10 +262,10 @@ export async function handleMessageComponentInteraction(
         stores,
         discordBotToken,
         requestOrigin,
+        ticketLifecycle,
         ticketTranscriptBlobs,
         waitUntil,
         aiTranscriptSummarizerEnv,
-        ticketLifecycle,
         ticketTranscriptCapabilities,
       );
     default:
@@ -261,28 +273,39 @@ export async function handleMessageComponentInteraction(
   }
 }
 
+type TicketSlashCommandName =
+  | "close"
+  | "request-close"
+  | "claim"
+  | "history"
+  | "reply"
+  | "add-user"
+  | "remove-user";
+
+export interface TicketSlashCommandInteractionOptions extends TicketComponentInteractionOptions {
+  subcommandName: TicketSlashCommandName;
+  templateId?: string;
+  participantUserId?: string;
+}
+
 export async function handleTicketSlashCommandInteraction(
   interaction: DiscordInteraction,
-  stores: RuntimeStores,
-  discordBotToken: string,
-  requestOrigin: string,
-  subcommandName:
-    | "close"
-    | "request-close"
-    | "claim"
-    | "history"
-    | "reply"
-    | "add-user"
-    | "remove-user",
-  ticketTranscriptBlobs?: TicketTranscriptBlobStore,
-  waitUntil?: (promise: Promise<unknown>) => void,
-  aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv,
-  templateId?: string,
-  ticketLifecycle?: TicketLifecycle,
-  participantUserId?: string,
-  ticketTranscriptCapabilities?: TicketTranscriptCapabilityAccess,
-  componentIdSigner?: ComponentIdSigner,
+  options: TicketSlashCommandInteractionOptions,
 ): Promise<Response> {
+  const {
+    stores,
+    ticketLifecycle,
+    discordBotToken,
+    requestOrigin,
+    ticketTranscriptBlobs,
+    waitUntil,
+    aiTranscriptSummarizerEnv,
+    subcommandName,
+    templateId,
+    participantUserId,
+    ticketTranscriptCapabilities,
+    componentIdSigner,
+  } = options;
   if (typeof interaction.guild_id !== "string" || interaction.guild_id.length === 0) {
     return Response.json(buildEphemeralMessage("This command can only be used inside a server."));
   }
@@ -321,10 +344,10 @@ export async function handleTicketSlashCommandInteraction(
         stores,
         discordBotToken,
         requestOrigin,
+        ticketLifecycle,
         ticketTranscriptBlobs,
         waitUntil,
         aiTranscriptSummarizerEnv,
-        ticketLifecycle,
         ticketTranscriptCapabilities,
       );
     case "request-close":
@@ -332,7 +355,6 @@ export async function handleTicketSlashCommandInteraction(
         interaction,
         guildId,
         channelId,
-        stores,
         discordBotToken,
         ticketLifecycle,
         componentIdSigner,
@@ -364,11 +386,16 @@ export async function handleTicketSlashCommandInteraction(
   }
 }
 
+export interface TicketReplyAutocompleteInteractionOptions {
+  stores: RuntimeStores;
+  ticketLifecycle: TicketLifecycle;
+}
+
 export async function handleTicketReplyAutocompleteInteraction(
   interaction: DiscordInteraction,
-  stores: RuntimeStores,
-  ticketLifecycle?: TicketLifecycle,
+  options: TicketReplyAutocompleteInteractionOptions,
 ): Promise<Response> {
+  const { stores, ticketLifecycle } = options;
   if (!isRecord(interaction.data) || interaction.data.name !== "ticket") {
     return Response.json({ type: DISCORD_AUTOCOMPLETE_RESPONSE, data: { choices: [] } });
   }
@@ -380,7 +407,7 @@ export async function handleTicketReplyAutocompleteInteraction(
   const authorization = await authorizeTicketTemplateReply(
     interaction,
     stores,
-    getTicketLifecycle(stores, ticketLifecycle),
+    ticketLifecycle,
     guildId,
     channelId,
   );
@@ -404,7 +431,7 @@ async function handleTicketParticipantCommand(
   action: "add-user" | "remove-user",
   stores: RuntimeStores,
   discordBotToken: string,
-  ticketLifecycle?: TicketLifecycle,
+  lifecycle: TicketLifecycle,
 ): Promise<Response> {
   const actorUserId = interaction.member?.user?.id ?? interaction.user?.id;
   if (!actorUserId || !targetUserId) {
@@ -415,7 +442,6 @@ async function handleTicketParticipantCommand(
   const members = resolved && isRecord(resolved.members) ? resolved.members : null;
   const users = resolved && isRecord(resolved.users) ? resolved.users : null;
   const targetUser = users && isRecord(users[targetUserId]) ? users[targetUserId] : null;
-  const lifecycle = getTicketLifecycle(stores, ticketLifecycle);
   const adapters = {
     readAccess: (ticketChannelId: string, userId: string) =>
       readTicketParticipantAccess(ticketChannelId, userId, discordBotToken),
@@ -467,10 +493,9 @@ async function handleTicketTemplateReplyPreview(
   channelId: string,
   templateId: string,
   stores: RuntimeStores,
-  ticketLifecycle?: TicketLifecycle,
+  lifecycle: TicketLifecycle,
   componentIdSigner?: ComponentIdSigner,
 ): Promise<Response> {
-  const lifecycle = getTicketLifecycle(stores, ticketLifecycle);
   const authorization = await authorizeTicketTemplateReply(
     interaction,
     stores,
@@ -528,9 +553,8 @@ async function handleTicketTemplateReplyConfirmation(
   templateUpdatedAtMs: number,
   stores: RuntimeStores,
   discordBotToken: string,
-  ticketLifecycle?: TicketLifecycle,
+  lifecycle: TicketLifecycle,
 ): Promise<Response> {
-  const lifecycle = getTicketLifecycle(stores, ticketLifecycle);
   const authorization = await authorizeTicketTemplateReply(
     interaction,
     stores,
@@ -759,7 +783,7 @@ async function handleTicketClaimInteraction(
   requestedChannelId: string,
   stores: RuntimeStores,
   discordBotToken: string,
-  ticketLifecycle?: TicketLifecycle,
+  lifecycle: TicketLifecycle,
   waitUntil?: (promise: Promise<unknown>) => void,
 ): Promise<Response> {
   if (waitUntil) {
@@ -773,7 +797,7 @@ async function handleTicketClaimInteraction(
           requestedChannelId,
           stores,
           discordBotToken,
-          ticketLifecycle,
+          lifecycle,
         ),
       "Failed to claim this ticket.",
     );
@@ -790,7 +814,7 @@ async function handleTicketClaimInteraction(
 
   let claimCommitted = false;
   try {
-    const claim = await getTicketLifecycle(stores, ticketLifecycle).claim({
+    const claim = await lifecycle.claim({
       guildId,
       channelId,
       actorUserId: userId,
@@ -799,7 +823,7 @@ async function handleTicketClaimInteraction(
     });
     if (!claim.ok) return Response.json(buildEphemeralMessage(claim.message));
     claimCommitted = true;
-    await getTicketLifecycle(stores, ticketLifecycle).deliverClaim(
+    await lifecycle.deliverClaim(
       {
         refreshOpeningMessage: (ticket) =>
           refreshTicketClaimOpeningMessage(interaction, ticket, stores, discordBotToken),
@@ -935,14 +959,19 @@ function isTicketClaimButton(component: Record<string, unknown>): boolean {
   );
 }
 
+export interface TicketModalSubmitInteractionOptions {
+  stores: RuntimeStores;
+  ticketLifecycle: TicketLifecycle;
+  discordBotToken: string;
+  waitUntil?: (promise: Promise<unknown>) => void;
+  componentIdSigner?: ComponentIdSigner;
+}
+
 export async function handleTicketModalSubmitInteraction(
   interaction: DiscordInteraction,
-  stores: RuntimeStores,
-  discordBotToken: string,
-  waitUntil?: (promise: Promise<unknown>) => void,
-  ticketLifecycle?: TicketLifecycle,
-  componentIdSigner?: ComponentIdSigner,
+  options: TicketModalSubmitInteractionOptions,
 ): Promise<Response> {
+  const { stores, ticketLifecycle, discordBotToken, waitUntil, componentIdSigner } = options;
   if (typeof interaction.guild_id !== "string" || interaction.guild_id.length === 0) {
     return Response.json(
       buildEphemeralMessage("This interaction can only be used inside a server."),
@@ -978,7 +1007,7 @@ export async function handleTicketModalSubmitInteraction(
     interaction as Parameters<typeof extractTicketAnswersFromModal>[0],
     savedTicketType.questions,
   );
-  const prepared = await getTicketLifecycle(stores, ticketLifecycle).prepareOpen({
+  const prepared = await ticketLifecycle.prepareOpen({
     guildId,
     panelId: parsedCustomId.panelId ?? "main",
     ticketTypeId: parsedCustomId.ticketTypeId,
@@ -1012,18 +1041,6 @@ async function readInteractionTicketPanel(
     return store.readTicketPanelConfigById(guildId, panelId);
   }
   return store.readTicketPanelConfig(guildId);
-}
-
-function getTicketLifecycle(stores: RuntimeStores, injected?: TicketLifecycle) {
-  return (
-    injected ??
-    createTicketLifecycle({
-      tickets: stores.tickets,
-      blocklist: stores.blocklist,
-      entitlements: stores.guildEntitlements,
-      messageTemplates: stores.messageTemplates,
-    })
-  );
 }
 
 async function authorizeTicketTemplateReply(
@@ -1139,11 +1156,11 @@ async function createTicketFromInteraction({
   answers: TicketInstance["answers"];
   stores: RuntimeStores;
   discordBotToken: string;
-  ticketLifecycle?: TicketLifecycle;
+  ticketLifecycle: TicketLifecycle;
   componentIdSigner?: ComponentIdSigner;
 }): Promise<Response> {
   try {
-    const result = await getTicketLifecycle(stores, ticketLifecycle).open(
+    const result = await ticketLifecycle.open(
       ({ panel, ticketType }) => ({
         createChannel: async (config) => {
           const channel = await createTicketChannel(config, discordBotToken);
@@ -1246,7 +1263,7 @@ async function createTicketFromInteraction({
     );
     if (!result.ok) {
       if (result.code === "partial-success" && result.recovery) {
-        const recoveryResult = await getTicketLifecycle(stores, ticketLifecycle).resumeOpenCleanup(
+        const recoveryResult = await ticketLifecycle.resumeOpenCleanup(
           {
             deleteChannel: (channelId) => deleteTicketResource(channelId, discordBotToken),
             deleteStaffThread: (threadId) => deleteTicketResource(threadId, discordBotToken),
@@ -1260,7 +1277,7 @@ async function createTicketFromInteraction({
             ),
           );
         }
-        await deferTicketRecovery(getTicketLifecycle(stores, ticketLifecycle), {
+        await deferTicketRecovery(ticketLifecycle, {
           kind: "open-cleanup",
           recovery: recoveryResult.recovery,
         });
@@ -1289,10 +1306,10 @@ async function handleTicketCloseInteraction(
   stores: RuntimeStores,
   discordBotToken: string,
   requestOrigin: string,
+  ticketLifecycle: TicketLifecycle,
   ticketTranscriptBlobs?: TicketTranscriptBlobStore,
   waitUntil?: (promise: Promise<unknown>) => void,
   aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv,
-  ticketLifecycle?: TicketLifecycle,
   ticketTranscriptCapabilities?: TicketTranscriptCapabilityAccess,
 ): Promise<Response> {
   const userId = getInteractionUserId(interaction);
@@ -1305,7 +1322,7 @@ async function handleTicketCloseInteraction(
     return Response.json(buildEphemeralMessage("That ticket close button is no longer valid."));
   }
 
-  const authorization = await getTicketLifecycle(stores, ticketLifecycle).authorize({
+  const authorization = await ticketLifecycle.authorize({
     guildId,
     channelId,
     actorUserId: userId,
@@ -1334,9 +1351,8 @@ async function handleTicketCloseRequestInteraction(
   interaction: DiscordInteraction,
   guildId: string,
   requestedChannelId: string,
-  stores: RuntimeStores,
   discordBotToken: string,
-  ticketLifecycle?: TicketLifecycle,
+  lifecycle: TicketLifecycle,
   componentIdSigner?: ComponentIdSigner,
 ): Promise<Response> {
   const userId = getInteractionUserId(interaction);
@@ -1353,7 +1369,7 @@ async function handleTicketCloseRequestInteraction(
     );
   }
 
-  const authorization = await getTicketLifecycle(stores, ticketLifecycle).authorize({
+  const authorization = await lifecycle.authorize({
     guildId,
     channelId,
     actorUserId: userId,
@@ -1363,7 +1379,7 @@ async function handleTicketCloseRequestInteraction(
   if (!authorization.ok) return Response.json(buildEphemeralMessage(authorization.message));
 
   try {
-    await getTicketLifecycle(stores, ticketLifecycle).requestClose(
+    await lifecycle.requestClose(
       {
         createChannelMessage: async (channelId, body) => {
           await createChannelMessage(
@@ -1400,10 +1416,10 @@ async function handleTicketCloseConfirmationInteraction(
   stores: RuntimeStores,
   discordBotToken: string,
   requestOrigin: string,
+  ticketLifecycle: TicketLifecycle,
   ticketTranscriptBlobs?: TicketTranscriptBlobStore,
   waitUntil?: (promise: Promise<unknown>) => void,
   aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv,
-  ticketLifecycle?: TicketLifecycle,
   ticketTranscriptCapabilities?: TicketTranscriptCapabilityAccess,
 ): Promise<Response> {
   const userId = getInteractionUserId(interaction);
@@ -1418,7 +1434,7 @@ async function handleTicketCloseConfirmationInteraction(
     return Response.json(buildEphemeralMessage("That ticket close request is no longer valid."));
   }
 
-  const authorization = await getTicketLifecycle(stores, ticketLifecycle).authorize({
+  const authorization = await ticketLifecycle.authorize({
     guildId,
     channelId,
     actorUserId: userId,
@@ -1454,7 +1470,7 @@ function closeTicketInteraction(options: {
   ticketTranscriptBlobs?: TicketTranscriptBlobStore;
   waitUntil?: (promise: Promise<unknown>) => void;
   aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv;
-  ticketLifecycle?: TicketLifecycle;
+  ticketLifecycle: TicketLifecycle;
   ticketTranscriptCapabilities?: TicketTranscriptCapabilityAccess;
 }): Promise<Response> {
   if (!options.waitUntil) {
@@ -1478,8 +1494,7 @@ async function handleTicketCloseDeclineInteraction(
   interaction: DiscordInteraction,
   guildId: string,
   requestedChannelId: string,
-  stores: RuntimeStores,
-  ticketLifecycle?: TicketLifecycle,
+  lifecycle: TicketLifecycle,
 ): Promise<Response> {
   const userId = getInteractionUserId(interaction);
   if (!userId) {
@@ -1493,7 +1508,7 @@ async function handleTicketCloseDeclineInteraction(
     return Response.json(buildEphemeralMessage("That ticket close request is no longer valid."));
   }
 
-  const authorization = await getTicketLifecycle(stores, ticketLifecycle).authorize({
+  const authorization = await lifecycle.authorize({
     guildId,
     channelId,
     actorUserId: userId,
@@ -1522,7 +1537,7 @@ async function closeTicket({
   ticketTranscriptBlobs,
   ticketTranscriptCapabilities,
   aiTranscriptSummarizerEnv,
-  ticketLifecycle,
+  ticketLifecycle: lifecycle,
 }: {
   ticket: TicketInstance;
   closedByUserId: string;
@@ -1533,10 +1548,9 @@ async function closeTicket({
   ticketTranscriptBlobs?: TicketTranscriptBlobStore;
   ticketTranscriptCapabilities?: TicketTranscriptCapabilityAccess;
   aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv;
-  ticketLifecycle?: TicketLifecycle;
+  ticketLifecycle: TicketLifecycle;
 }): Promise<Response> {
   try {
-    const lifecycle = getTicketLifecycle(stores, ticketLifecycle);
     const cleanupAdapters = {
       deleteChannel: (channelId: string) => deleteTicketResource(channelId, discordBotToken),
       deleteStaffThread: (threadId: string) => deleteTicketResource(threadId, discordBotToken),

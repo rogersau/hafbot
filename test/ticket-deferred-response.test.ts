@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { handleMessageComponentInteraction } from "../src/runtime/ticket-interaction-handler";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
+import { createTicketHandlerLifecycle } from "./support/ticket-handler-lifecycle";
 
 test("deferred ticket responses handle a deleted original without retrying or logging an action failure", async (t) => {
   for (const scenario of ["success", "deleted", "other-404", "malformed-404", "server-error"]) {
@@ -53,12 +54,14 @@ test("deferred ticket responses handle a deleted original without retrying or lo
           member: { user: { id: "staff-test" }, roles: [] },
           data: { custom_id: "ticket:claim:ticket-test" },
         },
-        f.stores,
-        "test-bot-token",
-        "https://runtime.example",
-        undefined,
-        (promise) => {
-          pending.push(promise);
+        {
+          stores: f.stores,
+          ticketLifecycle: createTicketHandlerLifecycle(f.stores),
+          discordBotToken: "test-bot-token",
+          requestOrigin: "https://runtime.example",
+          waitUntil: (promise) => {
+            pending.push(promise);
+          },
         },
       );
       assert.deepEqual(await response.json(), { type: 5, data: { flags: 64 } });

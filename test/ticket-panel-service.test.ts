@@ -1988,16 +1988,14 @@ test("Ticket participant commands recognize the configured HAF admin role", asyn
         },
       },
     } as never,
-    fixture.stores,
-    "token",
-    "https://runtime.example",
-    "add-user",
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    injected,
-    "participant-user",
+    {
+      stores: fixture.stores,
+      ticketLifecycle: injected,
+      discordBotToken: "token",
+      requestOrigin: "https://runtime.example",
+      subcommandName: "add-user",
+      participantUserId: "participant-user",
+    },
   );
 
   assert.equal(isAdmin, true);

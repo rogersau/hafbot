@@ -295,23 +295,23 @@ export async function handleApplicationCommand(
     if (!features.tickets) {
       return Response.json(buildEphemeralMessage("This feature is currently disabled."));
     }
-    return handleTicketSlashCommandInteraction(
-      interaction,
+    return handleTicketSlashCommandInteraction(interaction, {
       stores,
+      ticketLifecycle: options.services.ticketLifecycle,
       discordBotToken,
-      options.requestOrigin ?? "https://runtime.example",
-      invocation.subcommandName,
-      options.ticketTranscriptBlobs,
-      options.waitUntil,
-      options.aiTranscriptSummarizerEnv,
-      invocation.subcommandName === "reply" ? invocation.templateId : undefined,
-      options.services.ticketLifecycle,
-      invocation.subcommandName === "add-user" || invocation.subcommandName === "remove-user"
-        ? invocation.userId
-        : undefined,
-      options.ticketTranscriptCapabilities,
-      options.componentIdSigner,
-    );
+      requestOrigin: options.requestOrigin ?? "https://runtime.example",
+      subcommandName: invocation.subcommandName,
+      ticketTranscriptBlobs: options.ticketTranscriptBlobs,
+      waitUntil: options.waitUntil,
+      aiTranscriptSummarizerEnv: options.aiTranscriptSummarizerEnv,
+      templateId: invocation.subcommandName === "reply" ? invocation.templateId : undefined,
+      participantUserId:
+        invocation.subcommandName === "add-user" || invocation.subcommandName === "remove-user"
+          ? invocation.userId
+          : undefined,
+      ticketTranscriptCapabilities: options.ticketTranscriptCapabilities,
+      componentIdSigner: options.componentIdSigner,
+    });
   }
 
   if (invocation.commandName === "clan") {

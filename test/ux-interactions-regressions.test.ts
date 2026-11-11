@@ -19,6 +19,8 @@ import type { TicketInstance, TicketPanelConfig } from "../src/types";
 import type { DiscordInteraction } from "../src/runtime/app-types";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
 import { applicationCommandServices } from "./support/handler-services";
+import { createTicketHandlerLifecycle } from "./support/ticket-handler-lifecycle";
+import type { TicketComponentInteractionOptions } from "../src/runtime/ticket-interaction-handler";
 
 for (const root of ["blocklist", "timedrole", "playercount"] as const) {
   test(`/${root} list dispatches its own registered root/subcommand`, () => {
@@ -143,6 +145,7 @@ test("Free Timed Roles completes add/list/remove through the real service and re
 for (const failure of ["opening", "announcement", "audit"] as const) {
   test(`ticket claim retry completes delivery after a failed ${failure} without repeating completed notifications`, async () => {
     const fixture = createProductionRuntimeStores();
+    const handlerOptions = ticketHandlerOptions(fixture);
     const originalFetch = globalThis.fetch;
     let failOnce = true;
     const deliveries: string[] = [];
@@ -163,12 +166,7 @@ for (const failure of ["opening", "announcement", "audit"] as const) {
     try {
       await seedClaimTicket(fixture.stores);
       const claim = () =>
-        handleMessageComponentInteraction(
-          claimInteraction("staff-1"),
-          fixture.stores,
-          "fictional-token",
-          "https://example.test",
-        );
+        handleMessageComponentInteraction(claimInteraction("staff-1"), handlerOptions);
       const first = await claim();
       assert.match(
         ((await first.json()) as { data: { content: string } }).data.content,
@@ -194,6 +192,7 @@ for (const failure of ["opening", "announcement", "audit"] as const) {
 
 test("concurrent retries of a committed ticket claim deliver each notification once", async () => {
   const fixture = createProductionRuntimeStores();
+  const handlerOptions = ticketHandlerOptions(fixture);
   const originalFetch = globalThis.fetch;
   const deliveries: string[] = [];
   let release!: () => void;
@@ -221,12 +220,7 @@ test("concurrent retries of a committed ticket claim deliver each notification o
   try {
     await seedClaimTicket(fixture.stores);
     const claim = () =>
-      handleMessageComponentInteraction(
-        claimInteraction("staff-1"),
-        fixture.stores,
-        "fictional-token",
-        "https://example.test",
-      );
+      handleMessageComponentInteraction(claimInteraction("staff-1"), handlerOptions);
     const first = claim();
     await sending;
     await claim();
@@ -243,6 +237,7 @@ test("concurrent retries of a committed ticket claim deliver each notification o
 
 test("a ticket claim retries an ambiguous delivery with the same Discord nonce", async () => {
   const fixture = createProductionRuntimeStores();
+  const handlerOptions = ticketHandlerOptions(fixture);
   const originalFetch = globalThis.fetch;
   const sent = new Set<string>();
   const attempted: string[] = [];
@@ -270,12 +265,7 @@ test("a ticket claim retries an ambiguous delivery with the same Discord nonce",
       await complete(delivery);
     };
     const claim = () =>
-      handleMessageComponentInteraction(
-        claimInteraction("staff-1"),
-        fixture.stores,
-        "fictional-token",
-        "https://example.test",
-      );
+      handleMessageComponentInteraction(claimInteraction("staff-1"), handlerOptions);
     await claim();
     await claim();
     await claim();
@@ -291,6 +281,7 @@ test("a ticket claim retries an ambiguous delivery with the same Discord nonce",
 for (const delay of ["GET", "PATCH", "ambiguous PATCH"] as const) {
   test(`concurrent ticket transfers reconcile the owner after a delayed opening ${delay}`, async () => {
     const fixture = createProductionRuntimeStores();
+    const handlerOptions = ticketHandlerOptions(fixture);
     const originalFetch = globalThis.fetch;
     let opening = claimInteraction("staff-1").message!;
     let release!: () => void;
@@ -337,10 +328,7 @@ for (const delay of ["GET", "PATCH", "ambiguous PATCH"] as const) {
           message: undefined,
           data: { name: "ticket", options: [{ type: 1, name: "claim" }] },
         },
-        fixture.stores,
-        "fictional-token",
-        "https://example.test",
-        "claim",
+        { ...handlerOptions, subcommandName: "claim" },
       );
       await Promise.race([
         sending,
@@ -348,9 +336,7 @@ for (const delay of ["GET", "PATCH", "ambiguous PATCH"] as const) {
       ]);
       const second = await handleMessageComponentInteraction(
         claimInteraction("staff-2"),
-        fixture.stores,
-        "fictional-token",
-        "https://example.test",
+        handlerOptions,
       );
       assert.match(
         ((await second.json()) as { data: { content: string } }).data.content,
@@ -382,6 +368,7 @@ for (const delay of ["GET", "PATCH", "ambiguous PATCH"] as const) {
 for (const priorButtonClaim of [true, false]) {
   test(`slash claim refreshes the opening message after ${priorButtonClaim ? "a button claim" : "legacy ticket creation"}`, async () => {
     const fixture = createProductionRuntimeStores();
+    const handlerOptions = ticketHandlerOptions(fixture);
     const originalFetch = globalThis.fetch;
     let opening = claimInteraction("staff-1").message!;
     const notifications: Record<string, unknown>[] = [];
@@ -411,12 +398,7 @@ for (const priorButtonClaim of [true, false]) {
     try {
       await seedClaimTicket(fixture.stores);
       if (priorButtonClaim)
-        await handleMessageComponentInteraction(
-          claimInteraction("staff-1"),
-          fixture.stores,
-          "fictional-token",
-          "https://example.test",
-        );
+        await handleMessageComponentInteraction(claimInteraction("staff-1"), handlerOptions);
       const response = await handleTicketSlashCommandInteraction(
         {
           ...claimInteraction("staff-2"),
@@ -424,10 +406,7 @@ for (const priorButtonClaim of [true, false]) {
           message: undefined,
           data: { name: "ticket", options: [{ type: 1, name: "claim" }] },
         },
-        fixture.stores,
-        "fictional-token",
-        "https://example.test",
-        "claim",
+        { ...handlerOptions, subcommandName: "claim" },
       );
       assert.match(
         ((await response.json()) as { data: { content: string } }).data.content,
@@ -457,6 +436,7 @@ for (const priorButtonClaim of [true, false]) {
 for (const claimAlreadySaved of [false, true]) {
   test(`slash claim delivers updates for a legacy opening without a Claim button${claimAlreadySaved ? " after ownership was already saved" : ""}`, async () => {
     const fixture = createProductionRuntimeStores();
+    const handlerOptions = ticketHandlerOptions(fixture);
     const originalFetch = globalThis.fetch;
     try {
       await seedClaimTicket(fixture.stores);
@@ -511,10 +491,7 @@ for (const claimAlreadySaved of [false, true]) {
             message: undefined,
             data: { name: "ticket", options: [{ type: 1, name: "claim" }] },
           },
-          fixture.stores,
-          "fictional-token",
-          "https://example.test",
-          "claim",
+          { ...handlerOptions, subcommandName: "claim" },
         );
       const response = await claim();
       assert.match(
@@ -552,6 +529,7 @@ for (const storedOpening of [true, false]) {
   for (const failedNotification of [null, "announcement", "audit"] as const) {
     test(`slash claim recovers a missing ${storedOpening ? "stored" : "legacy"} opening with ${failedNotification ?? "no"} delivery failure`, async () => {
       const fixture = createProductionRuntimeStores();
+      const handlerOptions = ticketHandlerOptions(fixture);
       const originalFetch = globalThis.fetch;
       const deliveries: Array<{ phase: string; body: Record<string, unknown> }> = [];
       let failOnce = failedNotification !== null;
@@ -586,10 +564,7 @@ for (const storedOpening of [true, false]) {
             member: { user: { id: userId }, roles },
             data: { name: "ticket", options: [{ type: 1, name: "claim" }] },
           },
-          fixture.stores,
-          "fictional-token",
-          "https://example.test",
-          "claim",
+          { ...handlerOptions, subcommandName: "claim" },
         );
         return ((await response.json()) as { data: { content: string } }).data.content;
       };
@@ -652,6 +627,7 @@ for (const storedOpening of [true, false]) {
 for (const status of [403, 503]) {
   test(`slash claim retries opening lookup HTTP ${status} instead of treating it as a missing message`, async () => {
     const fixture = createProductionRuntimeStores();
+    const handlerOptions = ticketHandlerOptions(fixture);
     const originalFetch = globalThis.fetch;
     let unavailable = true;
     const deliveries: string[] = [];
@@ -680,10 +656,7 @@ for (const status of [403, 503]) {
             message: undefined,
             data: { name: "ticket", options: [{ type: 1, name: "claim" }] },
           },
-          fixture.stores,
-          "fictional-token",
-          "https://example.test",
-          "claim",
+          { ...handlerOptions, subcommandName: "claim" },
         );
         return ((await response.json()) as { data: { content: string } }).data.content;
       };
@@ -701,6 +674,17 @@ for (const status of [403, 503]) {
       fixture.close();
     }
   });
+}
+
+function ticketHandlerOptions(
+  fixture: ReturnType<typeof createProductionRuntimeStores>,
+): TicketComponentInteractionOptions {
+  return {
+    stores: fixture.stores,
+    ticketLifecycle: createTicketHandlerLifecycle(fixture.stores),
+    discordBotToken: "fictional-token",
+    requestOrigin: "https://example.test",
+  };
 }
 
 function claimInteraction(userId: string): DiscordInteraction {
@@ -802,6 +786,7 @@ test("paid Player Count list reaches its handler instead of Unsupported command"
 
 test("ticket claims defer slow work, preserve support authorization, and make repeats and transfers clear", async () => {
   const fixture = createProductionRuntimeStores();
+  const handlerOptions = ticketHandlerOptions(fixture);
   const originalFetch = globalThis.fetch;
   const messages: Array<{ url: string; method: string; body: Record<string, unknown> }> = [];
   globalThis.fetch = async (input, init) => {
@@ -878,14 +863,10 @@ test("ticket claims defer slow work, preserve support authorization, and make re
       return read(...args);
     };
     const tasks: Promise<unknown>[] = [];
-    const response = await handleMessageComponentInteraction(
-      interaction("staff-1"),
-      fixture.stores,
-      "fictional-token",
-      "https://example.test",
-      undefined,
-      (task) => tasks.push(task),
-    );
+    const response = await handleMessageComponentInteraction(interaction("staff-1"), {
+      ...handlerOptions,
+      waitUntil: (task) => tasks.push(task),
+    });
     assert.deepEqual(await response.json(), { type: 5, data: { flags: 64 } });
     assert.equal(messages.length, 0);
     release();
@@ -894,9 +875,7 @@ test("ticket claims defer slow work, preserve support authorization, and make re
     const first = await read("guild-1", "ticket-1");
     const repeated = await handleMessageComponentInteraction(
       interaction("staff-1"),
-      fixture.stores,
-      "fictional-token",
-      "https://example.test",
+      handlerOptions,
     );
     assert.match(
       ((await repeated.json()) as { data: { content: string } }).data.content,
@@ -904,12 +883,7 @@ test("ticket claims defer slow work, preserve support authorization, and make re
     );
     assert.equal((await read("guild-1", "ticket-1"))?.claimedAtMs, first?.claimedAtMs);
     assert.equal(messages.filter((item) => item.method === "POST").length, 1);
-    await handleMessageComponentInteraction(
-      interaction("staff-2"),
-      fixture.stores,
-      "fictional-token",
-      "https://example.test",
-    );
+    await handleMessageComponentInteraction(interaction("staff-2"), handlerOptions);
     assert.equal((await read("guild-1", "ticket-1"))?.claimedByUserId, "staff-2");
     assert.equal(messages.filter((item) => item.method === "POST").length, 2);
     const controls = messages.filter((item) => item.url.endsWith("/opening-1"));
@@ -918,9 +892,7 @@ test("ticket claims defer slow work, preserve support authorization, and make re
     assert.match(JSON.stringify(controls.at(-1)?.body), /signed-claim-id/);
     const denied = await handleMessageComponentInteraction(
       interaction("opener-1", []),
-      fixture.stores,
-      "fictional-token",
-      "https://example.test",
+      handlerOptions,
     );
     assert.match(
       ((await denied.json()) as { data: { content: string } }).data.content,
