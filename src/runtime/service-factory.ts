@@ -34,10 +34,7 @@ import { fetchGuildMember, guildMemberHasRole } from "../discord/members";
 import { BlocklistService } from "../services/blocklist-service";
 import { LfgService } from "../services/lfg-service";
 import { EventsService } from "../services/events-service";
-import {
-  EventTeamDeliveryService,
-  type EventTeamDeliveryStore,
-} from "../services/event-team-delivery-service";
+import { EventTeamDeliveryService } from "../services/event-team-delivery-service";
 import { MarketplaceService } from "../services/marketplace-service";
 import {
   PlayerCountService,
@@ -149,7 +146,7 @@ export interface ServiceFactory {
   marketplaceService: MarketplaceService;
   lfgService: LfgService;
   eventsService: EventsService;
-  eventTeamDeliveryService?: EventTeamDeliveryService;
+  eventTeamDeliveryService: EventTeamDeliveryService;
   playerCountService: PlayerCountService;
   webhookProxyService: WebhookProxyService;
   platformLinkService: PlatformLinkService;
@@ -441,28 +438,21 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
     (event) =>
       postSuggestionAuditEvent(event, options.stores.guildAuditLog, options.discordBotToken),
   );
-  const eventStore = options.stores.events;
-  const eventTeamDeliveryService =
-    eventStore?.listDueEventTeamDeliveries &&
-    eventStore?.claimEventTeamDelivery &&
-    eventStore?.updateEventTeamDelivery
-      ? new EventTeamDeliveryService({
-          store: eventStore as EventTeamDeliveryStore,
-          discord: {
-            sendUserDm: (userId, body) =>
-              createUserDmMessage(userId, body, options.discordBotToken),
-            editChannelMessage: (channelId, messageId, body) =>
-              editChannelMessage(channelId, messageId, body, options.discordBotToken),
-          },
-          observeMetrics: (metrics) => {
-            console.info({
-              event: "haf.metric",
-              metric: "event_team_delivery",
-              ...metrics,
-            });
-          },
-        })
-      : undefined;
+  const eventTeamDeliveryService = new EventTeamDeliveryService({
+    store: options.stores.events,
+    discord: {
+      sendUserDm: (userId, body) => createUserDmMessage(userId, body, options.discordBotToken),
+      editChannelMessage: (channelId, messageId, body) =>
+        editChannelMessage(channelId, messageId, body, options.discordBotToken),
+    },
+    observeMetrics: (metrics) => {
+      console.info({
+        event: "haf.metric",
+        metric: "event_team_delivery",
+        ...metrics,
+      });
+    },
+  });
 
   return {
     serverLevelProcessor: serverLevelLinkProcessor ?? undefined,
