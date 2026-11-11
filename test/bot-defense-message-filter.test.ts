@@ -534,9 +534,11 @@ test("honeypot detector posts to the mod queue when configured", async () => {
   });
   await moderateBotDefenseMessageCreate(createMessage(), createEnv(), dependencies);
   assert.equal(dependencies.queueMessages.length, 1);
-  assert.equal(dependencies.queueMessages[0]?.channelId, "queue-channel-1");
+  const queued = dependencies.queueMessages[0];
+  assert.ok(queued);
+  assert.equal(queued.channelId, "queue-channel-1");
   const components = (
-    dependencies.queueMessages[0]?.body as {
+    queued.body as {
       components?: Array<{ components?: Array<{ custom_id?: string }> }>;
     }
   ).components;
