@@ -25,7 +25,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const queue = createPostgresJobQueue(database);
       const startedAt = new Date("2026-11-05T00:00:00.000Z");
       const completeJob = await queue.enqueue({
@@ -166,7 +166,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const queue = createPostgresJobQueue(database);
       await queue.enqueue({
         id: "missing-outcome",
@@ -235,7 +235,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const queue = createPostgresJobQueue(database);
       const job = await queue.enqueue({
         id: "fenced-job",
@@ -309,7 +309,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const queue = createPostgresJobQueue(database);
       await queue.enqueue({
         id: "billing-job-1",
@@ -396,7 +396,7 @@ function createTestDatabase(url: string): PostgresDatabaseCapability {
   });
 }
 
-async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
+async function initializeFreshTestSchema(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
   await initializePostgresSchema(database);
 }
