@@ -96,7 +96,7 @@
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "4.3.5",
     "@types/jsdom": "^30.0.0",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.6.6",
     "@types/pg": "^8.15.0",
     "@types/pngjs": "^6.0.5",
     "@types/react": "^19.3.0",
