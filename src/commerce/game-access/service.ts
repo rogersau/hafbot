@@ -656,7 +656,6 @@ export class CommerceGameAccessService {
       dispatchAttempt &&
       a.transmitted &&
       !a.transmitted.acknowledged &&
-      dispatchAttempt.transmitted.operationId &&
       a.transmitted.operationId === dispatchAttempt.transmitted.operationId &&
       a.transmitted.action === dispatchAttempt.transmitted.action &&
       a.transmitted.generation === dispatchAttempt.transmitted.generation &&

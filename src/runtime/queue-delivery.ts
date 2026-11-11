@@ -6,7 +6,7 @@ import { reportOperationalEvent } from "../observability/operational-reporter";
 import { findGuildIdInValue } from "./guild-service-policy";
 import type { OperationalSeverity } from "../observability/operational-reporter";
 
-// wrangler.toml configures three retries after the initial delivery.
+// The delivery policy allows three retries after the initial attempt.
 export const DEFAULT_QUEUE_MAX_ATTEMPTS = 4;
 
 export type QueueParseResult<T> = { ok: true; value: T } | { ok: false; reasonCode: string };

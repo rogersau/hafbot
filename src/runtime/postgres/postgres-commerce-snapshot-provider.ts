@@ -1448,9 +1448,7 @@ function accountFromProvider(
       ? "active"
       : "pending";
   return {
-    // Reconciliation messages are keyed by the provider account ID. Keep the
-    // projection ID aligned with that key even if an older local row used a
-    // seller-owned identifier as its primary key.
+    // Reconciliation messages and the projection share the provider account ID.
     id: provider.id,
     guildId: local.guild_id,
     stripeAccountId: provider.id,
