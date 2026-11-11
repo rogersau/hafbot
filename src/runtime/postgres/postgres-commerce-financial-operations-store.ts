@@ -519,7 +519,7 @@ export class PostgresCommerceFinancialOperationsStore implements CommerceFinanci
   ): Promise<void> {
     await executePostgresCommands(this.database, [
       {
-        statement: `UPDATE commerce_offering_lifecycles
+        statement: `UPDATE commerce_offerings
            SET state = CASE WHEN state = 'published' THEN 'unpublished' ELSE state END,
                updated_at_ms = $1
             WHERE connected_account_id = $2 AND EXISTS (
@@ -666,28 +666,9 @@ export class PostgresCommerceFinancialOperationsStore implements CommerceFinanci
         ],
       },
       {
-        statement: `UPDATE commerce_offering_lifecycles
-           SET state = 'archived', archived_at_ms = COALESCE(archived_at_ms, $1), updated_at_ms = $2
-            WHERE connected_account_id = $3 AND NOT EXISTS (
-              SELECT 1 FROM commerce_subscriptions s
-               WHERE s.connected_account_id=$4 AND s.status NOT IN ('canceled','ended')
-            ) AND EXISTS (
-  SELECT 1 FROM commerce_financial_actions a
-   WHERE a.id=$5 AND a.status='processing' AND a.lease_token=$6 AND a.lease_expires_at_ms>$7
-)`,
-        values: [
-          lease.nowMs,
-          lease.nowMs,
-          connectedAccountId,
-          connectedAccountId,
-          lease.actionId,
-          lease.leaseToken,
-          lease.nowMs,
-        ],
-      },
-      {
         statement: `UPDATE commerce_offerings
-           SET status = 'archived', archived_at_ms = COALESCE(archived_at_ms, $1), updated_at_ms = $2
+           SET state = 'archived', repair_previous_state = NULL, repair_deadline_at_ms = NULL,
+               archived_at_ms = COALESCE(archived_at_ms, $1), updated_at_ms = $2
             WHERE connected_account_id = $3 AND NOT EXISTS (
               SELECT 1 FROM commerce_subscriptions s
                WHERE s.connected_account_id=$4 AND s.status NOT IN ('canceled','ended')

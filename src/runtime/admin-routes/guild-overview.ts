@@ -986,8 +986,8 @@ export function createGuildOverviewAdminRoutes(
           : [];
         const commerceAccount =
           (await options.commerce?.store.readConnectedAccountByGuild(guildId)) ?? null;
-        const commerceLifecycles = commerceAccount
-          ? await options.commerce!.catalog.listLifecycles(commerceAccount.id)
+        const commerceOfferingsForGuild = commerceAccount
+          ? await options.commerce!.catalog.listOfferings(commerceAccount.id)
           : [];
 
         const communityTools: NonNullable<GuildOverviewSummaryInput["communityTools"]> = {};
@@ -1060,8 +1060,8 @@ export function createGuildOverviewAdminRoutes(
           incidents: openIncidents,
           commerce: {
             connected: commerceAccount !== null,
-            publishedOfferings: commerceLifecycles.filter(
-              (lifecycle) => lifecycle.state === "published",
+            publishedOfferings: commerceOfferingsForGuild.filter(
+              (offering) => offering.state === "published",
             ).length,
           },
         });

@@ -235,16 +235,12 @@ function seedSeller(database: Awaited<ReturnType<typeof createTestDatabase>>): v
     VALUES ('acct_1','guild-1','active','approved','seller@example.test',${NOW},
       'discord_verified',0,NULL,1,1,'[]','[]','[]',NULL,'operator-1',${NOW},${NOW},${NOW},${NOW});
     INSERT INTO commerce_offerings
-      (id,connected_account_id,guild_id,discord_role_id,name,description,purchase_type,status,
+      (id,connected_account_id,guild_id,discord_role_id,name,description,purchase_type,state,
+       terms_version,included_benefits_json,support_contact,role_manageable,
+       repair_deadline_at_ms,repair_previous_state,retire_at_ms,published_at_ms,
        archived_at_ms,created_at_ms,updated_at_ms)
-    VALUES ('offering-1','acct_1','guild-1','role-1','Role',NULL,'subscription','active',
-      NULL,${NOW},${NOW});
-    INSERT INTO commerce_offering_lifecycles
-      (offering_id,connected_account_id,guild_id,state,terms_version,included_benefits_json,
-       support_contact,role_manageable,repair_deadline_at_ms,retire_at_ms,published_at_ms,
-       archived_at_ms,created_at_ms,updated_at_ms)
-    VALUES ('offering-1','acct_1','guild-1','published','terms','["Role"]',
-      'seller@example.test',1,NULL,NULL,${NOW},NULL,${NOW},${NOW});
+    VALUES ('offering-1','acct_1','guild-1','role-1','Role',NULL,'subscription','published',
+      'terms','["Role"]','seller@example.test',1,NULL,NULL,NULL,${NOW},NULL,${NOW},${NOW});
   `);
 }
 

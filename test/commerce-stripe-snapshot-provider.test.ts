@@ -860,7 +860,7 @@ function seed(database: D1Database) {
     .run();
   database
     .prepare(
-      "INSERT INTO commerce_offerings (id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms) VALUES (?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO commerce_offerings (id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,created_at_ms,updated_at_ms) VALUES (?,?,?,?,?,?,?,?,?)",
     )
     .bind(
       "offering_1",
@@ -869,7 +869,7 @@ function seed(database: D1Database) {
       "role_1",
       "Offering",
       "subscription",
-      "active",
+      "published",
       NOW,
       NOW,
     )

@@ -135,7 +135,7 @@ test("paid role state and commerce role assignments persist without claiming man
     assert.deepEqual(await store.readState(state.entitlementId), state);
     database.execRaw(`
       INSERT INTO commerce_buyers(id,discord_user_id,created_at_ms,updated_at_ms) VALUES ('buyer-1','user-1',${NOW},${NOW});
-      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms) VALUES ('offering-1','seller-1','guild-1','role-1','Monthly','subscription','active',${NOW},${NOW});
+      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,created_at_ms,updated_at_ms) VALUES ('offering-1','seller-1','guild-1','role-1','Monthly','subscription','published',${NOW},${NOW});
       INSERT INTO commerce_entitlements(id,connected_account_id,buyer_id,offering_id,source_type,source_id,status,effective_at_ms,created_at_ms,updated_at_ms) VALUES ('ent-1','seller-1','buyer-1','offering-1','subscription','stripe-sub-1','active',${NOW},${NOW},${NOW});
       INSERT INTO commerce_subscriptions(id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,created_at_ms,updated_at_ms) VALUES ('sub-1','seller-1','customer-1','buyer-1','offering-1','price-1','stripe-sub-1','active',${NOW},${NOW});
     `);
@@ -196,7 +196,7 @@ test("rebuild uses the provider grace anchor instead of reconciliation timestamp
     const graceStartedAtMs = NOW - 3 * 24 * 60 * 60 * 1_000;
     database.execRaw(`
       INSERT INTO commerce_buyers(id,discord_user_id,created_at_ms,updated_at_ms) VALUES ('buyer-grace','user-grace',${NOW},${NOW});
-      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms) VALUES ('offering-grace','seller-grace','guild-grace','role-grace','Monthly','subscription','active',${NOW},${NOW});
+      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,created_at_ms,updated_at_ms) VALUES ('offering-grace','seller-grace','guild-grace','role-grace','Monthly','subscription','published',${NOW},${NOW});
       INSERT INTO commerce_entitlements(id,connected_account_id,buyer_id,offering_id,source_type,source_id,status,effective_at_ms,created_at_ms,updated_at_ms) VALUES ('ent-grace','seller-grace','buyer-grace','offering-grace','subscription','stripe-sub-grace','active',${NOW},${NOW},${NOW});
       INSERT INTO commerce_subscriptions(
         id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_subscription_id,status,
@@ -225,7 +225,7 @@ test("rebuild resolves one-time entitlement payment state without a subscription
     const store = new SqlitePaidRoleStore(database.d1);
     database.execRaw(`
       INSERT INTO commerce_buyers(id,discord_user_id,created_at_ms,updated_at_ms) VALUES ('buyer-once','user-once',${NOW},${NOW});
-      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms) VALUES ('offering-once','seller-once','guild-once','role-once','Lifetime','one_time','active',${NOW},${NOW});
+      INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,created_at_ms,updated_at_ms) VALUES ('offering-once','seller-once','guild-once','role-once','Lifetime','one_time','published',${NOW},${NOW});
       INSERT INTO commerce_entitlements(id,connected_account_id,buyer_id,offering_id,source_type,source_id,status,effective_at_ms,created_at_ms,updated_at_ms) VALUES ('ent-once','seller-once','buyer-once','offering-once','payment','pi_once','active',${NOW},${NOW},${NOW});
       INSERT INTO commerce_payments(
         id,connected_account_id,customer_id,buyer_id,offering_id,price_id,stripe_payment_intent_id,

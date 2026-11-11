@@ -637,14 +637,9 @@ export class PostgresPaidRoleStore implements PaidRoleEntitlementStore {
     );
     await executePostgresCommands(this.database, [
       {
-        statement: `UPDATE commerce_offering_lifecycles
-           SET state='archived',archived_at_ms=COALESCE(archived_at_ms,$1),updated_at_ms=$2
-           WHERE guild_id=$3`,
-        values: [nowMs, nowMs, guildId],
-      },
-      {
         statement: `UPDATE commerce_offerings
-           SET status='archived',archived_at_ms=COALESCE(archived_at_ms,$1),updated_at_ms=$2
+           SET state='archived',repair_previous_state=NULL,repair_deadline_at_ms=NULL,
+               archived_at_ms=COALESCE(archived_at_ms,$1),updated_at_ms=$2
            WHERE guild_id=$3`,
         values: [nowMs, nowMs, guildId],
       },
@@ -758,10 +753,12 @@ export class PostgresPaidRoleStore implements PaidRoleEntitlementStore {
     );
     await run(
       this.database,
-      `UPDATE commerce_offering_lifecycles
-       SET state='repair_required',repair_deadline_at_ms=COALESCE(repair_deadline_at_ms,$1),
+      `UPDATE commerce_offerings
+       SET state='repair_required',
+           repair_previous_state=CASE WHEN state='repair_required' THEN repair_previous_state ELSE state END,
+           repair_deadline_at_ms=COALESCE(repair_deadline_at_ms,$1),
            role_manageable=0,updated_at_ms=$2
-       WHERE guild_id=$3 AND offering_id=$4 AND state<>'archived'`,
+       WHERE guild_id=$3 AND id=$4 AND state<>'archived'`,
       repair.deadlineAtMs,
       repair.updatedAtMs,
       repair.guildId,
@@ -774,30 +771,22 @@ export class PostgresPaidRoleStore implements PaidRoleEntitlementStore {
     const offering = await run(
       this.database,
       `UPDATE commerce_offerings SET discord_role_id=$1,updated_at_ms=$2
-       WHERE id=$3 AND guild_id=$4 AND discord_role_id IN ($5,$6) AND EXISTS (
-         SELECT 1 FROM commerce_offering_lifecycles lifecycle
-         WHERE lifecycle.offering_id=commerce_offerings.id
-           AND lifecycle.guild_id=$7 AND lifecycle.state='repair_required'
-       )`,
+       WHERE id=$3 AND guild_id=$4 AND discord_role_id IN ($5,$6) AND state='repair_required'`,
       repair.replacementRoleId,
       nowMs,
       repair.offeringId,
       repair.guildId,
       repair.oldRoleId,
       repair.replacementRoleId,
-      repair.guildId,
     );
     if (offering.rowCount === 0) throw new Error("commerce_role_repair_stale");
     await executePostgresCommands(this.database, [
       {
-        statement: `UPDATE commerce_offering_lifecycles
-           SET state=CASE
-                 WHEN offering_id IN (SELECT id FROM commerce_offerings WHERE status='active')
-                   THEN 'published'
-                 ELSE 'unpublished'
-               END,
+        statement: `UPDATE commerce_offerings
+           SET state=repair_previous_state,
+               repair_previous_state=NULL,
                role_manageable=1,repair_deadline_at_ms=NULL,updated_at_ms=$1
-           WHERE offering_id=$2 AND guild_id=$3 AND state='repair_required'`,
+           WHERE id=$2 AND guild_id=$3 AND state='repair_required'`,
         values: [nowMs, repair.offeringId, repair.guildId],
       },
       {

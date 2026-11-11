@@ -648,15 +648,9 @@ export class SqlitePaidRoleStore implements PaidRoleEntitlementStore {
     await this.database.batch([
       this.database
         .prepare(
-          `UPDATE commerce_offering_lifecycles
-           SET state='archived',archived_at_ms=COALESCE(archived_at_ms,?),updated_at_ms=?
-           WHERE guild_id=?`,
-        )
-        .bind(nowMs, nowMs, guildId),
-      this.database
-        .prepare(
           `UPDATE commerce_offerings
-           SET status='archived',archived_at_ms=COALESCE(archived_at_ms,?),updated_at_ms=?
+           SET state='archived',repair_previous_state=NULL,repair_deadline_at_ms=NULL,
+               archived_at_ms=COALESCE(archived_at_ms,?),updated_at_ms=?
            WHERE guild_id=?`,
         )
         .bind(nowMs, nowMs, guildId),
@@ -770,10 +764,12 @@ export class SqlitePaidRoleStore implements PaidRoleEntitlementStore {
     );
     await run(
       this.database,
-      `UPDATE commerce_offering_lifecycles
-       SET state='repair_required',repair_deadline_at_ms=COALESCE(repair_deadline_at_ms,?),
+      `UPDATE commerce_offerings
+       SET state='repair_required',
+           repair_previous_state=CASE WHEN state='repair_required' THEN repair_previous_state ELSE state END,
+           repair_deadline_at_ms=COALESCE(repair_deadline_at_ms,?),
            role_manageable=0,updated_at_ms=?
-       WHERE guild_id=? AND offering_id=? AND state<>'archived'`,
+       WHERE guild_id=? AND id=? AND state<>'archived'`,
       repair.deadlineAtMs,
       repair.updatedAtMs,
       repair.guildId,
@@ -786,31 +782,23 @@ export class SqlitePaidRoleStore implements PaidRoleEntitlementStore {
     const offering = await run(
       this.database,
       `UPDATE commerce_offerings SET discord_role_id=?,updated_at_ms=?
-       WHERE id=? AND guild_id=? AND discord_role_id IN (?,?) AND EXISTS (
-         SELECT 1 FROM commerce_offering_lifecycles lifecycle
-         WHERE lifecycle.offering_id=commerce_offerings.id
-           AND lifecycle.guild_id=? AND lifecycle.state='repair_required'
-       )`,
+       WHERE id=? AND guild_id=? AND discord_role_id IN (?,?) AND state='repair_required'`,
       repair.replacementRoleId,
       nowMs,
       repair.offeringId,
       repair.guildId,
       repair.oldRoleId,
       repair.replacementRoleId,
-      repair.guildId,
     );
     if (offering.meta.changes === 0) throw new Error("commerce_role_repair_stale");
     await this.database.batch([
       this.database
         .prepare(
-          `UPDATE commerce_offering_lifecycles
-           SET state=CASE
-                 WHEN offering_id IN (SELECT id FROM commerce_offerings WHERE status='active')
-                   THEN 'published'
-                 ELSE 'unpublished'
-               END,
+          `UPDATE commerce_offerings
+           SET state=repair_previous_state,
+               repair_previous_state=NULL,
                role_manageable=1,repair_deadline_at_ms=NULL,updated_at_ms=?
-           WHERE offering_id=? AND guild_id=? AND state='repair_required'`,
+           WHERE id=? AND guild_id=? AND state='repair_required'`,
         )
         .bind(nowMs, repair.offeringId, repair.guildId),
       this.database

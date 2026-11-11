@@ -34,7 +34,7 @@ test(
       };
       assert.equal((await store.readBuyerStatus(input)).checkoutAttemptId, null);
       await d1.queryResult(
-        "INSERT INTO commerce_offerings\n      (id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms)\n      VALUES($1,$2,'guild','role','Fixture','subscription','draft',1,1)",
+        "INSERT INTO commerce_offerings\n      (id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,created_at_ms,updated_at_ms)\n      VALUES($1,$2,'guild','role','Fixture','subscription','draft',1,1)",
         [scope, scope],
       );
       for (const [suffix, createdAtMs] of [

@@ -868,27 +868,6 @@ CREATE TABLE commerce_limit_alerts (
   updated_at_ms INTEGER NOT NULL
 );
 
-CREATE TABLE commerce_offering_lifecycles (
-  offering_id TEXT PRIMARY KEY NOT NULL,
-  connected_account_id TEXT NOT NULL,
-  guild_id TEXT NOT NULL,
-  state TEXT NOT NULL CHECK (
-    state IN ('draft', 'published', 'unpublished', 'repair_required', 'retiring', 'archived', 'suspended')
-  ),
-  terms_version TEXT,
-  included_benefits_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(included_benefits_json)),
-  support_contact TEXT,
-  role_manageable INTEGER NOT NULL DEFAULT 0 CHECK (role_manageable IN (0, 1)),
-  repair_deadline_at_ms INTEGER,
-  retire_at_ms INTEGER,
-  published_at_ms INTEGER,
-  archived_at_ms INTEGER,
-  created_at_ms INTEGER NOT NULL,
-  updated_at_ms INTEGER NOT NULL,
-  CHECK ((state = 'archived') = (archived_at_ms IS NOT NULL)),
-  CHECK (state <> 'retiring' OR retire_at_ms IS NOT NULL)
-);
-
 CREATE TABLE commerce_offering_retirements (
   id TEXT PRIMARY KEY NOT NULL,
   connected_account_id TEXT NOT NULL,
@@ -924,11 +903,25 @@ CREATE TABLE commerce_offerings (
   name TEXT NOT NULL,
   description TEXT,
   purchase_type TEXT NOT NULL CHECK (purchase_type IN ('subscription', 'one_time')),
-  status TEXT NOT NULL CHECK (status IN ('draft', 'active', 'archived')),
+  state TEXT NOT NULL CHECK (
+    state IN ('draft', 'published', 'unpublished', 'repair_required', 'retiring', 'archived', 'suspended')
+  ),
+  terms_version TEXT,
+  included_benefits_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(included_benefits_json)),
+  support_contact TEXT,
+  role_manageable INTEGER NOT NULL DEFAULT 0 CHECK (role_manageable IN (0, 1)),
+  repair_deadline_at_ms INTEGER,
+  repair_previous_state TEXT CHECK (
+    repair_previous_state IS NULL OR repair_previous_state IN ('draft', 'published', 'unpublished', 'retiring', 'suspended')
+  ),
+  retire_at_ms INTEGER,
+  published_at_ms INTEGER,
   archived_at_ms INTEGER,
   created_at_ms INTEGER NOT NULL,
   updated_at_ms INTEGER NOT NULL,
-  CHECK ((status = 'archived') = (archived_at_ms IS NOT NULL))
+  CHECK ((state = 'archived') = (archived_at_ms IS NOT NULL)),
+  CHECK (state <> 'retiring' OR retire_at_ms IS NOT NULL),
+  CHECK ((state = 'repair_required') = (repair_previous_state IS NOT NULL))
 );
 
 CREATE TABLE commerce_operational_controls (
@@ -3078,20 +3071,15 @@ CREATE INDEX commerce_incidents_guild_status
 CREATE INDEX commerce_limit_alerts_open
   ON commerce_limit_alerts (guild_id, status, updated_at_ms);
 
-CREATE INDEX commerce_offering_lifecycles_guild_state
-  ON commerce_offering_lifecycles (guild_id, state);
-
-CREATE INDEX commerce_offering_lifecycles_seller_state
-  ON commerce_offering_lifecycles (connected_account_id, state, updated_at_ms);
-
 CREATE INDEX commerce_offering_retirements_status
   ON commerce_offering_retirements (status, updated_at_ms);
 
-CREATE UNIQUE INDEX commerce_offerings_active_role
-  ON commerce_offerings (guild_id, discord_role_id) WHERE status = 'active';
+CREATE UNIQUE INDEX commerce_offerings_published_role
+  ON commerce_offerings (guild_id, discord_role_id)
+  WHERE state = 'published' OR (state = 'repair_required' AND repair_previous_state = 'published');
 
-CREATE INDEX commerce_offerings_seller_status
-  ON commerce_offerings (connected_account_id, status);
+CREATE INDEX commerce_offerings_seller_state
+  ON commerce_offerings (connected_account_id, state);
 
 CREATE INDEX commerce_operational_controls_active
   ON commerce_operational_controls (enabled, control_type, expires_at_ms);

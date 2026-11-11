@@ -57,15 +57,8 @@ test(
         scope,
       );
       await execute(
-        `INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms)
-      VALUES ($1, $2, $3, 'role', 'Gold','subscription','draft',1,1)`,
-        scope,
-        scope,
-        scope,
-      );
-      await execute(
-        `INSERT INTO commerce_offering_lifecycles(offering_id,connected_account_id,guild_id,state,included_benefits_json,support_contact,role_manageable,retire_at_ms,created_at_ms,updated_at_ms)
-      VALUES ($1, $2, $3, 'retiring','[]','seller@example.test',1,2,1,1)`,
+        `INSERT INTO commerce_offerings(id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,included_benefits_json,support_contact,role_manageable,retire_at_ms,created_at_ms,updated_at_ms)
+      VALUES ($1, $2, $3, 'role', 'Gold','subscription','retiring','[]','seller@example.test',1,2,1,1)`,
         scope,
         scope,
         scope,

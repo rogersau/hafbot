@@ -854,7 +854,7 @@ export function createCommerceAdminRoutes(
           return forbidden();
         }
         return Response.json({
-          lifecycle: await services.offerings.retire({
+          offering: await services.offerings.retire({
             offeringId: body.offeringId,
             actorUserId,
             reasonCode: body.reasonCode ?? "seller_offering_retired",
@@ -1240,7 +1240,7 @@ function actionRoute(
         return forbidden();
       }
       return Response.json({
-        lifecycle: await action(services.offerings, body.offeringId),
+        offering: await action(services.offerings, body.offeringId),
       });
     },
   });

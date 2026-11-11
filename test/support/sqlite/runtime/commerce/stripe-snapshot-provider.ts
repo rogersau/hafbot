@@ -50,7 +50,7 @@ interface OfferingRow {
   guild_id: string;
   discord_role_id: string;
   purchase_type: "subscription" | "one_time";
-  status: "draft" | "active" | "archived";
+  state: string;
 }
 
 interface PriceRow {
@@ -827,7 +827,7 @@ export class StripeCommerceSnapshotProvider implements CommerceSnapshotProvider 
       ),
       rows<OfferingRow>(
         this.database,
-        "SELECT id, connected_account_id, guild_id, discord_role_id, purchase_type, status FROM commerce_offerings WHERE connected_account_id = ?",
+        "SELECT id, connected_account_id, guild_id, discord_role_id, purchase_type, state FROM commerce_offerings WHERE connected_account_id = ?",
         accountId,
       ),
       rows<PriceRow>(

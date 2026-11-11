@@ -1,13 +1,15 @@
 import type {
   CommerceOfferingStore,
   CommerceOfferingDashboard,
-  CommerceOfferingLifecycle,
-  CommerceOfferingLifecycleRecord,
   CommerceOfferingPublishContext,
   CommerceOfferingRetirementProgress,
   CommerceOfferingRetirementStatus,
 } from "../../../../../src/commerce/offering-service";
-import type { CommerceOffering, CommercePrice } from "../../../../../src/commerce/types";
+import type {
+  CommerceOffering,
+  CommerceOfferingLifecycle,
+  CommercePrice,
+} from "../../../../../src/commerce/types";
 
 type Row = Record<string, unknown>;
 
@@ -27,12 +29,22 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
       .prepare(
         `INSERT INTO commerce_offerings
           (id, connected_account_id, guild_id, discord_role_id, name, description,
-           purchase_type, status, archived_at_ms, created_at_ms, updated_at_ms)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           purchase_type, state, terms_version, included_benefits_json, support_contact,
+           role_manageable, repair_deadline_at_ms, repair_previous_state, retire_at_ms,
+           published_at_ms, archived_at_ms, created_at_ms, updated_at_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            discord_role_id=excluded.discord_role_id, name=excluded.name,
            description=excluded.description, purchase_type=excluded.purchase_type,
-           status=excluded.status, archived_at_ms=excluded.archived_at_ms,
+           state=excluded.state, terms_version=excluded.terms_version,
+           included_benefits_json=excluded.included_benefits_json,
+           support_contact=excluded.support_contact,
+           role_manageable=excluded.role_manageable,
+           repair_deadline_at_ms=excluded.repair_deadline_at_ms,
+           repair_previous_state=excluded.repair_previous_state,
+           retire_at_ms=excluded.retire_at_ms,
+           published_at_ms=excluded.published_at_ms,
+           archived_at_ms=excluded.archived_at_ms,
            updated_at_ms=excluded.updated_at_ms`,
       )
       .bind(
@@ -43,7 +55,15 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
         offering.name,
         offering.description,
         offering.purchaseType,
-        offering.status,
+        offering.state,
+        offering.termsVersion,
+        JSON.stringify(offering.includedBenefits),
+        offering.supportContact,
+        offering.roleManageable ? 1 : 0,
+        offering.repairDeadlineAtMs,
+        offering.repairPreviousState,
+        offering.retireAtMs,
+        offering.publishedAtMs,
         offering.archivedAtMs,
         offering.createdAtMs,
         offering.updatedAtMs,
@@ -67,60 +87,6 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
       .bind(connectedAccountId)
       .all<Row>();
     return result.results.map(offeringFromRow);
-  }
-
-  async saveLifecycle(record: CommerceOfferingLifecycleRecord): Promise<void> {
-    await this.database
-      .prepare(
-        `INSERT INTO commerce_offering_lifecycles
-           (offering_id, connected_account_id, guild_id, state, terms_version,
-           included_benefits_json, support_contact, role_manageable, repair_deadline_at_ms, retire_at_ms, published_at_ms,
-           archived_at_ms, created_at_ms, updated_at_ms)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(offering_id) DO UPDATE SET
-           state=excluded.state, terms_version=excluded.terms_version,
-           included_benefits_json=excluded.included_benefits_json,
-           support_contact=excluded.support_contact,
-           role_manageable=excluded.role_manageable,
-           repair_deadline_at_ms=excluded.repair_deadline_at_ms,
-           retire_at_ms=excluded.retire_at_ms, published_at_ms=excluded.published_at_ms,
-           archived_at_ms=excluded.archived_at_ms, updated_at_ms=excluded.updated_at_ms`,
-      )
-      .bind(
-        record.offeringId,
-        record.connectedAccountId,
-        record.guildId,
-        record.state,
-        record.termsVersion,
-        JSON.stringify(record.includedBenefits),
-        record.supportContact,
-        record.roleManageable ? 1 : 0,
-        record.repairDeadlineAtMs,
-        record.retireAtMs,
-        record.publishedAtMs,
-        record.archivedAtMs,
-        record.createdAtMs,
-        record.updatedAtMs,
-      )
-      .run();
-  }
-
-  async readLifecycle(offeringId: string): Promise<CommerceOfferingLifecycleRecord | null> {
-    const row = await this.database
-      .prepare("SELECT * FROM commerce_offering_lifecycles WHERE offering_id = ? LIMIT 1")
-      .bind(offeringId)
-      .first<Row>();
-    return row ? lifecycleFromRow(row) : null;
-  }
-
-  async listLifecycles(connectedAccountId: string): Promise<CommerceOfferingLifecycleRecord[]> {
-    const result = await this.database
-      .prepare(
-        "SELECT * FROM commerce_offering_lifecycles WHERE connected_account_id = ? ORDER BY created_at_ms",
-      )
-      .bind(connectedAccountId)
-      .all<Row>();
-    return result.results.map(lifecycleFromRow);
   }
 
   async createPrice(price: CommercePrice): Promise<boolean> {
@@ -178,12 +144,13 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
       .prepare(
         `SELECT a.status AS account_status, a.charges_enabled, a.payouts_enabled,
                 a.details_submitted, p.lifecycle_state, p.approval_state,
-                l.role_manageable, l.terms_version,
+                o.role_manageable, o.terms_version,
                 EXISTS(SELECT 1 FROM commerce_seller_acceptances sa
-                  WHERE sa.connected_account_id = a.id AND sa.terms_version = l.terms_version) AS terms_accepted
+                  WHERE sa.connected_account_id = a.id AND sa.terms_version = o.terms_version) AS terms_accepted
            FROM commerce_connected_accounts a
            JOIN commerce_seller_profiles p ON p.connected_account_id = a.id
-           JOIN commerce_offering_lifecycles l ON l.offering_id = ?
+           JOIN commerce_offerings o
+             ON o.id = ? AND o.connected_account_id = a.id AND o.guild_id = a.guild_id
           WHERE a.id = ? AND a.guild_id = ? LIMIT 1`,
       )
       .bind(offeringId, connectedAccountId, guildId)
@@ -213,8 +180,7 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
     const row = await this.database
       .prepare(
         `SELECT COUNT(*) AS count FROM commerce_offerings o
-          JOIN commerce_offering_lifecycles l ON l.offering_id = o.id
-         WHERE o.guild_id = ? AND o.purchase_type = 'subscription' AND l.state = 'published'`,
+         WHERE o.guild_id = ? AND o.purchase_type = 'subscription' AND o.state = 'published'`,
       )
       .bind(guildId)
       .first<{ count: number }>();
@@ -229,9 +195,11 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
     const row = await this.database
       .prepare(
         `SELECT 1 AS found FROM commerce_offerings o
-          JOIN commerce_offering_lifecycles l ON l.offering_id = o.id
          WHERE o.guild_id = ? AND o.discord_role_id = ? AND o.id <> ?
-           AND l.state = 'published'
+           AND (
+             o.state = 'published'
+             OR (o.state = 'repair_required' AND o.repair_previous_state = 'published')
+           )
          LIMIT 1`,
       )
       .bind(guildId, discordRoleId, excludingOfferingId)
@@ -241,7 +209,6 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
 
   async beginRoleReplacement(input: {
     offering: CommerceOffering;
-    lifecycle: CommerceOfferingLifecycleRecord;
     replacementRoleId: string;
     nowMs: number;
   }): Promise<"updated" | "replacement_pending"> {
@@ -257,18 +224,16 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
       await this.createOffering({
         ...input.offering,
         discordRoleId: input.replacementRoleId,
-        updatedAtMs: input.nowMs,
-      });
-      await this.saveLifecycle({
-        ...input.lifecycle,
         roleManageable: true,
         repairDeadlineAtMs: null,
+        repairPreviousState:
+          input.offering.state === "repair_required" ? input.offering.repairPreviousState : null,
         updatedAtMs: input.nowMs,
       });
       return "updated";
     }
     const repairId = `role-repair:${input.offering.id}:${input.offering.discordRoleId}`;
-    const deadlineAtMs = input.lifecycle.repairDeadlineAtMs ?? input.nowMs + 72 * 60 * 60 * 1_000;
+    const deadlineAtMs = input.offering.repairDeadlineAtMs ?? input.nowMs + 72 * 60 * 60 * 1_000;
     await this.database.batch([
       this.database
         .prepare(
@@ -292,9 +257,12 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
         ),
       this.database
         .prepare(
-          `UPDATE commerce_offering_lifecycles
-           SET state='repair_required',role_manageable=1,repair_deadline_at_ms=?,updated_at_ms=?
-           WHERE offering_id=?`,
+          `UPDATE commerce_offerings
+           SET state='repair_required',
+               repair_previous_state=CASE WHEN state='repair_required'
+                 THEN repair_previous_state ELSE state END,
+               role_manageable=1, repair_deadline_at_ms=?, updated_at_ms=?
+           WHERE id=?`,
         )
         .bind(deadlineAtMs, input.nowMs, input.offering.id),
     ]);
@@ -303,7 +271,6 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
 
   async beginRetirement(input: {
     offering: CommerceOffering;
-    lifecycle: CommerceOfferingLifecycleRecord;
     actorUserId: string;
     reasonCode: string;
     actionId: string;
@@ -314,18 +281,11 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
     await this.database.batch([
       this.database
         .prepare(
-          `UPDATE commerce_offering_lifecycles
+          `UPDATE commerce_offerings
              SET state='retiring', retire_at_ms=COALESCE(retire_at_ms, ?), updated_at_ms=?
-           WHERE offering_id=? AND state IN ('published','unpublished','suspended','retiring')`,
+           WHERE id=? AND state IN ('published','unpublished','suspended','retiring')`,
         )
         .bind(input.retireAtMs, input.nowMs, input.offering.id),
-      this.database
-        .prepare(
-          `UPDATE commerce_offerings
-             SET status='draft', updated_at_ms=?
-           WHERE id=? AND status <> 'archived'`,
-        )
-        .bind(input.nowMs, input.offering.id),
       this.database
         .prepare(
           `INSERT INTO commerce_offering_retirements(
@@ -396,47 +356,35 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
   }
 
   async archiveOffering(offeringId: string, nowMs: number): Promise<boolean> {
-    const result = await this.database.batch([
-      this.database
-        .prepare(
-          `UPDATE commerce_offering_lifecycles
-              SET state='archived', archived_at_ms=COALESCE(archived_at_ms, ?), updated_at_ms=?
-            WHERE offering_id=?
-              AND (
-                (
-                  state='retiring'
-                  AND EXISTS (
-                    SELECT 1 FROM commerce_offering_retirements r
-                     WHERE r.offering_id=? AND r.status='complete'
-                  )
-                )
-                OR (
-                  state='draft'
-                  AND NOT EXISTS (
-                    SELECT 1 FROM commerce_offering_retirements r
-                     WHERE r.offering_id=?
-                  )
+    const result = await this.database
+      .prepare(
+        `UPDATE commerce_offerings
+            SET state='archived', archived_at_ms=COALESCE(archived_at_ms, ?), updated_at_ms=?
+          WHERE id=?
+            AND (
+              (
+                state='retiring'
+                AND EXISTS (
+                  SELECT 1 FROM commerce_offering_retirements r
+                   WHERE r.offering_id=? AND r.status='complete'
                 )
               )
-              AND NOT EXISTS (
-                SELECT 1 FROM commerce_subscriptions s
-                 WHERE s.offering_id=? AND s.status NOT IN ('canceled','ended')
-              )`,
-        )
-        .bind(nowMs, nowMs, offeringId, offeringId, offeringId, offeringId),
-      this.database
-        .prepare(
-          `UPDATE commerce_offerings
-              SET status='archived', archived_at_ms=COALESCE(archived_at_ms, ?), updated_at_ms=?
-            WHERE id=?
-              AND EXISTS (
-                SELECT 1 FROM commerce_offering_lifecycles
-                 WHERE offering_id=? AND state='archived'
-              )`,
-        )
-        .bind(nowMs, nowMs, offeringId, offeringId),
-    ]);
-    return result[0]?.meta.changes === 1 && result[1]?.meta.changes === 1;
+              OR (
+                state='draft'
+                AND NOT EXISTS (
+                  SELECT 1 FROM commerce_offering_retirements r
+                   WHERE r.offering_id=?
+                )
+              )
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM commerce_subscriptions s
+               WHERE s.offering_id=? AND s.status NOT IN ('canceled','ended')
+            )`,
+      )
+      .bind(nowMs, nowMs, offeringId, offeringId, offeringId, offeringId)
+      .run();
+    return result.meta.changes === 1;
   }
 
   async readDashboard(connectedAccountId: string): Promise<CommerceOfferingDashboard> {
@@ -448,9 +396,8 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
       .first<Row>();
     const offerings = await this.database
       .prepare(
-        `SELECT o.*, l.state AS lifecycle_state, l.included_benefits_json, l.support_contact FROM commerce_offerings o
-          JOIN commerce_offering_lifecycles l ON l.offering_id = o.id
-         WHERE o.connected_account_id = ? ORDER BY o.created_at_ms`,
+        `SELECT * FROM commerce_offerings
+         WHERE connected_account_id = ? ORDER BY created_at_ms`,
       )
       .bind(connectedAccountId)
       .all<Row>();
@@ -524,7 +471,6 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
         .first<Row>();
       output.push({
         offering: offeringFromRow(row),
-        lifecycle: lifecycleValue(row.lifecycle_state),
         subscribers: {
           active: Number(subs?.active ?? 0),
           canceling: Number(subs?.canceling ?? 0),
@@ -536,8 +482,6 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
         refundsByCurrency,
         disputesByCurrency,
         activePrices: (await this.listPrices(id)).filter((price) => price.status === "active"),
-        includedBenefits: parseBenefits(row.included_benefits_json),
-        supportContact: row.support_contact == null ? null : String(row.support_contact),
         estimatedProceedsByCurrency: {
           AUD: Math.max(
             0,
@@ -579,18 +523,6 @@ function offeringFromRow(row: Row): CommerceOffering {
     name: String(row.name),
     description: row.description == null ? null : String(row.description),
     purchaseType: row.purchase_type === "one_time" ? "one_time" : "subscription",
-    status: row.status === "archived" ? "archived" : row.status === "active" ? "active" : "draft",
-    archivedAtMs: row.archived_at_ms == null ? null : Number(row.archived_at_ms),
-    createdAtMs: Number(row.created_at_ms),
-    updatedAtMs: Number(row.updated_at_ms),
-  };
-}
-
-function lifecycleFromRow(row: Row): CommerceOfferingLifecycleRecord {
-  return {
-    offeringId: String(row.offering_id),
-    connectedAccountId: String(row.connected_account_id),
-    guildId: String(row.guild_id),
     state: lifecycleValue(row.state),
     termsVersion: row.terms_version == null ? null : String(row.terms_version),
     includedBenefits: parseBenefits(row.included_benefits_json),
@@ -598,6 +530,8 @@ function lifecycleFromRow(row: Row): CommerceOfferingLifecycleRecord {
     roleManageable: Boolean(row.role_manageable),
     repairDeadlineAtMs:
       row.repair_deadline_at_ms == null ? null : Number(row.repair_deadline_at_ms),
+    repairPreviousState:
+      row.repair_previous_state == null ? null : lifecycleValue(row.repair_previous_state),
     retireAtMs: row.retire_at_ms == null ? null : Number(row.retire_at_ms),
     publishedAtMs: row.published_at_ms == null ? null : Number(row.published_at_ms),
     archivedAtMs: row.archived_at_ms == null ? null : Number(row.archived_at_ms),

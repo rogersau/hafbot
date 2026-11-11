@@ -139,7 +139,7 @@ export function createGameAccessRuntime(input: {
             sf?.publishContext.premiumActive &&
             sf.publishContext.sellerEligible &&
             sf.publishContext.termsAccepted &&
-            sf.lifecycle.state === "published"
+            sf.offering.state === "published"
           )
             grantsAllowed = true;
         }

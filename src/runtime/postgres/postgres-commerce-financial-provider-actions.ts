@@ -102,9 +102,9 @@ async function ensureRetirementChildren(
               CASE WHEN s.cancel_at_period_end=1 THEN CAST($4 AS BIGINT) END,
               NULL, $5, $6
          FROM commerce_offering_retirements r
-         JOIN commerce_offering_lifecycles l ON l.offering_id=r.offering_id
+         JOIN commerce_offerings o ON o.id=r.offering_id
          JOIN commerce_subscriptions s ON s.offering_id=r.offering_id
-        WHERE l.state IN ('retiring','archived')
+        WHERE o.state IN ('retiring','archived')
           AND s.status NOT IN ('canceled','ended')
        ON CONFLICT(operation_key) DO NOTHING`,
     [nowMs, nowMs, nowMs, nowMs, nowMs, nowMs],
@@ -363,8 +363,8 @@ async function refreshWorkflowProgress(
                 END,
                 updated_at_ms=$2
           WHERE EXISTS (
-            SELECT 1 FROM commerce_offering_lifecycles l
-             WHERE l.offering_id=r.offering_id AND l.state IN ('retiring','archived')
+            SELECT 1 FROM commerce_offerings o
+             WHERE o.id=r.offering_id AND o.state IN ('retiring','archived')
           )`,
       values: [nowMs, nowMs],
     },

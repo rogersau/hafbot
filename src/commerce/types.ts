@@ -7,7 +7,14 @@ export type CommerceConnectedAccountStatus =
   | "restricted"
   | "disconnected"
   | "archived";
-export type CommerceOfferingStatus = "draft" | "active" | "archived";
+export type CommerceOfferingLifecycle =
+  | "draft"
+  | "published"
+  | "unpublished"
+  | "repair_required"
+  | "retiring"
+  | "archived"
+  | "suspended";
 export type CommercePriceStatus = "active" | "retired";
 export type CommerceSubscriptionStatus =
   | "incomplete"
@@ -189,7 +196,15 @@ export interface CommerceOffering {
   name: string;
   description: string | null;
   purchaseType: CommercePurchaseType;
-  status: CommerceOfferingStatus;
+  state: CommerceOfferingLifecycle;
+  termsVersion: string | null;
+  includedBenefits: string[];
+  supportContact: string | null;
+  roleManageable: boolean;
+  repairDeadlineAtMs: number | null;
+  repairPreviousState: CommerceOfferingLifecycle | null;
+  retireAtMs: number | null;
+  publishedAtMs: number | null;
   archivedAtMs: number | null;
   createdAtMs: number;
   updatedAtMs: number;

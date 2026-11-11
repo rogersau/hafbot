@@ -355,13 +355,6 @@ test("permanent guild deletion archives sales, queues immediate cancellation and
   try {
     await seed(database.d1);
     database.execRaw(`
-      INSERT INTO commerce_offering_lifecycles(
-        offering_id,connected_account_id,guild_id,state,included_benefits_json,
-        support_contact,role_manageable,created_at_ms,updated_at_ms
-      ) VALUES (
-        'offering-1','acct_seller','guild-1','published','["Paid role"]',
-        'seller@example.test',1,${NOW},${NOW}
-      );
       INSERT INTO commerce_connected_accounts(
         id,guild_id,stripe_account_id,status,charges_enabled,payouts_enabled,details_submitted,
         created_at_ms,updated_at_ms
@@ -377,8 +370,8 @@ test("permanent guild deletion archives sales, queues immediate cancellation and
     const runtime = createSqlitePaidRoleRuntime(runtimeEnv(database.d1));
     assert.ok(runtime);
     assert.equal(await runtime.store.enqueueGuildDeletion("guild-1", "delete-1", NOW), 1);
-    assert.deepEqual(database.query("SELECT status FROM commerce_offerings"), [
-      { status: "archived" },
+    assert.deepEqual(database.query("SELECT state FROM commerce_offerings"), [
+      { state: "archived" },
     ]);
     assert.deepEqual(
       database.query("SELECT action_type,status FROM commerce_paid_role_provider_actions"),
@@ -417,8 +410,11 @@ async function seed(database: D1Database): Promise<void> {
       created_at_ms,updated_at_ms
     ) VALUES ('acct_seller','guild-1','acct_seller','active',1,1,1,${NOW},${NOW});
     INSERT INTO commerce_offerings(
-      id,connected_account_id,guild_id,discord_role_id,name,purchase_type,status,created_at_ms,updated_at_ms
-    ) VALUES ('offering-1','acct_seller','guild-1','role-paid','Paid','subscription','active',${NOW},${NOW});
+      id,connected_account_id,guild_id,discord_role_id,name,purchase_type,state,
+      terms_version,included_benefits_json,support_contact,role_manageable,published_at_ms,
+      created_at_ms,updated_at_ms
+    ) VALUES ('offering-1','acct_seller','guild-1','role-paid','Paid','subscription','published',
+      'v1','["Paid role"]','seller@example.test',1,${NOW},${NOW},${NOW});
     INSERT INTO commerce_prices(
       id,connected_account_id,offering_id,stripe_product_id,stripe_price_id,currency,
       unit_amount_minor,price_type,recurring_interval,status,created_at_ms

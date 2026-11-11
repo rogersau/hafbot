@@ -1265,28 +1265,6 @@ CREATE TABLE public.commerce_limit_alerts (
     CONSTRAINT commerce_limit_alerts_status_check CHECK ((status = ANY (ARRAY['open'::text, 'resolved'::text])))
 );
 
-CREATE TABLE public.commerce_offering_lifecycles (
-    offering_id text NOT NULL,
-    connected_account_id text NOT NULL,
-    guild_id text NOT NULL,
-    state text NOT NULL,
-    terms_version text,
-    included_benefits_json text DEFAULT '[]'::text NOT NULL,
-    support_contact text,
-    role_manageable bigint DEFAULT 0 NOT NULL,
-    repair_deadline_at_ms bigint,
-    retire_at_ms bigint,
-    published_at_ms bigint,
-    archived_at_ms bigint,
-    created_at_ms bigint NOT NULL,
-    updated_at_ms bigint NOT NULL,
-    CONSTRAINT commerce_offering_lifecycles_check CHECK (((state = 'archived'::text) = (archived_at_ms IS NOT NULL))),
-    CONSTRAINT commerce_offering_lifecycles_check1 CHECK (((state <> 'retiring'::text) OR (retire_at_ms IS NOT NULL))),
-    CONSTRAINT commerce_offering_lifecycles_included_benefits_json_check CHECK (public.haf_json_valid(included_benefits_json)),
-    CONSTRAINT commerce_offering_lifecycles_role_manageable_check CHECK ((role_manageable = ANY (ARRAY[(0)::bigint, (1)::bigint]))),
-    CONSTRAINT commerce_offering_lifecycles_state_check CHECK ((state = ANY (ARRAY['draft'::text, 'published'::text, 'unpublished'::text, 'repair_required'::text, 'retiring'::text, 'archived'::text, 'suspended'::text])))
-);
-
 CREATE TABLE public.commerce_offering_retirements (
     id text NOT NULL,
     connected_account_id text NOT NULL,
@@ -1314,13 +1292,26 @@ CREATE TABLE public.commerce_offerings (
     name text NOT NULL,
     description text,
     purchase_type text NOT NULL,
-    status text NOT NULL,
+    state text NOT NULL,
+    terms_version text,
+    included_benefits_json text DEFAULT '[]'::text NOT NULL,
+    support_contact text,
+    role_manageable bigint DEFAULT 0 NOT NULL,
+    repair_deadline_at_ms bigint,
+    repair_previous_state text,
+    retire_at_ms bigint,
+    published_at_ms bigint,
     archived_at_ms bigint,
     created_at_ms bigint NOT NULL,
     updated_at_ms bigint NOT NULL,
-    CONSTRAINT commerce_offerings_check CHECK (((status = 'archived'::text) = (archived_at_ms IS NOT NULL))),
+    CONSTRAINT commerce_offerings_archived_check CHECK (((state = 'archived'::text) = (archived_at_ms IS NOT NULL))),
+    CONSTRAINT commerce_offerings_included_benefits_json_check CHECK (public.haf_json_valid(included_benefits_json)),
     CONSTRAINT commerce_offerings_purchase_type_check CHECK ((purchase_type = ANY (ARRAY['subscription'::text, 'one_time'::text]))),
-    CONSTRAINT commerce_offerings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'archived'::text])))
+    CONSTRAINT commerce_offerings_repair_previous_state_check CHECK (((repair_previous_state IS NULL) OR (repair_previous_state = ANY (ARRAY['draft'::text, 'published'::text, 'unpublished'::text, 'retiring'::text, 'suspended'::text])))),
+    CONSTRAINT commerce_offerings_repair_state_check CHECK (((state = 'repair_required'::text) = (repair_previous_state IS NOT NULL))),
+    CONSTRAINT commerce_offerings_retiring_check CHECK (((state <> 'retiring'::text) OR (retire_at_ms IS NOT NULL))),
+    CONSTRAINT commerce_offerings_role_manageable_check CHECK ((role_manageable = ANY (ARRAY[(0)::bigint, (1)::bigint]))),
+    CONSTRAINT commerce_offerings_state_check CHECK ((state = ANY (ARRAY['draft'::text, 'published'::text, 'unpublished'::text, 'repair_required'::text, 'retiring'::text, 'archived'::text, 'suspended'::text])))
 );
 
 CREATE TABLE public.commerce_operational_controls (
@@ -3957,9 +3948,6 @@ ALTER TABLE ONLY public.commerce_incidents
 ALTER TABLE ONLY public.commerce_limit_alerts
     ADD CONSTRAINT commerce_limit_alerts_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.commerce_offering_lifecycles
-    ADD CONSTRAINT commerce_offering_lifecycles_pkey PRIMARY KEY (offering_id);
-
 ALTER TABLE ONLY public.commerce_offering_retirements
     ADD CONSTRAINT commerce_offering_retirements_offering_id_key UNIQUE (offering_id);
 
@@ -4782,15 +4770,11 @@ CREATE INDEX commerce_incidents_guild_status ON public.commerce_incidents USING 
 
 CREATE INDEX commerce_limit_alerts_open ON public.commerce_limit_alerts USING btree (guild_id, status, updated_at_ms);
 
-CREATE INDEX commerce_offering_lifecycles_guild_state ON public.commerce_offering_lifecycles USING btree (guild_id, state);
-
-CREATE INDEX commerce_offering_lifecycles_seller_state ON public.commerce_offering_lifecycles USING btree (connected_account_id, state, updated_at_ms);
-
 CREATE INDEX commerce_offering_retirements_status ON public.commerce_offering_retirements USING btree (status, updated_at_ms);
 
-CREATE UNIQUE INDEX commerce_offerings_active_role ON public.commerce_offerings USING btree (guild_id, discord_role_id) WHERE (status = 'active'::text);
+CREATE UNIQUE INDEX commerce_offerings_published_role ON public.commerce_offerings USING btree (guild_id, discord_role_id) WHERE ((state = 'published'::text) OR ((state = 'repair_required'::text) AND (repair_previous_state = 'published'::text)));
 
-CREATE INDEX commerce_offerings_seller_status ON public.commerce_offerings USING btree (connected_account_id, status);
+CREATE INDEX commerce_offerings_seller_state ON public.commerce_offerings USING btree (connected_account_id, state);
 
 CREATE INDEX commerce_operational_controls_active ON public.commerce_operational_controls USING btree (enabled, control_type, expires_at_ms);
 

@@ -193,16 +193,46 @@ export const commerceOfferings = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     purchaseType: text("purchase_type").notNull(),
-    status: text("status").notNull(),
+    state: text("state").notNull(),
+    termsVersion: text("terms_version"),
+    includedBenefitsJson: text("included_benefits_json").notNull().default("[]"),
+    supportContact: text("support_contact"),
+    roleManageable: integerBoolean("role_manageable").notNull().default(false),
+    repairDeadlineAtMs: bigInteger("repair_deadline_at_ms"),
+    repairPreviousState: text("repair_previous_state"),
+    retireAtMs: bigInteger("retire_at_ms"),
+    publishedAtMs: bigInteger("published_at_ms"),
     archivedAtMs: bigInteger("archived_at_ms"),
     createdAtMs: bigInteger("created_at_ms").notNull(),
     updatedAtMs: bigInteger("updated_at_ms").notNull(),
   },
   (table) => [
-    uniqueIndex("commerce_offerings_active_role")
+    check(
+      "commerce_offerings_state_check",
+      sql`${table.state} IN ('draft', 'published', 'unpublished', 'repair_required', 'retiring', 'archived', 'suspended')`,
+    ),
+    check(
+      "commerce_offerings_archived_check",
+      sql`(${table.state} = 'archived') = (${table.archivedAtMs} IS NOT NULL)`,
+    ),
+    check(
+      "commerce_offerings_retiring_check",
+      sql`${table.state} <> 'retiring' OR ${table.retireAtMs} IS NOT NULL`,
+    ),
+    check(
+      "commerce_offerings_repair_state_check",
+      sql`(${table.state} = 'repair_required') = (${table.repairPreviousState} IS NOT NULL)`,
+    ),
+    check(
+      "commerce_offerings_repair_previous_state_check",
+      sql`${table.repairPreviousState} IS NULL OR ${table.repairPreviousState} IN ('draft', 'published', 'unpublished', 'retiring', 'suspended')`,
+    ),
+    uniqueIndex("commerce_offerings_published_role")
       .on(table.guildId, table.discordRoleId)
-      .where(sql`${table.status} = 'active'`),
-    index("commerce_offerings_seller_status").on(table.connectedAccountId, table.status),
+      .where(
+        sql`${table.state} = 'published' OR (${table.state} = 'repair_required' AND ${table.repairPreviousState} = 'published')`,
+      ),
+    index("commerce_offerings_seller_state").on(table.connectedAccountId, table.state),
   ],
 );
 
@@ -235,39 +265,9 @@ export const commerceSalesPanels = pgTable(
 );
 
 /**
- * Commerce offering lifecycle projection.  The original commerce_offerings
- * table has a small `status` CHECK for
- * reads (`draft`, `active`, `archived`).  This projection carries the richer
- * seller-facing lifecycle without rewriting historical rows.
+ * Current Offering lifecycle state is stored directly on commerce_offerings.
+ * Repair restores the explicit original state; there is no projection table.
  */
-export const commerceOfferingLifecycles = pgTable(
-  "commerce_offering_lifecycles",
-  {
-    offeringId: text("offering_id").primaryKey().notNull(),
-    connectedAccountId: text("connected_account_id").notNull(),
-    guildId: text("guild_id").notNull(),
-    state: text("state").notNull(),
-    termsVersion: text("terms_version"),
-    includedBenefitsJson: text("included_benefits_json").notNull().default("[]"),
-    supportContact: text("support_contact"),
-    roleManageable: integerBoolean("role_manageable").notNull().default(false),
-    repairDeadlineAtMs: bigInteger("repair_deadline_at_ms"),
-    retireAtMs: bigInteger("retire_at_ms"),
-    publishedAtMs: bigInteger("published_at_ms"),
-    archivedAtMs: bigInteger("archived_at_ms"),
-    createdAtMs: bigInteger("created_at_ms").notNull(),
-    updatedAtMs: bigInteger("updated_at_ms").notNull(),
-  },
-  (table) => [
-    index("commerce_offering_lifecycles_seller_state").on(
-      table.connectedAccountId,
-      table.state,
-      table.updatedAtMs,
-    ),
-    index("commerce_offering_lifecycles_guild_state").on(table.guildId, table.state),
-  ],
-);
-
 export const commercePrices = pgTable(
   "commerce_prices",
   {

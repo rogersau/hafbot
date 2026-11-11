@@ -314,7 +314,7 @@ export class CommerceSalesPanelService {
     const offerings = (
       await Promise.all(
         dashboard.offerings
-          .filter((row) => row.lifecycle === "published")
+          .filter((row) => row.offering.state === "published")
           .map(async (row) => {
             if (isCommerceNewPurchaseBlocked(safeguard, row.offering.id)) return null;
             if (row.offering.purchaseType !== "subscription") return null;
@@ -445,9 +445,13 @@ export function buildCommerceSalesPanelMessage(input: {
       ? `${formatMoney(price.unitAmountMinor, price.currency)} / ${price.recurringInterval ?? "period"}`
       : "Price unavailable";
     const description = row.offering.description?.trim();
-    const benefits = row.includedBenefits.slice(0, 4).map((benefit) => `• ${benefit.trim()}`);
-    if (row.includedBenefits.length > benefits.length) {
-      benefits.push(`• and ${row.includedBenefits.length - benefits.length} more benefit(s)`);
+    const benefits = row.offering.includedBenefits
+      .slice(0, 4)
+      .map((benefit) => `• ${benefit.trim()}`);
+    if (row.offering.includedBenefits.length > benefits.length) {
+      benefits.push(
+        `• and ${row.offering.includedBenefits.length - benefits.length} more benefit(s)`,
+      );
     }
     return {
       name: truncate(row.offering.name, MAX_FIELD_NAME),

@@ -83,13 +83,13 @@ async function seedAssignments(database: PostgresDatabaseCapability) {
     // A replacement and its archived predecessor can share a Guild/role pair.
     const archived = offering.id === "offering-two";
     await database.queryResult(
-      "INSERT INTO commerce_offerings(id, connected_account_id, guild_id, discord_role_id, name, purchase_type, status, archived_at_ms, created_at_ms, updated_at_ms)\n      VALUES ($1, $2, $3, $4, 'Fixture Offering', 'subscription', $5, $6, $7, $8)",
+      "INSERT INTO commerce_offerings(id, connected_account_id, guild_id, discord_role_id, name, purchase_type, state, archived_at_ms, created_at_ms, updated_at_ms)\n      VALUES ($1, $2, $3, $4, 'Fixture Offering', 'subscription', $5, $6, $7, $8)",
       [
         offering.id,
         `seller-${offering.guild}`,
         offering.guild,
         offering.role,
-        archived ? "archived" : "active",
+        archived ? "archived" : "published",
         archived ? NOW : null,
         NOW,
         NOW,

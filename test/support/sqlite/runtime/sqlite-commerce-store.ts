@@ -686,19 +686,48 @@ export function createSqliteCommerceStore(database: D1Database): CommerceStore {
     },
 
     async saveOffering(offering) {
+      const values = {
+        id: offering.id,
+        connectedAccountId: offering.connectedAccountId,
+        guildId: offering.guildId,
+        discordRoleId: offering.discordRoleId,
+        name: offering.name,
+        description: offering.description,
+        purchaseType: offering.purchaseType,
+        state: offering.state,
+        termsVersion: offering.termsVersion,
+        includedBenefitsJson: JSON.stringify(offering.includedBenefits),
+        supportContact: offering.supportContact,
+        roleManageable: offering.roleManageable,
+        repairDeadlineAtMs: offering.repairDeadlineAtMs,
+        repairPreviousState: offering.repairPreviousState,
+        retireAtMs: offering.retireAtMs,
+        publishedAtMs: offering.publishedAtMs,
+        archivedAtMs: offering.archivedAtMs,
+        createdAtMs: offering.createdAtMs,
+        updatedAtMs: offering.updatedAtMs,
+      };
       await db
         .insert(commerceOfferings)
-        .values(offering)
+        .values(values)
         .onConflictDoUpdate({
           target: commerceOfferings.id,
           set: {
-            discordRoleId: offering.discordRoleId,
-            name: offering.name,
-            description: offering.description,
-            purchaseType: offering.purchaseType,
-            status: offering.status,
-            archivedAtMs: offering.archivedAtMs,
-            updatedAtMs: offering.updatedAtMs,
+            discordRoleId: values.discordRoleId,
+            name: values.name,
+            description: values.description,
+            purchaseType: values.purchaseType,
+            state: values.state,
+            termsVersion: values.termsVersion,
+            includedBenefitsJson: values.includedBenefitsJson,
+            supportContact: values.supportContact,
+            roleManageable: values.roleManageable,
+            repairDeadlineAtMs: values.repairDeadlineAtMs,
+            repairPreviousState: values.repairPreviousState,
+            retireAtMs: values.retireAtMs,
+            publishedAtMs: values.publishedAtMs,
+            archivedAtMs: values.archivedAtMs,
+            updatedAtMs: values.updatedAtMs,
           },
         })
         .run();
@@ -1140,10 +1169,37 @@ function offeringFromRow(row: typeof commerceOfferings.$inferSelect): CommerceOf
   if (row.purchaseType !== "subscription" && row.purchaseType !== "one_time") {
     throw new Error(`Invalid commerce offering purchase type in storage: ${row.purchaseType}`);
   }
-  if (row.status !== "draft" && row.status !== "active" && row.status !== "archived") {
-    throw new Error(`Invalid commerce offering status in storage: ${row.status}`);
+  if (
+    ![
+      "draft",
+      "published",
+      "unpublished",
+      "repair_required",
+      "retiring",
+      "archived",
+      "suspended",
+    ].includes(row.state)
+  ) {
+    throw new Error(`Invalid commerce offering state in storage: ${row.state}`);
   }
-  return { ...row, purchaseType: row.purchaseType, status: row.status };
+  return {
+    ...row,
+    purchaseType: row.purchaseType,
+    state: row.state as CommerceOffering["state"],
+    includedBenefits: parseIncludedBenefits(row.includedBenefitsJson),
+    repairPreviousState: row.repairPreviousState as CommerceOffering["repairPreviousState"],
+  };
+}
+
+function parseIncludedBenefits(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function priceFromRow(row: typeof commercePrices.$inferSelect): CommercePrice {

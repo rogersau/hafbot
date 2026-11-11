@@ -67,7 +67,7 @@ export class SqliteCommerceSafeguardStore implements CommerceSafeguardStore {
               AND cc.expires_at_ms > ?) < ?
        ))
        AND (? = 'support' OR (
-         SELECT COUNT(*) FROM commerce_offering_lifecycles l
+         SELECT COUNT(*) FROM commerce_offerings l
          WHERE l.connected_account_id = ? AND l.state = 'published'
        ) <= ?)
        AND (? <> 'support' OR ? <= ?)
@@ -363,7 +363,7 @@ export class SqliteCommerceSafeguardStore implements CommerceSafeguardStore {
       ),
       first(
         this.database,
-        `SELECT COUNT(*) active FROM commerce_offering_lifecycles
+        `SELECT COUNT(*) active FROM commerce_offerings
          WHERE connected_account_id = ? AND state = 'published'`,
         connectedAccountId,
       ),
@@ -465,7 +465,7 @@ export class SqliteCommerceSafeguardStore implements CommerceSafeguardStore {
       first(
         this.database,
         `SELECT MIN(repair_deadline_at_ms) deadline
-         FROM commerce_offering_lifecycles
+         FROM commerce_offerings
          WHERE connected_account_id = ? AND state = 'repair_required'`,
         connectedAccountId,
       ),

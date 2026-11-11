@@ -5,14 +5,11 @@ import type {
   CommerceStorefront,
 } from "../../../../../src/commerce/buyer-checkout";
 import type {
-  CommerceOfferingLifecycle,
-  CommerceOfferingLifecycleRecord,
-} from "../../../../../src/commerce/offering-service";
-import type {
   CommerceBuyer,
   CommerceConnectedAccount,
   CommerceCustomer,
   CommerceOffering,
+  CommerceOfferingLifecycle,
   CommercePrice,
   CommerceSellerProfile,
 } from "../../../../../src/commerce/types";
@@ -32,14 +29,12 @@ export class SqliteCommerceBuyerCheckoutStore implements CommerceBuyerCheckoutSt
       .prepare(
         `SELECT
            o.id offering_id, o.connected_account_id, o.guild_id, o.discord_role_id,
-           o.name offering_name, o.description, o.purchase_type, o.status offering_status,
+           o.name offering_name, o.description, o.purchase_type,
+           o.state, o.terms_version, o.included_benefits_json, o.support_contact,
+           o.role_manageable, o.repair_deadline_at_ms, o.repair_previous_state,
+           o.retire_at_ms, o.published_at_ms,
            o.archived_at_ms offering_archived_at_ms, o.created_at_ms offering_created_at_ms,
            o.updated_at_ms offering_updated_at_ms,
-           l.state lifecycle_state, l.terms_version, l.included_benefits_json,
-           l.support_contact lifecycle_support_contact, l.role_manageable,
-           l.repair_deadline_at_ms, l.retire_at_ms, l.published_at_ms,
-           l.archived_at_ms lifecycle_archived_at_ms, l.created_at_ms lifecycle_created_at_ms,
-           l.updated_at_ms lifecycle_updated_at_ms,
            a.stripe_account_id, a.status account_status, a.country, a.default_currency,
            a.charges_enabled, a.payouts_enabled, a.details_submitted,
            a.provider_created_at_ms, a.archived_at_ms account_archived_at_ms,
@@ -55,14 +50,13 @@ export class SqliteCommerceBuyerCheckoutStore implements CommerceBuyerCheckoutSt
            s.created_at_ms seller_created_at_ms, s.updated_at_ms seller_updated_at_ms,
            EXISTS(SELECT 1 FROM commerce_seller_acceptances sa
              WHERE sa.connected_account_id = o.connected_account_id
-               AND sa.terms_version = l.terms_version) terms_accepted,
+               AND sa.terms_version = o.terms_version) terms_accepted,
            EXISTS(SELECT 1 FROM commerce_seller_controls c
              WHERE c.suspended = 1 AND (
                (c.scope_type = 'global' AND c.scope_id = 'commerce') OR
                (c.scope_type = 'guild' AND c.scope_id = o.guild_id)
              )) seller_suspended
          FROM commerce_offerings o
-         JOIN commerce_offering_lifecycles l ON l.offering_id = o.id
          JOIN commerce_connected_accounts a ON a.id = o.connected_account_id
          JOIN commerce_seller_profiles s ON s.connected_account_id = o.connected_account_id
          WHERE o.id = ? LIMIT 1`,
@@ -81,7 +75,6 @@ export class SqliteCommerceBuyerCheckoutStore implements CommerceBuyerCheckoutSt
     if (!priceRow) return null;
 
     const offering = offeringFromRow(row);
-    const lifecycle = lifecycleFromRow(row);
     const account = accountFromRow(row);
     const seller = sellerFromRow(row);
     const sellerEligible =
@@ -94,7 +87,6 @@ export class SqliteCommerceBuyerCheckoutStore implements CommerceBuyerCheckoutSt
       !row.seller_suspended;
     return {
       offering,
-      lifecycle,
       price: priceFromRow(priceRow),
       account,
       seller,
@@ -102,7 +94,7 @@ export class SqliteCommerceBuyerCheckoutStore implements CommerceBuyerCheckoutSt
         premiumActive: await this.premium.isPremium(offering.guildId),
         sellerEligible,
         termsAccepted: Boolean(row.terms_accepted),
-        roleManageable: lifecycle.roleManageable,
+        roleManageable: offering.roleManageable,
       },
     };
   }
@@ -111,7 +103,7 @@ export class SqliteCommerceBuyerCheckoutStore implements CommerceBuyerCheckoutSt
     const rows = await this.database
       .prepare(
         `SELECT id FROM commerce_offerings
-           WHERE guild_id = ? AND status <> 'archived'
+           WHERE guild_id = ? AND state <> 'archived'
            ORDER BY created_at_ms ASC`,
       )
       .bind(guildId)
@@ -427,29 +419,21 @@ function offeringFromRow(row: Row): CommerceOffering {
     name: String(row.offering_name),
     description: nullableString(row.description),
     purchaseType: String(row.purchase_type) as CommerceOffering["purchaseType"],
-    status: String(row.offering_status) as CommerceOffering["status"],
+    state: String(row.state) as CommerceOfferingLifecycle,
+    termsVersion: nullableString(row.terms_version),
+    includedBenefits: parseStringArray(row.included_benefits_json),
+    supportContact: nullableString(row.support_contact),
+    roleManageable: Boolean(row.role_manageable),
+    repairDeadlineAtMs: nullableNumber(row.repair_deadline_at_ms),
+    repairPreviousState:
+      row.repair_previous_state == null
+        ? null
+        : (String(row.repair_previous_state) as CommerceOfferingLifecycle),
+    retireAtMs: nullableNumber(row.retire_at_ms),
+    publishedAtMs: nullableNumber(row.published_at_ms),
     archivedAtMs: nullableNumber(row.offering_archived_at_ms),
     createdAtMs: Number(row.offering_created_at_ms),
     updatedAtMs: Number(row.offering_updated_at_ms),
-  };
-}
-
-function lifecycleFromRow(row: Row): CommerceOfferingLifecycleRecord {
-  return {
-    offeringId: String(row.offering_id),
-    connectedAccountId: String(row.connected_account_id),
-    guildId: String(row.guild_id),
-    state: String(row.lifecycle_state) as CommerceOfferingLifecycle,
-    termsVersion: nullableString(row.terms_version),
-    includedBenefits: parseStringArray(row.included_benefits_json),
-    supportContact: nullableString(row.lifecycle_support_contact),
-    roleManageable: Boolean(row.role_manageable),
-    repairDeadlineAtMs: nullableNumber(row.repair_deadline_at_ms),
-    retireAtMs: nullableNumber(row.retire_at_ms),
-    publishedAtMs: nullableNumber(row.published_at_ms),
-    archivedAtMs: nullableNumber(row.lifecycle_archived_at_ms),
-    createdAtMs: Number(row.lifecycle_created_at_ms),
-    updatedAtMs: Number(row.lifecycle_updated_at_ms),
   };
 }
 

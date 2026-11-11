@@ -520,7 +520,7 @@ export class SqliteCommerceFinancialOperationsStore implements CommerceFinancial
     await this.database.batch([
       this.database
         .prepare(
-          `UPDATE commerce_offering_lifecycles
+          `UPDATE commerce_offerings
            SET state = CASE WHEN state = 'published' THEN 'unpublished' ELSE state END,
                updated_at_ms = ?
             WHERE connected_account_id = ? AND ${ACTION_LEASE_SQL}`,
@@ -654,26 +654,9 @@ export class SqliteCommerceFinancialOperationsStore implements CommerceFinancial
         ),
       this.database
         .prepare(
-          `UPDATE commerce_offering_lifecycles
-           SET state = 'archived', archived_at_ms = COALESCE(archived_at_ms, ?), updated_at_ms = ?
-            WHERE connected_account_id = ? AND NOT EXISTS (
-              SELECT 1 FROM commerce_subscriptions s
-               WHERE s.connected_account_id=? AND s.status NOT IN ('canceled','ended')
-            ) AND ${ACTION_LEASE_SQL}`,
-        )
-        .bind(
-          lease.nowMs,
-          lease.nowMs,
-          connectedAccountId,
-          connectedAccountId,
-          lease.actionId,
-          lease.leaseToken,
-          lease.nowMs,
-        ),
-      this.database
-        .prepare(
           `UPDATE commerce_offerings
-           SET status = 'archived', archived_at_ms = COALESCE(archived_at_ms, ?), updated_at_ms = ?
+           SET state = 'archived', repair_previous_state = NULL, repair_deadline_at_ms = NULL,
+               archived_at_ms = COALESCE(archived_at_ms, ?), updated_at_ms = ?
             WHERE connected_account_id = ? AND NOT EXISTS (
               SELECT 1 FROM commerce_subscriptions s
                WHERE s.connected_account_id=? AND s.status NOT IN ('canceled','ended')

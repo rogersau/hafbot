@@ -77,7 +77,7 @@ export class PostgresCommerceSafeguardStore implements CommerceSafeguardStore {
               AND cc.expires_at_ms > $18) < $19
        ))
        AND ($20 = 'support' OR (
-         SELECT COUNT(*) FROM commerce_offering_lifecycles l
+         SELECT COUNT(*) FROM commerce_offerings l
          WHERE l.connected_account_id = $21 AND l.state = 'published'
        ) <= $22)
        AND ($23 <> 'support' OR $24::bigint <= $25::bigint)
@@ -365,7 +365,7 @@ export class PostgresCommerceSafeguardStore implements CommerceSafeguardStore {
       ),
       first(
         this.database,
-        `SELECT COUNT(*) active FROM commerce_offering_lifecycles
+        `SELECT COUNT(*) active FROM commerce_offerings
          WHERE connected_account_id = $1 AND state = 'published'`,
         connectedAccountId,
       ),
@@ -467,7 +467,7 @@ export class PostgresCommerceSafeguardStore implements CommerceSafeguardStore {
       first(
         this.database,
         `SELECT MIN(repair_deadline_at_ms) deadline
-         FROM commerce_offering_lifecycles
+         FROM commerce_offerings
          WHERE connected_account_id = $1 AND state = 'repair_required'`,
         connectedAccountId,
       ),
