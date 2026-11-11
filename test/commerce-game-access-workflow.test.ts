@@ -42,10 +42,16 @@ async function workflow(options: { realWardogs?: boolean; policy?: CommercePurch
   const db = fixture.database;
   await seedStorefront(db);
   db.execRaw(
-    `INSERT INTO commerce_offerings SELECT '${SECOND_OFFERING}',connected_account_id,guild_id,'333333333333333333','Second',description,purchase_type,status,archived_at_ms,created_at_ms,updated_at_ms FROM commerce_offerings WHERE id='${OFFERING_ID}';`,
-  );
-  db.execRaw(
-    `INSERT INTO commerce_offering_lifecycles SELECT '${SECOND_OFFERING}',connected_account_id,guild_id,state,terms_version,included_benefits_json,support_contact,role_manageable,repair_deadline_at_ms,retire_at_ms,published_at_ms,archived_at_ms,created_at_ms,updated_at_ms FROM commerce_offering_lifecycles WHERE offering_id='${OFFERING_ID}';`,
+    `INSERT INTO commerce_offerings
+       (id,connected_account_id,guild_id,discord_role_id,name,description,purchase_type,
+        state,terms_version,included_benefits_json,support_contact,role_manageable,
+        repair_deadline_at_ms,repair_previous_state,retire_at_ms,published_at_ms,
+        archived_at_ms,created_at_ms,updated_at_ms)
+     SELECT '${SECOND_OFFERING}',connected_account_id,guild_id,'333333333333333333',
+        'Second',description,purchase_type,state,terms_version,included_benefits_json,
+        support_contact,role_manageable,repair_deadline_at_ms,repair_previous_state,
+        retire_at_ms,published_at_ms,archived_at_ms,created_at_ms,updated_at_ms
+       FROM commerce_offerings WHERE id='${OFFERING_ID}';`,
   );
   db.execRaw(
     `INSERT INTO commerce_prices SELECT 'price_second',connected_account_id,'${SECOND_OFFERING}',stripe_product_id,'price_second',currency,unit_amount_minor,price_type,recurring_interval,status,provider_created_at_ms,retired_at_ms,created_at_ms FROM commerce_prices WHERE id='price_local';`,
@@ -528,8 +534,7 @@ for (const condition of ["free", "dormant", "suspended"] as const)
     const h = await workflow();
     t.after(() => h.fixture.close());
     if (condition === "free") h.control.premium = false;
-    if (condition === "dormant")
-      h.db.execRaw("UPDATE commerce_offering_lifecycles SET state='unpublished'");
+    if (condition === "dormant") h.db.execRaw("UPDATE commerce_offerings SET state='unpublished'");
     if (condition === "suspended")
       h.db.execRaw(
         `INSERT INTO commerce_seller_controls(id,scope_type,scope_id,suspended,reason_code,actor_user_id,created_at_ms,updated_at_ms) VALUES('control','guild','${GUILD}',1,'review','staff',1,1)`,
@@ -545,7 +550,7 @@ test("offboarding prevents new grants while servicing cleanup and preserving fin
   await h.pay();
   await h.cycle();
   h.control.premium = false;
-  h.db.execRaw("UPDATE commerce_offering_lifecycles SET state='archived',archived_at_ms=1");
+  h.db.execRaw("UPDATE commerce_offerings SET state='archived',archived_at_ms=1");
   h.subscriptions[0].status = "ended";
   await h.project();
   await h.cycle();
@@ -646,20 +651,11 @@ async function seedStorefront(database: TestDatabase) {
     .prepare(
       `INSERT INTO commerce_offerings
        (id, connected_account_id, guild_id, discord_role_id, name, description,
-        purchase_type, status, archived_at_ms, created_at_ms, updated_at_ms)
+        purchase_type, state, terms_version, included_benefits_json, support_contact,
+        role_manageable, published_at_ms, archived_at_ms, created_at_ms, updated_at_ms)
        VALUES (?, 'acct_seller', '111111111111111111', '222222222222222222',
-        'VIP', 'VIP access', 'subscription', 'active', NULL, ?, ?)`,
-    )
-    .bind(OFFERING_ID, NOW, NOW)
-    .run();
-  await database.d1
-    .prepare(
-      `INSERT INTO commerce_offering_lifecycles
-       (offering_id, connected_account_id, guild_id, state, terms_version,
-        included_benefits_json, support_contact, role_manageable, repair_deadline_at_ms,
-        retire_at_ms, published_at_ms, archived_at_ms, created_at_ms, updated_at_ms)
-       VALUES (?, 'acct_seller', '111111111111111111', 'published', 'terms-v1',
-        '["VIP channels"]', 'seller@example.test', 1, NULL, NULL, ?, NULL, ?, ?)`,
+        'VIP', 'VIP access', 'subscription', 'published', 'terms-v1',
+        '["VIP channels"]', 'seller@example.test', 1, ?, NULL, ?, ?)`,
     )
     .bind(OFFERING_ID, NOW, NOW, NOW)
     .run();
