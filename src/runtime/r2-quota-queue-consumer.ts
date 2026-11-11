@@ -1,13 +1,9 @@
-import type { QueueBatch } from "./queue-types";
+import type { QueueJobMetadata } from "./queue-types";
 
 import type { GuildR2ObjectStore } from "./contracts";
 
 import { isRecord } from "../unknown-parse";
-import {
-  DEFAULT_QUEUE_MAX_ATTEMPTS,
-  deliverQueueBatch,
-  queueDeliveryEmitter,
-} from "./queue-delivery";
+import { deliverQueueJob, queueDeliveryEmitter, type QueueDeliveryOutcome } from "./queue-delivery";
 
 export const R2_QUOTA_QUEUE_NAME = "haf-bot-r2-quota";
 
@@ -16,13 +12,14 @@ export interface R2QuotaQueueLogger {
   info?(...args: unknown[]): void;
 }
 
-export async function deliverR2QuotaQueueBatch(
-  batch: QueueBatch<unknown>,
+export async function deliverR2Quota(
+  payload: unknown,
+  metadata: QueueJobMetadata,
   store: GuildR2ObjectStore,
   logger: R2QuotaQueueLogger = console,
-): Promise<void> {
-  await deliverQueueBatch(batch, {
-    maxAttempts: DEFAULT_QUEUE_MAX_ATTEMPTS,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
     parse(body) {
       const event = parseR2Event(body);
       return event ? { ok: true, value: event } : { ok: false, reasonCode: "invalid_r2_event" };

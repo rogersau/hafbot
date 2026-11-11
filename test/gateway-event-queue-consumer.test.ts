@@ -1,5 +1,5 @@
 import { gatewayEnvelope } from "./support/gateway-envelope";
-import type { QueueBatch } from "../src/runtime/queue-types";
+import { queueJobMetadata } from "./support/queue-delivery-fixture";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  deliverGatewayEventQueueBatch,
+  deliverGatewayEvent,
   processGatewayEventQueueMessages as processGatewayEventQueueMessagesRuntime,
 } from "./support/gateway-event-consumer";
 import { createSqliteGuildAuditLogStore } from "./support/sqlite/runtime/sqlite-guild-audit-log-store";
@@ -1889,12 +1889,22 @@ test("Gateway Event consumer settles successful and malformed siblings before re
       throw Object.assign(new Error("store unavailable"), { code: "ECONNREFUSED" });
     },
   } as unknown as D1Database;
-  const complete = fakeQueueMessage(
-    "complete",
+  const env = createGatewayConsumerEnv({ HAF_DB: appDb });
+  const events: Array<{ reasonCode?: string }> = [];
+  const logger = {
+    error() {},
+    info(_message: string, event: { reasonCode?: string }) {
+      events.push(event);
+    },
+  };
+
+  const complete = await deliverGatewayEvent(
     gatewayEnvelope({ type: "UNHANDLED_EVENT", data: {} }),
+    queueJobMetadata({ jobId: "complete", queueName: "gateway-events" }),
+    env,
+    logger,
   );
-  const retry = fakeQueueMessage(
-    "retry",
+  const retry = await deliverGatewayEvent(
     gatewayEnvelope({
       type: "MESSAGE_UPDATE",
       data: {
@@ -1904,24 +1914,20 @@ test("Gateway Event consumer settles successful and malformed siblings before re
         content: "updated ticket reply",
       },
     }),
+    queueJobMetadata({ jobId: "retry", queueName: "gateway-events" }),
+    env,
+    logger,
   );
-  const malformed = fakeQueueMessage("malformed", null);
-  const events: Array<{ reasonCode?: string }> = [];
-
-  await deliverGatewayEventQueueBatch(
-    fakeGatewayBatch([complete, retry, malformed]),
-    createGatewayConsumerEnv({ HAF_DB: appDb }),
-    {
-      error() {},
-      info(_message, event) {
-        events.push(event as { reasonCode?: string });
-      },
-    },
+  const malformed = await deliverGatewayEvent(
+    null,
+    queueJobMetadata({ jobId: "malformed", queueName: "gateway-events" }),
+    env,
+    logger,
   );
 
-  assert.deepEqual(complete.actions, ["ack"]);
-  assert.deepEqual(retry.actions, ["retry"]);
-  assert.deepEqual(malformed.actions, ["ack"]);
+  assert.deepEqual(complete, { status: "complete" });
+  assert.deepEqual(retry, { status: "retry", reasonCode: "database_unavailable" });
+  assert.deepEqual(malformed, { status: "terminal", reasonCode: "invalid_gateway_event" });
   assert.equal(
     events.find((event) => event.reasonCode === "database_unavailable")?.reasonCode,
     "database_unavailable",
@@ -1929,22 +1935,29 @@ test("Gateway Event consumer settles successful and malformed siblings before re
 });
 
 test("Gateway Event consumer terminally rejects unsupported envelope versions", async () => {
-  const unsupported = fakeQueueMessage("unsupported", {
-    version: 99,
-    eventKey: "future-event",
-    type: "MESSAGE_CREATE",
-    data: {},
-  });
   const events: Array<{ event?: string; reasonCode?: string }> = [];
 
-  await deliverGatewayEventQueueBatch(fakeGatewayBatch([unsupported]), createGatewayConsumerEnv(), {
-    error() {},
-    info(_message, event) {
-      events.push(event as { event?: string; reasonCode?: string });
+  const outcome = await deliverGatewayEvent(
+    {
+      version: 99,
+      eventKey: "future-event",
+      type: "MESSAGE_CREATE",
+      data: {},
     },
-  });
+    queueJobMetadata({ jobId: "unsupported", queueName: "gateway-events" }),
+    createGatewayConsumerEnv(),
+    {
+      error() {},
+      info(_message, event) {
+        events.push(event as { event?: string; reasonCode?: string });
+      },
+    },
+  );
 
-  assert.deepEqual(unsupported.actions, ["ack"]);
+  assert.deepEqual(outcome, {
+    status: "terminal",
+    reasonCode: "unsupported_gateway_event_version",
+  });
   assert.equal(events.at(-1)?.event, "terminal");
   assert.equal(events.at(-1)?.reasonCode, "unsupported_gateway_event_version");
 });
@@ -2006,24 +2019,29 @@ for (const audit of [
           eventStates: { groups: {}, overrides: {} },
           updatedAtMs: Date.now(),
         });
-        const first = fakeQueueMessage("first", envelope);
-        const delays: Array<number | undefined> = [];
-        first.retry = (options?: { delaySeconds?: number }) => {
-          delays.push(options?.delaySeconds);
-          return first.actions.push("retry");
-        };
-        const deliver = (message: ReturnType<typeof fakeQueueMessage>) =>
-          deliverGatewayEventQueueBatch(
-            fakeGatewayBatch([message]),
+        const deliver = (jobId: string, attempts: number) =>
+          deliverGatewayEvent(
+            envelope,
+            queueJobMetadata({
+              jobId,
+              queueName: "gateway-events",
+              attempts,
+              maxAttempts: 4,
+            }),
             env,
             { error() {}, info() {} },
             {
               guildResources: createPermissiveGuildResourceValidator(),
             },
           );
-        await deliver(first);
-        assert.deepEqual(first.actions, ["retry"]);
-        assert.deepEqual(delays, [120]);
+        const first = await deliver("first", 1);
+        // The retained 120s operation lease is an intentional retry floor: it stops a redelivery
+        // from racing a still-live ambiguous provider request, not just the 429 retry_after hint.
+        assert.deepEqual(first, {
+          status: "retry",
+          reasonCode: status === 429 ? "provider_rate_limited" : "provider_unavailable",
+          delaySeconds: 120,
+        });
         const reports = [...warnings, ...errors];
         assert.equal(reports.length, 1);
         assert.equal(
@@ -2034,15 +2052,12 @@ for (const audit of [
         const receipt = await receipts.read(eventKey, audit.handlerKey);
         assert.equal(receipt?.state, "processing");
         assert.notEqual(receipt?.leaseExpiresAtMs, null);
-        clock.set(Date.now() + delays[0]! * 1_000);
-        const redelivery = fakeQueueMessage("redelivery", envelope);
-        redelivery.attempts = 2;
-        await deliver(redelivery);
-        assert.deepEqual(redelivery.actions, ["ack"]);
+        clock.set(Date.now() + (first.status === "retry" ? (first.delaySeconds ?? 0) : 0) * 1_000);
+        const redelivery = await deliver("redelivery", 2);
+        assert.deepEqual(redelivery, { status: "complete" });
         assert.equal((await receipts.read(eventKey, audit.handlerKey))?.state, "completed");
-        const replay = fakeQueueMessage("replay", envelope);
-        await deliver(replay);
-        assert.deepEqual(replay.actions, ["ack"]);
+        const replay = await deliver("replay", 1);
+        assert.deepEqual(replay, { status: "complete" });
         assert.equal(posts.length, 2);
         assert.ok(posts[0].nonce);
         assert.equal(posts[0].nonce, posts[1].nonce);
@@ -2060,37 +2075,44 @@ for (const audit of [
 }
 
 test("Gateway Event consumer rejects unverified or unsafe v2 event keys", async () => {
-  const unsafe = fakeQueueMessage("unsafe", {
-    version: 2,
-    eventKey: "https://discord.com/api/webhooks/123/secret-token",
-    sessionId: "session-1",
-    sequence: 1,
-    type: "MESSAGE_CREATE",
-    data: {},
-  });
-  const oversized = fakeQueueMessage("oversized", {
-    version: 2,
-    eventKey: `v2:${"a".repeat(500)}`,
-    sessionId: "session-1",
-    sequence: 2,
-    type: "MESSAGE_CREATE",
-    data: {},
-  });
   const events: Array<{ event?: string; reasonCode?: string }> = [];
-
-  await deliverGatewayEventQueueBatch(
-    fakeGatewayBatch([unsafe, oversized]),
-    createGatewayConsumerEnv(),
-    {
-      error() {},
-      info(_message, event) {
-        events.push(event as { event?: string; reasonCode?: string });
-      },
+  const env = createGatewayConsumerEnv();
+  const logger = {
+    error() {},
+    info(_message: string, event: { event?: string; reasonCode?: string }) {
+      events.push(event);
     },
+  };
+
+  const unsafe = await deliverGatewayEvent(
+    {
+      version: 2,
+      eventKey: "https://discord.com/api/webhooks/123/secret-token",
+      sessionId: "session-1",
+      sequence: 1,
+      type: "MESSAGE_CREATE",
+      data: {},
+    },
+    queueJobMetadata({ jobId: "unsafe", queueName: "gateway-events" }),
+    env,
+    logger,
+  );
+  const oversized = await deliverGatewayEvent(
+    {
+      version: 2,
+      eventKey: `v2:${"a".repeat(500)}`,
+      sessionId: "session-1",
+      sequence: 2,
+      type: "MESSAGE_CREATE",
+      data: {},
+    },
+    queueJobMetadata({ jobId: "oversized", queueName: "gateway-events" }),
+    env,
+    logger,
   );
 
-  assert.deepEqual(unsafe.actions, ["ack"]);
-  assert.deepEqual(oversized.actions, ["ack"]);
+  assert.deepEqual(unsafe, { status: "terminal", reasonCode: "invalid_gateway_event_key" });
+  assert.deepEqual(oversized, { status: "terminal", reasonCode: "invalid_gateway_event_key" });
   assert.deepEqual(
     events.filter((event) => event.event === "terminal").map((event) => event.reasonCode),
     ["invalid_gateway_event_key", "invalid_gateway_event_key"],
@@ -2130,28 +2152,6 @@ test("Gateway Event consumer preserves a terminal inner operation on replay", as
   );
   assert.equal((await store.read(eventKey, "event:dispatch"))?.state, "terminal");
 });
-
-function fakeQueueMessage(id: string, body: unknown) {
-  const actions: string[] = [];
-  return {
-    id,
-    body,
-    attempts: 1,
-    timestamp: new Date(),
-    actions,
-    ack: () => actions.push("ack"),
-    retry: () => actions.push("retry"),
-  };
-}
-
-function fakeGatewayBatch(messages: ReturnType<typeof fakeQueueMessage>[]): QueueBatch<unknown> {
-  return {
-    queue: "haf-bot-gateway-events",
-    messages,
-    ackAll() {},
-    retryAll() {},
-  };
-}
 
 function interceptDiscordFetch(handler: typeof fetch) {
   const originalFetch = globalThis.fetch;

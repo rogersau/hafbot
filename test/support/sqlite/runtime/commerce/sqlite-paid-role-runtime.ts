@@ -1,4 +1,4 @@
-import type { QueueProducer, QueueBatch } from "../../../../../src/runtime/queue-types";
+import type { QueueProducer } from "../../../../../src/runtime/queue-types";
 import { PaidRoleEntitlementService } from "../../../../../src/commerce/paid-role-entitlement";
 import type { Env } from "../../../test-env";
 import { isRecord } from "../../../../../src/unknown-parse";
@@ -11,7 +11,6 @@ import {
 import { StripePaidRoleSubscriptionOperations } from "../../../../../src/runtime/commerce/stripe-paid-role-subscriptions";
 
 export const COMMERCE_ROLE_QUEUE_NAME = "haf-bot-commerce-roles";
-const MAX_ROLE_ATTEMPTS = 5;
 const ROLE_REPAIR_WINDOW_MS = 72 * 60 * 60 * 1_000;
 
 export interface CommerceRoleQueueMessage {
@@ -113,32 +112,7 @@ export function createSqlitePaidRoleRuntime(env: Env) {
   };
 }
 
-export async function handleCommerceRoleQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-): Promise<void> {
-  const runtime = createSqlitePaidRoleRuntime(env);
-  if (!runtime) throw new Error("Commerce role Queue is not fully configured.");
-  for (const message of batch.messages) {
-    if (!isCommerceRoleQueueMessage(message.body)) {
-      message.ack();
-      continue;
-    }
-    try {
-      await runtime.processMessage(message.body);
-      message.ack();
-    } catch {
-      await runtime.store.recordRoleOutboxFailure(
-        message.body.outboxId,
-        message.attempts,
-        "commerce_role_delivery_failed",
-        message.attempts >= MAX_ROLE_ATTEMPTS,
-        Date.now(),
-      );
-      message.retry();
-    }
-  }
-}
+export { deliverCommerceRole } from "../../../../../src/runtime/commerce/postgres-paid-role-runtime";
 
 async function processRepair(
   service: PaidRoleEntitlementService,
@@ -222,22 +196,6 @@ function safeProviderError(error: unknown): string {
   return /^[a-z0-9_:-]{1,100}$/i.test(error.message)
     ? error.message.toLowerCase()
     : "provider_action_failed";
-}
-
-function isCommerceRoleQueueMessage(value: unknown): value is CommerceRoleQueueMessage {
-  return (
-    isRecord(value) &&
-    typeof value.outboxId === "string" &&
-    value.outboxId.length > 0 &&
-    typeof value.operationKey === "string" &&
-    value.operationKey.length > 0 &&
-    typeof value.entitlementId === "string" &&
-    value.entitlementId.length > 0 &&
-    (value.memberState === undefined ||
-      value.memberState === "left" ||
-      value.memberState === "rejoined" ||
-      value.memberState === "banned")
-  );
 }
 
 function readMemberStateOverride(payloadJson: string): "left" | "rejoined" | "banned" | undefined {

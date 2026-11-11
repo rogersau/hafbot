@@ -1,4 +1,3 @@
-import type { QueueMessage, QueueRetryOptions } from "../runtime/queue-types";
 import { createGatewayCommerceLifecycle } from "../runtime/gateway-commerce-lifecycle";
 import { PostgresPaidRoleStore } from "../runtime/postgres/postgres-commerce-paid-role-store";
 import { createPostgresGuildPlanProjectionStore } from "../runtime/postgres/postgres-guild-plan-projection-store";
@@ -30,11 +29,8 @@ import { createPostgresSuggestionStore } from "../runtime/postgres/postgres-sugg
 import { createPostgresTimedRoleStore } from "../runtime/postgres/postgres-timed-role-store";
 import { createPostgresBotDefenseStore } from "../runtime/postgres/postgres-bot-defense-store";
 import { createPostgresImageRulesStore } from "../runtime/postgres/postgres-image-rules-store";
-import type { QueueProducer, QueueBatch } from "../runtime/queue-types";
-import {
-  COMMERCE_GAME_QUEUE_NAME,
-  handleCommerceGameQueueBatch,
-} from "../runtime/postgres/postgres-commerce-game-access-runtime";
+import type { QueueProducer } from "../runtime/queue-types";
+import { deliverCommerceGameAccess } from "../runtime/postgres/postgres-commerce-game-access-runtime";
 
 import {
   createPostgresObservationStore,
@@ -61,10 +57,7 @@ import { createNodeApplicationContext } from "./application-context";
 import type { RuntimeAppContext } from "../runtime/app-context";
 import type { GuildR2QuotaStore } from "../runtime/contracts";
 import type { GatewayEventStores } from "../runtime/gateway-events/contracts";
-import {
-  deliverGatewayEventQueueBatch,
-  GATEWAY_EVENT_QUEUE_NAME,
-} from "../runtime/gateway-event-queue-consumer";
+import { deliverGatewayEvent } from "../runtime/gateway-event-queue-consumer";
 import {
   findGuildIdInValue,
   GuildServicePolicy,
@@ -76,42 +69,31 @@ import {
   createPortablePublicManagedMediaStore,
   createPortableTicketTranscriptBlobStore,
 } from "../runtime/portable-blob-stores";
-import type { QueueDeliveryOutcome } from "../runtime/queue-delivery";
-import { deliverR2QuotaQueueBatch, R2_QUOTA_QUEUE_NAME } from "../runtime/r2-quota-queue-consumer";
+import { deliverR2Quota } from "../runtime/r2-quota-queue-consumer";
 import { createServiceFactory } from "../runtime/service-factory";
+import { deliverSteamBanLookup } from "../runtime/steam-ban-lookup-queue-consumer";
+import { deliverTicketRecovery } from "../runtime/ticket-recovery-queue-consumer";
 import {
-  deliverSteamBanLookupQueueBatch,
-  STEAM_BAN_LOOKUP_QUEUE_NAME,
-} from "../runtime/steam-ban-lookup-queue-consumer";
-import {
-  deliverTicketRecoveryQueueBatch,
-  TICKET_RECOVERY_QUEUE_NAME,
-} from "../runtime/ticket-recovery-queue-consumer";
-import {
-  handleServerLevelQueueBatch,
+  createServerLevelProcessor,
+  deliverServerLevel,
   maintainServerLevels,
-  SERVER_LEVELS_QUEUE_NAME,
 } from "../runtime/server-level-queue-consumer";
+import { deliverWebhookProxyDelivery } from "../runtime/webhook-proxy-delivery-queue-consumer";
 import {
-  deliverWebhookProxyDeliveryQueueBatch,
-  WEBHOOK_PROXY_DELIVERY_QUEUE_NAME,
-} from "../runtime/webhook-proxy-delivery-queue-consumer";
-import {
-  handleBillingSyncQueueBatch,
-  BILLING_SYNC_QUEUE_NAME,
+  createPostgresBillingRuntime,
+  deliverBillingSync,
 } from "../runtime/billing/postgres-runtime";
 import {
-  handleBillingDeliveryQueueBatch,
-  BILLING_DELIVERY_QUEUE_NAME,
+  createPostgresBillingDeliveryRuntime,
+  deliverBillingDelivery,
 } from "../runtime/billing/postgres-delivery-runtime";
 import {
-  handleCommerceSyncQueueBatch,
-  COMMERCE_SYNC_QUEUE_NAME,
+  createPostgresCommerceRuntime,
+  deliverCommerceSync,
 } from "../runtime/commerce/postgres-runtime";
 import {
   createPostgresPaidRoleRuntime,
-  handleCommerceRoleQueueBatch,
-  COMMERCE_ROLE_QUEUE_NAME,
+  deliverCommerceRole,
 } from "../runtime/commerce/postgres-paid-role-runtime";
 import { createPostgresEvidenceVaultStore } from "../runtime/postgres/postgres-evidence-vault-store";
 import { createPostgresReactionRoleStore } from "../runtime/postgres/postgres-reaction-role-store";
@@ -641,6 +623,15 @@ function createJobHandlers(input: {
     ...(recheckIntervalMs ? { recheckIntervalMs } : {}),
   });
   const gatewayDependencies = createGatewayDependencies(input.context, input.env, input.database);
+  const billingSync = createPostgresBillingRuntime(input.env, input.database);
+  const billingDelivery = createPostgresBillingDeliveryRuntime(input.env, input.database);
+  const commerceSync = createPostgresCommerceRuntime(
+    input.env,
+    input.database,
+    input.context.commerceAdmin?.sellerReviews,
+  );
+  const commerceRoles = createPostgresPaidRoleRuntime(input.env, input.database);
+  const serverLevelProcessor = createServerLevelProcessor(input.env, input.context, Date.now);
   const policy = new GuildServicePolicy(input.context.stores.guildServiceSuspensions);
   const protectedHandler =
     (
@@ -658,102 +649,63 @@ function createJobHandlers(input: {
     };
 
   return {
-    "r2-quota": protectedHandler(
-      createSingleMessageHandler(R2_QUOTA_QUEUE_NAME, (batch) =>
-        deliverR2QuotaQueueBatch(batch, input.guildObjects),
-      ),
+    "r2-quota": protectedHandler((payload, metadata) =>
+      deliverR2Quota(payload, metadata, input.guildObjects),
     ),
     "gateway-events": protectedHandler(
-      createSingleMessageHandler(GATEWAY_EVENT_QUEUE_NAME, (batch) =>
-        deliverGatewayEventQueueBatch(batch, input.env, console, gatewayDependencies),
-      ),
+      (payload, metadata) =>
+        deliverGatewayEvent(payload, metadata, input.env, console, gatewayDependencies),
       isGatewayGuildLifecycleEvent,
     ),
-    "webhook-proxy-deliveries": protectedHandler(
-      createSingleMessageHandler(WEBHOOK_PROXY_DELIVERY_QUEUE_NAME, (batch) =>
-        deliverWebhookProxyDeliveryQueueBatch(batch, services.webhookProxyService),
+    "webhook-proxy-deliveries": protectedHandler((payload, metadata) =>
+      deliverWebhookProxyDelivery(payload, metadata, services.webhookProxyService),
+    ),
+    "steam-ban-lookups": protectedHandler((payload, metadata) =>
+      deliverSteamBanLookup(
+        payload,
+        metadata,
+        steam,
+        console,
+        input.context.webhookCredentialService,
       ),
     ),
-    "steam-ban-lookups": protectedHandler(
-      createSingleMessageHandler(STEAM_BAN_LOOKUP_QUEUE_NAME, (batch) =>
-        deliverSteamBanLookupQueueBatch(
-          batch,
-          steam,
-          console,
-          input.context.webhookCredentialService,
-        ),
-      ),
-    ),
-    "billing-sync": createSingleMessageHandler(BILLING_SYNC_QUEUE_NAME, (batch) =>
-      handleBillingSyncQueueBatch(batch, input.env, input.database),
-    ),
-    "billing-delivery": createSingleMessageHandler(BILLING_DELIVERY_QUEUE_NAME, (batch) =>
-      handleBillingDeliveryQueueBatch(batch, input.env, input.database),
-    ),
-    "commerce-sync": createSingleMessageHandler(COMMERCE_SYNC_QUEUE_NAME, (batch) =>
-      handleCommerceSyncQueueBatch(
-        batch,
-        input.env,
-        input.database,
-        input.context.commerceAdmin?.sellerReviews,
-      ),
-    ),
-    "commerce-roles": createSingleMessageHandler(COMMERCE_ROLE_QUEUE_NAME, (batch) =>
-      handleCommerceRoleQueueBatch(batch, input.env, input.database),
-    ),
-    "commerce-game-access": createSingleMessageHandler(COMMERCE_GAME_QUEUE_NAME, (batch) => {
-      if (!input.context.commerceGameAccess)
-        throw new Error("Commerce game delivery is unavailable.");
-      return handleCommerceGameQueueBatch(batch, input.context.commerceGameAccess);
-    }),
-    "ticket-recovery": createSingleMessageHandler(TICKET_RECOVERY_QUEUE_NAME, (batch) =>
-      deliverTicketRecoveryQueueBatch(
-        batch,
+    "billing-sync": billingSync
+      ? (payload, metadata) => deliverBillingSync(payload, metadata, billingSync)
+      : missingRuntimeHandler("Billing sync Queue is not fully configured."),
+    "billing-delivery": billingDelivery
+      ? (payload, metadata) => deliverBillingDelivery(payload, metadata, billingDelivery)
+      : missingRuntimeHandler("Billing delivery Queue is not fully configured."),
+    "commerce-sync": commerceSync
+      ? (payload, metadata) => deliverCommerceSync(payload, metadata, commerceSync)
+      : missingRuntimeHandler("Commerce sync Queue is not fully configured."),
+    "commerce-roles": commerceRoles
+      ? (payload, metadata) => deliverCommerceRole(payload, metadata, commerceRoles)
+      : missingRuntimeHandler("Commerce role Queue is not fully configured."),
+    "commerce-game-access": input.context.commerceGameAccess
+      ? (payload, metadata) =>
+          deliverCommerceGameAccess(payload, metadata, input.context.commerceGameAccess!)
+      : missingRuntimeHandler("Commerce game delivery is unavailable."),
+    "ticket-recovery": (payload, metadata) =>
+      deliverTicketRecovery(
+        payload,
+        metadata,
         services.ticketLifecycle,
         services.ticketPanelService,
         input.env.DISCORD_BOT_TOKEN,
       ),
-    ),
-    "server-levels": protectedHandler(
-      createSingleMessageHandler(SERVER_LEVELS_QUEUE_NAME, (batch) =>
-        handleServerLevelQueueBatch(batch, input.env, input.context),
-      ),
+    "server-levels": protectedHandler((payload, metadata) =>
+      deliverServerLevel(payload, metadata, {
+        serverLevels: input.context.stores.serverLevels,
+        processor: serverLevelProcessor,
+        now: Date.now,
+      }),
     ),
   };
 }
 
-function createSingleMessageHandler(
-  queueName: string,
-  consume: (batch: QueueBatch<unknown>) => Promise<void>,
-): PostgresJobHandler {
-  return async (payload, context) => {
-    let outcome: QueueDeliveryOutcome | undefined;
-    const settle = (next: QueueDeliveryOutcome) => {
-      if (outcome) throw new Error(`Queue consumer settled ${queueName} more than once.`);
-      outcome = next;
-    };
-    const message = {
-      id: context.jobId,
-      timestamp: new Date(),
-      body: payload,
-      attempts: context.attempts,
-      ack: () => settle({ status: "complete" }),
-      retry: (options?: QueueRetryOptions) =>
-        settle({
-          status: "retry",
-          reasonCode: "consumer_requested_retry",
-          ...(options?.delaySeconds === undefined ? {} : { delaySeconds: options.delaySeconds }),
-        }),
-    } as QueueMessage<unknown>;
-    const batch = {
-      queue: queueName,
-      messages: [message],
-      ackAll: () => message.ack(),
-      retryAll: (options?: QueueRetryOptions) => message.retry(options),
-    } as QueueBatch<unknown>;
-    await consume(batch);
-    if (!outcome) throw new Error(`Queue consumer did not settle ${queueName}.`);
-    return outcome;
+function missingRuntimeHandler(message: string): PostgresJobHandler {
+  return async () => {
+    throw new Error(message);
   };
 }
 

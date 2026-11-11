@@ -14,7 +14,7 @@ import {
 import { createPostgresJobQueue } from "../src/runtime/postgres/postgres-job-queue";
 import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresReactionLimitStore } from "../src/runtime/postgres/postgres-reaction-limit-store";
-import { deliverGatewayEventQueueBatch } from "../src/runtime/gateway-event-queue-consumer";
+import { deliverGatewayEvent } from "../src/runtime/gateway-event-queue-consumer";
 import { deriveGatewayEventKey } from "../src/runtime/gateway-event-idempotency";
 import { createPostgresGatewayEventOperationStore } from "../src/runtime/postgres/postgres-gateway-event-operation-store";
 import type { QueueDeliveryOutcome } from "../src/runtime/queue-delivery";
@@ -233,26 +233,14 @@ async function deliverNext(
     now,
   });
   assert.ok(job);
-  const result: { outcome?: QueueDeliveryOutcome } = {};
   const reasons: string[] = [];
-  const message = {
-    id: job.id,
-    timestamp: now,
-    body: job.payload,
-    attempts: job.attempts,
-    ack() {
-      result.outcome = { status: "complete" };
-    },
-    retry(options?: QueueRetryOptions) {
-      result.outcome = { status: "retry", reasonCode: "consumer_requested_retry", ...options };
-    },
-  };
-  await deliverGatewayEventQueueBatch(
+  const outcome: QueueDeliveryOutcome = await deliverGatewayEvent(
+    job.payload,
     {
-      queue: "haf-bot-gateway-events",
-      messages: [message],
-      ackAll: () => message.ack(),
-      retryAll: (options) => message.retry(options),
+      jobId: job.id,
+      queueName: job.queueName,
+      attempts: job.attempts,
+      maxAttempts: job.maxAttempts,
     },
     env,
     {
@@ -273,9 +261,8 @@ async function deliverNext(
       database,
     ),
   );
-  assert.ok(result.outcome);
   return {
-    state: await queue.settle(job, result.outcome, new Date(Date.now())),
+    state: await queue.settle(job, outcome, new Date(Date.now())),
     reasons,
     jobId: job.id,
   };

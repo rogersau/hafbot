@@ -1,4 +1,3 @@
-import type { QueueBatch } from "../../../../../src/runtime/queue-types";
 import type { Env } from "../../../test-env";
 import { createBillingCatalog } from "../../../../../src/runtime/billing/catalog";
 import { createBillingCheckoutService } from "../../../../../src/runtime/billing/checkout";
@@ -22,7 +21,6 @@ import { SqliteBillingManagementStore } from "./sqlite-management-store";
 import { createBillingManagementService } from "../../../../../src/runtime/billing/management";
 import { SqliteBillingGraceStore } from "./sqlite-grace-store";
 import { createBillingGraceProcessor } from "../../../../../src/runtime/billing/grace";
-import { isRecord } from "../../../../../src/unknown-parse";
 import { SqliteBillingHistoryStore } from "./history";
 import { SqliteBillingSupportStore } from "./sqlite-support-store";
 import { SqliteBillingDeliveryStore } from "./sqlite-delivery-store";
@@ -150,25 +148,4 @@ function readBillingConfig(env: Env) {
   };
 }
 
-export async function handleBillingSyncQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-): Promise<void> {
-  const runtime = createSqliteBillingRuntime(env);
-  if (!runtime) throw new Error("Billing sync Queue is not fully configured.");
-  for (const message of batch.messages) {
-    if (!isBillingSyncMessage(message.body)) {
-      message.ack();
-      continue;
-    }
-    const result = await runtime.processMessage(message.body, message.attempts);
-    if (result === "retry") message.retry();
-    else message.ack();
-  }
-}
-
-function isBillingSyncMessage(value: unknown): value is BillingSyncQueueMessage {
-  return (
-    isRecord(value) && typeof value.eventId === "string" && typeof value.customerId === "string"
-  );
-}
+export { deliverBillingSync } from "../../../../../src/runtime/billing/postgres-runtime";

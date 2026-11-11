@@ -1,5 +1,5 @@
 import type { PostgresDatabaseCapability } from "../postgres/postgres-capability";
-import type { QueueProducer, QueueBatch } from "../queue-types";
+import type { QueueProducer, QueueJobMetadata } from "../queue-types";
 import { PaidRoleEntitlementService } from "../../commerce/paid-role-entitlement";
 import type { Env } from "../../env";
 import { isRecord } from "../../unknown-parse";
@@ -10,9 +10,9 @@ import {
 import { DiscordPaidRoleAdapter } from "./discord-paid-role-adapter";
 import { isValidStripeSecretKey, StripeConnectClient } from "./stripe-connect-client";
 import { StripePaidRoleSubscriptionOperations } from "./stripe-paid-role-subscriptions";
+import { deliverQueueJob, type QueueDeliveryOutcome } from "../queue-delivery";
 
 export const COMMERCE_ROLE_QUEUE_NAME = "haf-bot-commerce-roles";
-const MAX_ROLE_ATTEMPTS = 5;
 const ROLE_REPAIR_WINDOW_MS = 72 * 60 * 60 * 1_000;
 
 export type CommerceRoleQueueMessage = {
@@ -113,32 +113,39 @@ export function createPostgresPaidRoleRuntime(env: Env, database: PostgresDataba
   };
 }
 
-export async function handleCommerceRoleQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-  database: PostgresDatabaseCapability,
-): Promise<void> {
-  const runtime = createPostgresPaidRoleRuntime(env, database);
-  if (!runtime) throw new Error("Commerce role Queue is not fully configured.");
-  for (const message of batch.messages) {
-    if (!isCommerceRoleQueueMessage(message.body)) {
-      message.ack();
-      continue;
-    }
-    try {
-      await runtime.processMessage(message.body);
-      message.ack();
-    } catch {
-      await runtime.store.recordRoleOutboxFailure(
-        message.body.outboxId,
-        message.attempts,
-        "commerce_role_delivery_failed",
-        message.attempts >= MAX_ROLE_ATTEMPTS,
-        Date.now(),
-      );
-      message.retry();
-    }
-  }
+export interface CommerceRoleDeliveryPort {
+  processMessage(message: CommerceRoleQueueMessage): Promise<void>;
+  store: Pick<PostgresPaidRoleStore, "recordRoleOutboxFailure">;
+}
+
+export async function deliverCommerceRole(
+  payload: unknown,
+  metadata: QueueJobMetadata,
+  runtime: CommerceRoleDeliveryPort,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
+    parse(body) {
+      return isCommerceRoleQueueMessage(body)
+        ? { ok: true, value: body }
+        : { ok: false, reasonCode: "invalid_commerce_role_message" };
+    },
+    async handle(message) {
+      try {
+        await runtime.processMessage(message);
+        return { status: "complete" };
+      } catch {
+        await runtime.store.recordRoleOutboxFailure(
+          message.outboxId,
+          metadata.attempts,
+          "commerce_role_delivery_failed",
+          metadata.attempts >= Math.max(1, Math.floor(metadata.maxAttempts)),
+          Date.now(),
+        );
+        return { status: "retry", reasonCode: "commerce_role_delivery_failed" };
+      }
+    },
+  });
 }
 
 async function processRepair(

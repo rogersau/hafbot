@@ -29,7 +29,7 @@ test("PostgreSQL background loops reject lease timing that cannot renew safely",
     () =>
       createPostgresJobWorker({
         queue: {} as never,
-        handlers: { "gateway-events": async () => undefined },
+        handlers: { "gateway-events": async () => ({ status: "complete" }) },
         leaseMs: 299,
       }),
     /at least 300 milliseconds/,
@@ -330,7 +330,9 @@ test(
           "steam-ban-lookups": async (payload, context) => {
             assert.deepEqual(payload, { steamId: "steam-1" });
             assert.equal(context.attempts, 1);
+            assert.equal(context.maxAttempts, 4);
             handled += 1;
+            return { status: "complete" };
           },
         },
       });

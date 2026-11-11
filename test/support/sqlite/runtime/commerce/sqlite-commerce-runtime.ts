@@ -1,4 +1,4 @@
-import type { QueueProducer, QueueBatch } from "../../../../../src/runtime/queue-types";
+import type { QueueProducer } from "../../../../../src/runtime/queue-types";
 import type { Env } from "../../../test-env";
 import { CommerceBuyerCheckoutService } from "../../../../../src/commerce/buyer-checkout";
 import { CommerceFinancialOperationsService } from "../../../../../src/commerce/financial-operations";
@@ -6,7 +6,6 @@ import { CommerceSafeguardsService } from "../../../../../src/commerce/safeguard
 import type { CommerceConnectedAccount } from "../../../../../src/commerce/types";
 import { CommerceSupportService } from "../../../../../src/commerce/support-payments";
 import { isCommerceFeatureEnabled } from "../../../../../src/commerce/production-readiness";
-import { isRecord } from "../../../../../src/unknown-parse";
 import { SqliteCommerceBuyerCheckoutStore } from "./sqlite-buyer-checkout-store";
 import { SqliteCommerceFinancialOperationsStore } from "./sqlite-financial-operations-store";
 import { SqliteCommerceSafeguardStore } from "./sqlite-safeguard-store";
@@ -203,24 +202,7 @@ export function createSqliteCommerceFinancialOperationsRuntime(
   return createCommerceFinancialOperationsService(env.HAF_DB, stripe, reconciliationStore, queue);
 }
 
-export async function handleCommerceSyncQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-  sellerReviews?: Pick<CommerceSellerReviewNotificationService, "syncSeller" | "retryPending">,
-): Promise<void> {
-  const runtime = createSqliteCommerceRuntime(env, sellerReviews);
-  if (!runtime) throw new Error("Commerce sync Queue is not fully configured.");
-
-  for (const message of batch.messages) {
-    if (!isCommerceReconciliationMessage(message.body)) {
-      message.ack();
-      continue;
-    }
-    const result = await runtime.processMessage(message.body, message.attempts);
-    if (result === "retry" || result === "leased") message.retry();
-    else message.ack();
-  }
-}
+export { deliverCommerceSync } from "../../../../../src/runtime/commerce/postgres-runtime";
 
 export function readCommerceConfig(env: Env): {
   secretKey: string;
@@ -244,21 +226,6 @@ export function readCommerceConfig(env: Env): {
     webhookSecret,
     apiVersion,
   };
-}
-
-function isCommerceReconciliationMessage(value: unknown): value is CommerceReconciliationMessage {
-  if (!isRecord(value)) return false;
-  const message = value;
-  return (
-    typeof message.connectedAccountId === "string" &&
-    /^acct_[A-Za-z0-9]+$/.test(message.connectedAccountId) &&
-    typeof message.eventId === "string" &&
-    message.resourceType === "seller" &&
-    message.resourceId === message.connectedAccountId &&
-    typeof message.generation === "number" &&
-    Number.isSafeInteger(message.generation) &&
-    message.generation > 0
-  );
 }
 
 function createCommerceFinancialOperationsService(

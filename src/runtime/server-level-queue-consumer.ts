@@ -1,4 +1,4 @@
-import type { QueueBatch } from "./queue-types";
+import type { QueueJobMetadata } from "./queue-types";
 import { fetchGuildMember } from "../discord/members";
 import { createChannelMessage } from "../discord/messages";
 import { DiscordApiError } from "../discord/client";
@@ -24,10 +24,10 @@ type ServerLevelRuntimeContext = Pick<
 };
 import type { ServerLevelStore } from "./contracts/server-level-store";
 import {
-  DEFAULT_QUEUE_MAX_ATTEMPTS,
   classifyQueueDeliveryError,
-  deliverQueueBatch,
+  deliverQueueJob,
   queueDeliveryEmitter,
+  type QueueDeliveryOutcome,
 } from "./queue-delivery";
 
 export const SERVER_LEVELS_QUEUE_NAME = "haf-bot-server-levels";
@@ -39,16 +39,20 @@ export interface ServerLevelQueueLogger {
   info?(...args: unknown[]): void;
 }
 
-export async function handleServerLevelQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-  context: ServerLevelRuntimeContext,
+export interface ServerLevelDeliveryPorts {
+  serverLevels: Pick<ServerLevelStore, "readProviderEvent">;
+  processor: Pick<ServerLevelProcessor, "processAvailableForServer">;
+  now: () => number;
+}
+
+export async function deliverServerLevel(
+  payload: unknown,
+  metadata: QueueJobMetadata,
+  ports: ServerLevelDeliveryPorts,
   logger: ServerLevelQueueLogger = console,
-  now: () => number = Date.now,
-): Promise<void> {
-  const processor = createServerLevelProcessor(env, context, now, logServerLevelTelemetry);
-  await deliverQueueBatch(batch, {
-    maxAttempts: DEFAULT_QUEUE_MAX_ATTEMPTS,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
     parse(body) {
       const message = parseServerLevelMessage(body);
       return message
@@ -56,11 +60,11 @@ export async function handleServerLevelQueueBatch(
         : { ok: false, reasonCode: "invalid_server_level_message" };
     },
     async handle(message) {
-      const event = await context.stores.serverLevels.readProviderEvent(message.inboxId);
+      const event = await ports.serverLevels.readProviderEvent(message.inboxId);
       if (!event || event.guildId !== message.guildId) {
         return { status: "terminal", reasonCode: "provider_event_missing" };
       }
-      const currentTime = now();
+      const currentTime = ports.now();
       const eligibleAtMs =
         Math.max(event.receivedAtMs, event.occurredAtMs) + SERVER_LEVEL_ORDERING_WINDOW_MS;
       if (currentTime < eligibleAtMs) {
@@ -70,7 +74,7 @@ export async function handleServerLevelQueueBatch(
           delaySeconds: Math.max(1, Math.ceil((eligibleAtMs - currentTime) / 1_000)),
         };
       }
-      await processor.processAvailableForServer(event.configuredGameServerId);
+      await ports.processor.processAvailableForServer(event.configuredGameServerId);
       return { status: "complete" };
     },
     classifyError: classifyQueueDeliveryError,
@@ -221,11 +225,11 @@ async function serverLevelAnnouncementNonce(announcementId: string): Promise<str
     .join("")}`;
 }
 
-function createServerLevelProcessor(
+export function createServerLevelProcessor(
   env: Env,
   context: ServerLevelRuntimeContext,
   now: () => number,
-  emitTelemetry: ServerLevelTelemetryEmitter,
+  emitTelemetry: ServerLevelTelemetryEmitter = logServerLevelTelemetry,
 ): ServerLevelProcessor {
   return new ServerLevelProcessor({
     store: context.stores.serverLevels,

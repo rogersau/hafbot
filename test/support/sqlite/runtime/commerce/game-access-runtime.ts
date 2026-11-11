@@ -1,13 +1,8 @@
-import type { QueueBatch } from "../../../../../src/runtime/queue-types";
 import {
   commerceEligibility,
   type CommerceEligibilityState,
 } from "../../../../../src/commerce/eligibility";
-import { isRecord } from "../../../../../src/unknown-parse";
-import type {
-  GameAccessMessage,
-  GameAccessQueue,
-} from "../../../../../src/commerce/game-access/model";
+import type { GameAccessQueue } from "../../../../../src/commerce/game-access/model";
 import type { GameAccessProvider } from "../../../../../src/commerce/game-access/provider";
 import { SqliteCommerceBuyerCheckoutStore } from "./sqlite-buyer-checkout-store";
 import { createGameAccessStore, type GameAccessStore } from "../../commerce/game-access/store";
@@ -236,41 +231,4 @@ export function createGameAccessRuntime(input: {
 }
 
 export const COMMERCE_GAME_QUEUE_NAME = "haf-bot-commerce-game-access";
-function validMessage(value: unknown): value is GameAccessMessage {
-  return (
-    isRecord(value) &&
-    Object.keys(value).length === 1 &&
-    Array.isArray(value.assignments) &&
-    value.assignments.length > 0 &&
-    value.assignments.length <= 50 &&
-    value.assignments.every(
-      (a) =>
-        isRecord(a) &&
-        Object.keys(a).length === 3 &&
-        typeof a.assignmentId === "string" &&
-        a.assignmentId.length > 0 &&
-        a.assignmentId.length <= 100 &&
-        Number.isSafeInteger(a.generation) &&
-        Number(a.generation) > 0 &&
-        Number.isSafeInteger(a.revision) &&
-        Number(a.revision) > 0,
-    )
-  );
-}
-export async function handleCommerceGameQueueBatch(
-  batch: QueueBatch<unknown>,
-  runtime: ReturnType<typeof createGameAccessRuntime>,
-) {
-  for (const message of batch.messages) {
-    if (!validMessage(message.body)) {
-      message.ack();
-      continue;
-    }
-    try {
-      await runtime.service.processMessage(message.body);
-      message.ack();
-    } catch {
-      message.retry();
-    }
-  }
-}
+export { deliverCommerceGameAccess } from "../../../../../src/runtime/postgres/postgres-commerce-game-access-runtime";

@@ -1,4 +1,4 @@
-import type { QueueBatch } from "./queue-types";
+import type { QueueJobMetadata } from "./queue-types";
 
 import {
   type WebhookProxyDeliveryEnvelope,
@@ -9,9 +9,9 @@ import { isRecord } from "../unknown-parse";
 
 import {
   classifyQueueDeliveryError,
-  DEFAULT_QUEUE_MAX_ATTEMPTS,
-  deliverQueueBatch,
+  deliverQueueJob,
   queueDeliveryEmitter,
+  type QueueDeliveryOutcome,
 } from "./queue-delivery";
 
 export const WEBHOOK_PROXY_DELIVERY_QUEUE_NAME = "haf-bot-webhook-proxy-deliveries";
@@ -21,17 +21,18 @@ export interface WebhookProxyDeliveryQueueLogger {
   info?(...args: unknown[]): void;
 }
 
-export async function deliverWebhookProxyDeliveryQueueBatch(
-  batch: QueueBatch<unknown>,
+export async function deliverWebhookProxyDelivery(
+  payload: unknown,
+  metadata: QueueJobMetadata,
   service: {
     deliverQueuedWebhook(
       delivery: WebhookProxyDeliveryEnvelope,
     ): Promise<WebhookProxyDeliveryResult>;
   },
   logger: WebhookProxyDeliveryQueueLogger = console,
-): Promise<void> {
-  await deliverQueueBatch(batch, {
-    maxAttempts: DEFAULT_QUEUE_MAX_ATTEMPTS,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
     parse(body) {
       const delivery = parseWebhookProxyDeliveryEnvelope(body);
       return delivery

@@ -1,4 +1,4 @@
-import type { QueueBatch } from "../../src/runtime/queue-types";
+import type { QueueJobMetadata } from "../../src/runtime/queue-types";
 import type { Env } from "./test-env";
 import { SteamBanLookupService } from "../../src/services/steam-ban-lookup-service";
 import { createSqliteSteamBanLookupStore } from "./sqlite/runtime/sqlite-steam-ban-lookup-store";
@@ -8,19 +8,19 @@ import { createSqliteContext } from "./sqlite/runtime/sqlite-context";
 import { type WebhookCredentialService } from "../../src/security/webhook-credentials/store";
 
 import {
-  deliverSteamBanLookupQueueBatch,
+  deliverSteamBanLookup,
   type SteamBanLookupQueueLogger,
 } from "../../src/runtime/steam-ban-lookup-queue-consumer";
-export async function handleSteamBanLookupQueueBatch(
-  batch: QueueBatch<unknown>,
+export async function handleSteamBanLookup(
+  payload: unknown,
+  metadata: QueueJobMetadata,
   env: Env,
   logger: SteamBanLookupQueueLogger = console,
   credentialService?: WebhookCredentialService,
-): Promise<void> {
+) {
   if (!env.STEAM_BAN_LOOKUP_KV) {
     logger.error("Steam ban lookup KV binding is missing");
-    await deliverSteamBanLookupQueueBatch(batch, null, logger, credentialService);
-    return;
+    return deliverSteamBanLookup(payload, metadata, null, logger, credentialService);
   }
 
   const recheckIntervalMs = parsePositiveInteger(env.STEAM_BAN_LOOKUP_RECHECK_INTERVAL_MS);
@@ -36,8 +36,9 @@ export async function handleSteamBanLookupQueueBatch(
   });
 
   const context = createSqliteContext(env);
-  await deliverSteamBanLookupQueueBatch(
-    batch,
+  return deliverSteamBanLookup(
+    payload,
+    metadata,
     service,
     logger,
     credentialService ?? context.webhookCredentialService,

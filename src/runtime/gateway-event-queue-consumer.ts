@@ -1,11 +1,11 @@
-import type { QueueBatch } from "./queue-types";
+import type { QueueJobMetadata } from "./queue-types";
 import type { Env } from "../env";
 import { isRecord } from "../unknown-parse";
 import {
   classifyQueueDeliveryError,
-  DEFAULT_QUEUE_MAX_ATTEMPTS,
-  deliverQueueBatch,
+  deliverQueueJob,
   queueDeliveryEmitter,
+  type QueueDeliveryOutcome,
   type QueueParseResult,
   QueueTerminalError,
 } from "./queue-delivery";
@@ -46,23 +46,15 @@ const IDEMPOTENT_GATEWAY_EVENT_TYPES = new Set([
 
 export type { GatewayEventEnvelope, GatewayEventQueueLogger } from "./gateway-events/contracts";
 
-export async function handleGatewayEventQueueBatch(
-  batch: QueueBatch<unknown>,
+export async function deliverGatewayEvent(
+  payload: unknown,
+  metadata: QueueJobMetadata,
   env: Env,
   logger: GatewayEventQueueLogger = console,
   dependencies: GatewayEventDependencies,
-): Promise<void> {
-  await deliverGatewayEventQueueBatch(batch, env, logger, dependencies);
-}
-
-export async function deliverGatewayEventQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-  logger: GatewayEventQueueLogger = console,
-  dependencies: GatewayEventDependencies,
-): Promise<void> {
-  await deliverQueueBatch(batch, {
-    maxAttempts: DEFAULT_QUEUE_MAX_ATTEMPTS,
+): Promise<QueueDeliveryOutcome> {
+  const outcome = await deliverQueueJob(payload, {
+    metadata,
     parse: parseGatewayEventEnvelope,
     async handle(envelope) {
       await processGatewayEventEnvelope(envelope, env, logger, dependencies);
@@ -80,6 +72,7 @@ export async function deliverGatewayEventQueueBatch(
       reasonCode: "database_unavailable",
     });
   }
+  return outcome;
 }
 
 export async function processGatewayEventQueueMessages(

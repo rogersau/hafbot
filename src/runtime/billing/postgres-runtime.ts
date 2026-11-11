@@ -1,5 +1,5 @@
 import type { PostgresDatabaseCapability } from "../postgres/postgres-capability";
-import type { QueueBatch } from "../queue-types";
+import type { QueueJobMetadata } from "../queue-types";
 import type { Env } from "../../env";
 import { createBillingCatalog } from "./catalog";
 import { createBillingCheckoutService } from "./checkout";
@@ -23,6 +23,7 @@ import { createBillingAdverseService } from "./adverse";
 import { PostgresBillingAdverseStore } from "../postgres/postgres-billing-adverse-store";
 import { createLandingPriceCatalog } from "./landing-catalog";
 import { resolveBillingOwnerIdentity } from "../postgres/postgres-billing-owner-identity";
+import { deliverQueueJob, type QueueDeliveryOutcome } from "../queue-delivery";
 
 export const BILLING_SYNC_QUEUE_NAME = "haf-bot-billing-sync";
 
@@ -140,22 +141,38 @@ function readBillingConfig(env: Env) {
   };
 }
 
-export async function handleBillingSyncQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-  database: PostgresDatabaseCapability,
-): Promise<void> {
-  const runtime = createPostgresBillingRuntime(env, database);
-  if (!runtime) throw new Error("Billing sync Queue is not fully configured.");
-  for (const message of batch.messages) {
-    if (!isBillingSyncMessage(message.body)) {
-      message.ack();
-      continue;
-    }
-    const result = await runtime.processMessage(message.body, message.attempts);
-    if (result === "retry") message.retry();
-    else message.ack();
-  }
+export type BillingSyncProcessingResult = "processed" | "already_processed" | "retry" | "terminal";
+
+export interface BillingSyncDeliveryPort {
+  processMessage(
+    message: BillingSyncQueueMessage,
+    attempts: number,
+  ): Promise<BillingSyncProcessingResult>;
+}
+
+export async function deliverBillingSync(
+  payload: unknown,
+  metadata: QueueJobMetadata,
+  processing: BillingSyncDeliveryPort,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
+    parse(body) {
+      return isBillingSyncMessage(body)
+        ? { ok: true, value: body }
+        : { ok: false, reasonCode: "invalid_billing_sync_message" };
+    },
+    async handle(message) {
+      const result = await processing.processMessage(message, metadata.attempts);
+      if (result === "retry") {
+        return { status: "retry", reasonCode: "billing_sync_retry" };
+      }
+      if (result === "terminal") {
+        return { status: "terminal", reasonCode: "billing_sync_terminal" };
+      }
+      return { status: "complete" };
+    },
+  });
 }
 
 function isBillingSyncMessage(value: unknown): value is BillingSyncQueueMessage {

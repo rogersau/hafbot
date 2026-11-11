@@ -1,5 +1,5 @@
 import type { PostgresDatabaseCapability } from "./postgres-capability";
-import type { QueueBatch } from "../queue-types";
+import type { QueueJobMetadata } from "../queue-types";
 import { commerceEligibility, type CommerceEligibilityState } from "../../commerce/eligibility";
 import { isRecord } from "../../unknown-parse";
 import type { GameAccessMessage, GameAccessQueue } from "../../commerce/game-access/model";
@@ -14,6 +14,7 @@ import type { WardogsService } from "../../wardogs/service";
 import type { GameAccessCheckoutHooks } from "../../commerce/buyer-checkout";
 import { PostgresPaidRoleStore } from "./postgres-commerce-paid-role-store";
 import { DiscordPaidRoleAdapter } from "../commerce/discord-paid-role-adapter";
+import { deliverQueueJob, type QueueDeliveryOutcome } from "../queue-delivery";
 
 export function createGameAccessRuntime(input: {
   database: PostgresDatabaseCapability;
@@ -240,20 +241,29 @@ function validMessage(value: unknown): value is GameAccessMessage {
     )
   );
 }
-export async function handleCommerceGameQueueBatch(
-  batch: QueueBatch<unknown>,
-  runtime: ReturnType<typeof createGameAccessRuntime>,
-) {
-  for (const message of batch.messages) {
-    if (!validMessage(message.body)) {
-      message.ack();
-      continue;
-    }
-    try {
-      await runtime.service.processMessage(message.body);
-      message.ack();
-    } catch {
-      message.retry();
-    }
-  }
+export interface CommerceGameAccessDeliveryPort {
+  service: Pick<ReturnType<typeof createGameAccessRuntime>["service"], "processMessage">;
+}
+
+export async function deliverCommerceGameAccess(
+  payload: unknown,
+  metadata: QueueJobMetadata,
+  runtime: CommerceGameAccessDeliveryPort,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
+    parse(body) {
+      return validMessage(body)
+        ? { ok: true, value: body }
+        : { ok: false, reasonCode: "invalid_commerce_game_message" };
+    },
+    async handle(message) {
+      try {
+        await runtime.service.processMessage(message);
+        return { status: "complete" };
+      } catch {
+        return { status: "retry", reasonCode: "commerce_game_access_delivery_failed" };
+      }
+    },
+  });
 }

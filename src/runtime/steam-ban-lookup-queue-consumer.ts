@@ -1,4 +1,4 @@
-import type { QueueBatch } from "./queue-types";
+import type { QueueJobMetadata } from "./queue-types";
 
 import {
   type SteamBanLookupMessage,
@@ -14,9 +14,9 @@ import {
 } from "../security/webhook-credentials/store";
 import {
   classifyQueueDeliveryError,
-  DEFAULT_QUEUE_MAX_ATTEMPTS,
-  deliverQueueBatch,
+  deliverQueueJob,
   queueDeliveryEmitter,
+  type QueueDeliveryOutcome,
 } from "./queue-delivery";
 
 export const STEAM_BAN_LOOKUP_QUEUE_NAME = "haf-bot-steam-ban-lookups";
@@ -26,16 +26,17 @@ export interface SteamBanLookupQueueLogger {
   info?(...args: unknown[]): void;
 }
 
-export async function deliverSteamBanLookupQueueBatch(
-  batch: QueueBatch<unknown>,
+export async function deliverSteamBanLookup(
+  payload: unknown,
+  metadata: QueueJobMetadata,
   service: {
     processBatch(messages: SteamBanLookupMessage[]): Promise<SteamBanLookupProcessResult>;
   } | null,
   logger: SteamBanLookupQueueLogger = console,
   credentialService?: Pick<WebhookCredentialService, "resolve">,
-): Promise<void> {
-  await deliverQueueBatch(batch, {
-    maxAttempts: DEFAULT_QUEUE_MAX_ATTEMPTS,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
     parse(body) {
       const message = parseSteamBanLookupMessage(body);
       return message

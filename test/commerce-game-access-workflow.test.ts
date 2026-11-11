@@ -10,7 +10,7 @@ import {
 import {
   createSqliteGameAccessStore,
   createGameAccessRuntime,
-  handleCommerceGameQueueBatch,
+  deliverCommerceGameAccess,
 } from "./support/sqlite/runtime/commerce/game-access-runtime";
 import { SqliteCommerceBuyerCheckoutStore } from "./support/sqlite/runtime/commerce/sqlite-buyer-checkout-store";
 import { createSqliteCommerceStore } from "./support/sqlite/runtime/sqlite-commerce-store";
@@ -594,31 +594,19 @@ test("Queue input cannot substitute a subject or command; dispatch rechecks targ
   await h.pay();
   await h.runtime.sweepOutbox();
   const work = h.queue.shift()!;
-  let acked = false;
   const body = { ...work, subject: SECOND_SUBJECT, action: "grant" };
-  await handleCommerceGameQueueBatch(
+  const outcome = await deliverCommerceGameAccess(
+    body,
     {
-      queue: "fixture",
-      messages: [
-        {
-          id: "message",
-          timestamp: new Date(NOW),
-          attempts: 1,
-          body,
-          ack() {
-            acked = true;
-          },
-          retry() {
-            throw new Error("unexpected retry");
-          },
-        },
-      ],
-      ackAll() {},
-      retryAll() {},
+      jobId: "message",
+      queueName: "commerce-game-access",
+      attempts: 1,
+      maxAttempts: 4,
+      signal: new AbortController().signal,
     },
     h.runtime,
   );
-  assert.ok(acked);
+  assert.deepEqual(outcome, { status: "terminal", reasonCode: "invalid_commerce_game_message" });
   assert.equal(h.providerCalls.filter((x) => x !== "GET").length, 0);
   h.control.beforeSend = async () => {
     h.control.generation++;

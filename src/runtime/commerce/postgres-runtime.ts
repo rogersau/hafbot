@@ -1,5 +1,5 @@
 import type { PostgresDatabaseCapability } from "../postgres/postgres-capability";
-import type { QueueProducer, QueueBatch } from "../queue-types";
+import type { QueueProducer, QueueJobMetadata } from "../queue-types";
 import type { Env } from "../../env";
 import { CommerceBuyerCheckoutService } from "../../commerce/buyer-checkout";
 import { CommerceFinancialOperationsService } from "../../commerce/financial-operations";
@@ -32,6 +32,7 @@ import {
 import { StripeCommerceSnapshotProvider } from "../postgres/postgres-commerce-snapshot-provider";
 import { createCommerceStripeWebhookHandler } from "./webhook";
 import { processCommerceFinancialProviderActions } from "../postgres/postgres-commerce-financial-provider-actions";
+import { deliverQueueJob, type QueueDeliveryOutcome } from "../queue-delivery";
 import { createPostgresCommerceStore } from "../postgres/postgres-commerce-store";
 import type { CommerceSellerReviewNotificationService } from "../../commerce/seller-review-notifications";
 
@@ -208,24 +209,47 @@ export function createPostgresCommerceFinancialOperationsRuntime(
   return createCommerceFinancialOperationsService(database, stripe, reconciliationStore, queue);
 }
 
-export async function handleCommerceSyncQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-  database: PostgresDatabaseCapability,
-  sellerReviews?: Pick<CommerceSellerReviewNotificationService, "syncSeller" | "retryPending">,
-): Promise<void> {
-  const runtime = createPostgresCommerceRuntime(env, database, sellerReviews);
-  if (!runtime) throw new Error("Commerce sync Queue is not fully configured.");
+export type CommerceSyncProcessingResult =
+  | "processed"
+  | "stale"
+  | "leased"
+  | "complete"
+  | "retry"
+  | "quarantined";
 
-  for (const message of batch.messages) {
-    if (!isCommerceReconciliationMessage(message.body)) {
-      message.ack();
-      continue;
-    }
-    const result = await runtime.processMessage(message.body, message.attempts);
-    if (result === "retry" || result === "leased") message.retry();
-    else message.ack();
-  }
+export interface CommerceSyncDeliveryPort {
+  processMessage(
+    message: CommerceReconciliationMessage,
+    attempts: number,
+  ): Promise<CommerceSyncProcessingResult>;
+}
+
+export async function deliverCommerceSync(
+  payload: unknown,
+  metadata: QueueJobMetadata,
+  processing: CommerceSyncDeliveryPort,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
+    parse(body) {
+      return isCommerceReconciliationMessage(body)
+        ? { ok: true, value: body }
+        : { ok: false, reasonCode: "invalid_commerce_sync_message" };
+    },
+    async handle(message) {
+      const result = await processing.processMessage(message, metadata.attempts);
+      if (result === "retry") {
+        return { status: "retry", reasonCode: "commerce_sync_retry" };
+      }
+      if (result === "leased") {
+        return { status: "retry", reasonCode: "commerce_sync_leased" };
+      }
+      if (result === "quarantined") {
+        return { status: "terminal", reasonCode: "commerce_sync_quarantined" };
+      }
+      return { status: "complete" };
+    },
+  });
 }
 
 export function readCommerceConfig(env: Env): {

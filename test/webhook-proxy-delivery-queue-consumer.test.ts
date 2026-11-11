@@ -3,7 +3,6 @@ import {
   testWebhookCredential,
   testWebhookResolver,
 } from "./support/webhook-credentials";
-import type { QueueBatch } from "../src/runtime/queue-types";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -11,35 +10,57 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { deliverWebhookProxyDeliveryQueueBatch } from "../src/runtime/webhook-proxy-delivery-queue-consumer";
+import { deliverWebhookProxyDelivery } from "../src/runtime/webhook-proxy-delivery-queue-consumer";
 import {
   WebhookProxyService,
   type WebhookProxyDeliveryEnvelope,
 } from "../src/services/webhook-proxy-service";
 import { DiscordApiError } from "../src/discord/client";
 import { WebhookCredentialService } from "../src/security/webhook-credentials/store";
+import { queueJobMetadata } from "./support/queue-delivery-fixture";
 
-test("webhook delivery consumer acknowledges success and delays only the rate-limited sibling", async () => {
-  const complete = fakeMessage("complete", deliveryEnvelope("complete"));
-  const retry = fakeMessage("retry", deliveryEnvelope("retry"));
-  const malformed = fakeMessage("malformed", { config: null });
-
-  await deliverWebhookProxyDeliveryQueueBatch(fakeBatch([complete, retry, malformed]), {
-    async deliverQueuedWebhook(delivery) {
-      if (delivery.config.publicId === "retry") {
-        throw new DiscordApiError("rate limited", 429, "redacted", { retryAfterMs: 1_200 });
-      }
-      return { status: "complete" };
+test("webhook delivery consumer completes success and delays only the rate-limited sibling", async () => {
+  const complete = await deliverWebhookProxyDelivery(
+    deliveryEnvelope("complete"),
+    queueJobMetadata({ jobId: "complete" }),
+    {
+      async deliverQueuedWebhook() {
+        return { status: "complete" };
+      },
     },
-  });
+  );
+  const retry = await deliverWebhookProxyDelivery(
+    deliveryEnvelope("retry"),
+    queueJobMetadata({ jobId: "retry" }),
+    {
+      async deliverQueuedWebhook() {
+        throw new DiscordApiError("rate limited", 429, "redacted", { retryAfterMs: 1_200 });
+      },
+    },
+  );
+  let handled = 0;
+  const malformed = await deliverWebhookProxyDelivery(
+    { config: null },
+    queueJobMetadata({ jobId: "malformed" }),
+    {
+      async deliverQueuedWebhook() {
+        handled++;
+        return { status: "complete" };
+      },
+    },
+  );
 
-  assert.deepEqual(complete.actions, [{ action: "ack" }]);
-  assert.deepEqual(retry.actions, [{ action: "retry", delaySeconds: 2 }]);
-  assert.deepEqual(malformed.actions, [{ action: "ack" }]);
+  assert.deepEqual(complete, { status: "complete" });
+  assert.deepEqual(retry, {
+    status: "retry",
+    reasonCode: "provider_rate_limited",
+    delaySeconds: 2,
+  });
+  assert.deepEqual(malformed, { status: "terminal", reasonCode: "invalid_webhook_delivery" });
+  assert.equal(handled, 0);
 });
 
-test("webhook delivery consumer retries an exhausted rate limit from the production service", async () => {
-  const message = fakeMessage("rate-limited", deliveryEnvelope("rate-limited"));
+test("webhook delivery consumer preserves an exhausted rate limit from the production service", async () => {
   const service = new WebhookProxyService(
     {
       async readWebhookProxyConfig() {
@@ -63,12 +84,20 @@ test("webhook delivery consumer retries an exhausted rate limit from the product
     },
   );
 
-  await deliverWebhookProxyDeliveryQueueBatch(fakeBatch([message]), service);
+  const outcome = await deliverWebhookProxyDelivery(
+    deliveryEnvelope("rate-limited"),
+    queueJobMetadata({ jobId: "rate-limited", attempts: 4, maxAttempts: 4 }),
+    service,
+  );
 
-  assert.deepEqual(message.actions, [{ action: "retry", delaySeconds: 3 }]);
+  assert.deepEqual(outcome, {
+    status: "retry",
+    reasonCode: "provider_rate_limited",
+    delaySeconds: 3,
+  });
 });
 
-test("webhook delivery retries credential storage outages but acknowledges deleted credentials", async () => {
+test("webhook delivery retries credential storage outages but terminates deleted credentials", async () => {
   let unavailable = true;
   const credentials = new WebhookCredentialService(
     {
@@ -113,14 +142,20 @@ test("webhook delivery retries credential storage outages but acknowledges delet
     body: "{}",
     contentType: "application/json",
   };
-  const temporary = fakeMessage("credential-outage", body);
-  await deliverWebhookProxyDeliveryQueueBatch(fakeBatch([temporary]), service);
-  assert.deepEqual(temporary.actions, [{ action: "retry", delaySeconds: undefined }]);
+  const temporary = await deliverWebhookProxyDelivery(
+    body,
+    queueJobMetadata({ jobId: "credential-outage" }),
+    service,
+  );
+  assert.deepEqual(temporary, { status: "retry", reasonCode: "credential_store_unavailable" });
 
   unavailable = false;
-  const deleted = fakeMessage("credential-deleted", body);
-  await deliverWebhookProxyDeliveryQueueBatch(fakeBatch([deleted]), service);
-  assert.deepEqual(deleted.actions, [{ action: "ack" }]);
+  const deleted = await deliverWebhookProxyDelivery(
+    body,
+    queueJobMetadata({ jobId: "credential-deleted" }),
+    service,
+  );
+  assert.deepEqual(deleted, { status: "terminal", reasonCode: "credential_unavailable" });
 });
 
 function deliveryEnvelope(publicId: string): WebhookProxyDeliveryEnvelope {
@@ -136,28 +171,5 @@ function deliveryEnvelope(publicId: string): WebhookProxyDeliveryEnvelope {
     ]),
     body: "{}",
     contentType: "application/json",
-  };
-}
-
-function fakeMessage(id: string, body: unknown) {
-  const actions: Array<{ action: "ack" } | { action: "retry"; delaySeconds?: number }> = [];
-  return {
-    id,
-    body,
-    attempts: 1,
-    timestamp: new Date(),
-    actions,
-    ack: () => actions.push({ action: "ack" }),
-    retry: (options?: { delaySeconds?: number }) =>
-      actions.push({ action: "retry", delaySeconds: options?.delaySeconds }),
-  };
-}
-
-function fakeBatch(messages: ReturnType<typeof fakeMessage>[]): QueueBatch<unknown> {
-  return {
-    queue: "haf-bot-webhook-proxy-deliveries",
-    messages,
-    ackAll() {},
-    retryAll() {},
   };
 }

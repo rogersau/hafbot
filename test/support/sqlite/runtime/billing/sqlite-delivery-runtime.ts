@@ -1,4 +1,3 @@
-import type { QueueBatch } from "../../../../../src/runtime/queue-types";
 import type { Env } from "../../../test-env";
 import { DiscordApiError } from "../../../../../src/discord/client";
 import {
@@ -13,7 +12,6 @@ import {
 } from "../../../../../src/runtime/billing/delivery";
 import { SqliteBillingDeliveryStore } from "./sqlite-delivery-store";
 import { resolveBillingOwnerIdentity } from "./sqlite-owner-identity";
-import { isRecord } from "../../../../../src/unknown-parse";
 
 export const BILLING_DELIVERY_QUEUE_NAME = "haf-bot-billing-delivery";
 
@@ -54,23 +52,7 @@ export function createSqliteBillingDeliveryRuntime(env: Env) {
   };
 }
 
-export async function handleBillingDeliveryQueueBatch(batch: QueueBatch<unknown>, env: Env) {
-  const runtime = createSqliteBillingDeliveryRuntime(env);
-  if (!runtime) throw new Error("Billing delivery Queue is not fully configured.");
-  for (const message of batch.messages) {
-    const operationId =
-      isRecord(message.body) && typeof message.body.operationId === "string"
-        ? message.body.operationId
-        : null;
-    if (!operationId) {
-      message.ack();
-      continue;
-    }
-    const result = await runtime.process(operationId);
-    if (result.result === "retry") message.retry({ delaySeconds: result.delaySeconds });
-    else message.ack();
-  }
-}
+export { deliverBillingDelivery } from "../../../../../src/runtime/billing/postgres-delivery-runtime";
 
 function classifyDiscordError(error: unknown): BillingDeliveryError {
   if (!(error instanceof DiscordApiError))

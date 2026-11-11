@@ -1,5 +1,5 @@
 import type { PostgresDatabaseCapability } from "../postgres/postgres-capability";
-import type { QueueBatch } from "../queue-types";
+import type { QueueJobMetadata } from "../queue-types";
 import type { Env } from "../../env";
 import { DiscordApiError } from "../../discord/client";
 import {
@@ -15,6 +15,7 @@ import {
 import { PostgresBillingDeliveryStore } from "../postgres/postgres-billing-delivery-store";
 import { resolveBillingOwnerIdentity } from "../postgres/postgres-billing-owner-identity";
 import { isRecord } from "../../unknown-parse";
+import { deliverQueueJob, type QueueDeliveryOutcome } from "../queue-delivery";
 
 export const BILLING_DELIVERY_QUEUE_NAME = "haf-bot-billing-delivery";
 
@@ -58,26 +59,35 @@ export function createPostgresBillingDeliveryRuntime(
   };
 }
 
-export async function handleBillingDeliveryQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-  database: PostgresDatabaseCapability,
-) {
-  const runtime = createPostgresBillingDeliveryRuntime(env, database);
-  if (!runtime) throw new Error("Billing delivery Queue is not fully configured.");
-  for (const message of batch.messages) {
-    const operationId =
-      isRecord(message.body) && typeof message.body.operationId === "string"
-        ? message.body.operationId
-        : null;
-    if (!operationId) {
-      message.ack();
-      continue;
-    }
-    const result = await runtime.process(operationId);
-    if (result.result === "retry") message.retry({ delaySeconds: result.delaySeconds });
-    else message.ack();
-  }
+export interface BillingDeliveryProcessingPort {
+  process(operationId: string): Promise<{ result: "complete" | "retry"; delaySeconds?: number }>;
+}
+
+export async function deliverBillingDelivery(
+  payload: unknown,
+  metadata: QueueJobMetadata,
+  processing: BillingDeliveryProcessingPort,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
+    parse(body) {
+      const operationId =
+        isRecord(body) && typeof body.operationId === "string" ? body.operationId : null;
+      return operationId
+        ? { ok: true, value: operationId }
+        : { ok: false, reasonCode: "invalid_billing_delivery_message" };
+    },
+    async handle(operationId) {
+      const result = await processing.process(operationId);
+      return result.result === "retry"
+        ? {
+            status: "retry",
+            reasonCode: "billing_delivery_retry",
+            ...(result.delaySeconds === undefined ? {} : { delaySeconds: result.delaySeconds }),
+          }
+        : { status: "complete" };
+    },
+  });
 }
 
 function classifyDiscordError(error: unknown): BillingDeliveryError {

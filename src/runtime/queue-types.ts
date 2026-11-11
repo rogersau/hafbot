@@ -1,9 +1,6 @@
 export interface QueueSendOptions {
   delaySeconds?: number;
 }
-export interface QueueRetryOptions {
-  delaySeconds?: number;
-}
 
 export interface QueueProducer<Body = unknown> {
   send(message: Body, options?: QueueSendOptions): Promise<unknown>;
@@ -13,18 +10,14 @@ export interface QueueProducer<Body = unknown> {
   ): Promise<unknown>;
 }
 
-export interface QueueMessage<Body = unknown> {
-  readonly id: string;
-  readonly timestamp: Date;
-  readonly body: Body;
+/**
+ * Native delivery metadata supplied by the PostgreSQL job worker for one claimed job.
+ * Consumers use this directly instead of a broker-shaped message envelope.
+ */
+export interface QueueJobMetadata {
+  readonly jobId: string;
+  readonly queueName: string;
   readonly attempts: number;
-  ack(): void;
-  retry(options?: QueueRetryOptions): void;
-}
-
-export interface QueueBatch<Body = unknown> {
-  readonly queue: string;
-  readonly messages: readonly QueueMessage<Body>[];
-  ackAll(): void;
-  retryAll(options?: QueueRetryOptions): void;
+  readonly maxAttempts: number;
+  readonly signal?: AbortSignal;
 }
