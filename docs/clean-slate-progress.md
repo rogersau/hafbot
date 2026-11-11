@@ -6,16 +6,17 @@ there are no active deployments, inherited compatibility requirements or upgrade
 
 ## Ownership
 
-| Area                                                     | Owner                              | State and evidence                                                                  |
-| -------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------- |
-| Native PostgreSQL stores and runtime composition         | Architecture thread                | Implemented; 111 PostgreSQL contracts pass                                          |
-| Worker/D1 production removal and injected handlers       | Architecture thread                | Implemented; 7 architecture checks pass; SQLite is test-only                        |
-| Canonical installation schema and startup                | Architecture thread                | Implemented; fresh-schema container readiness passes                                |
-| Canonical persisted and queue documents                  | Architecture thread                | Implemented; current signatures, Gateway envelopes and encrypted webhook references |
-| Server error contract                                    | Architecture thread                | Current fields only; latest cleanup needs rerun                                     |
-| Admin loading/error UI, prototypes and shared validation | Task thread                        | Distinct-fix manifest and remaining adapted work requested                          |
-| Service atomicity and regressions                        | Integration by architecture thread | Preserve and reconcile distinct task fixes individually                             |
-| Final combined validation                                | Architecture thread                | Pending combined integration                                                        |
+| Area                                                | Owner                              | State and evidence                                                                  |
+| --------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------- |
+| Native PostgreSQL stores and runtime composition    | Architecture thread                | Implemented; 111 PostgreSQL contracts pass                                          |
+| Worker/D1 production removal and injected handlers  | Architecture thread                | Implemented; 7 architecture checks pass; SQLite is test-only                        |
+| Canonical installation schema and startup           | Architecture thread                | Implemented; fresh-schema container readiness passes                                |
+| Canonical persisted and queue documents             | Architecture thread                | Implemented; current signatures, Gateway envelopes and encrypted webhook references |
+| Server error contract                               | Architecture thread                | Current fields only; 65 focused checks and type/test builds pass                    |
+| Admin loading/error UI and prototypes               | Architecture integration           | C02 and C07 integrated as `02cbf2e` and `4af4df0`; 33 checks and Admin types pass   |
+| Shared validation and required service capabilities | Task thread adaptations            | Distinct-fix manifest requested; C03, C10 and C11 remain open                       |
+| Service atomicity and regressions                   | Integration by architecture thread | Preserve and reconcile distinct task fixes individually                             |
+| Final combined validation                           | Architecture thread                | Pending combined integration                                                        |
 
 ## Reconciliation queue
 
@@ -28,6 +29,21 @@ there are no active deployments, inherited compatibility requirements or upgrade
 - Make current game-access transmission markers require their operation identity.
 - Accept only distinct remaining task work adapted onto the architecture checkpoint. Verify
   equivalent behavior before marking an overlapping task covered.
+
+## Shared implementer allocation
+
+The global limit is five active implementers across both coordinators and all machines. The
+agreed proposal reserves two slots for architecture and three for the task coordinator. New
+launches await confirmation that the old overlapping delegates have stopped. Cancelled duplicate
+assignments must not restart. All new tasks use isolated checkouts with OpenCode Go
+`opencode-go/deepseek-v4.1-flash`, `variant=max`, serial focused tests and disposable PostgreSQL
+containers limited to one CPU and 256 MB.
+
+Architecture's ready briefs cover the proven Mention Protection configuration/burst locking
+invariant and the remaining object metadata conversion mode/current game transmission marker.
+The task coordinator adapts distinct completed shared-validation and service-atomicity fixes;
+offering lifecycle consolidation (C23), retired selector plumbing (C06) and unused aliases (C09)
+still need explicit reconciliation. None is assumed covered merely because native stores exist.
 
 ## Checkpoint validation
 
