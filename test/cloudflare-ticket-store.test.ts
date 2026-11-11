@@ -94,9 +94,9 @@ test("multiple ticket panels can be listed and read independently", async () => 
   await store.upsertTicketPanelConfig(mainPanel);
   await store.upsertTicketPanelConfig(escalationPanel);
 
-  assert.deepEqual(await store.listTicketPanelConfigs?.("guild-1"), [mainPanel, escalationPanel]);
+  assert.deepEqual(await store.listTicketPanelConfigs("guild-1"), [mainPanel, escalationPanel]);
   assert.deepEqual(
-    await store.readTicketPanelConfigById?.("guild-1", "panel-escalation"),
+    await store.readTicketPanelConfigById("guild-1", "panel-escalation"),
     escalationPanel,
   );
   assert.deepEqual(await store.readTicketPanelConfig("guild-1"), mainPanel);
@@ -140,15 +140,11 @@ test("closed tickets can be listed for one panel while open ticket limits stay g
 
 test("ticket panel deletion is blocked while the panel has open tickets", async () => {
   const store = createStore();
-  assert.ok(store.countOpenTicketsForPanel);
-  assert.ok(store.deleteTicketPanelConfig);
-  const countOpenTicketsForPanel = store.countOpenTicketsForPanel;
-  const deleteTicketPanelConfig = store.deleteTicketPanelConfig;
   await store.upsertTicketPanelConfig(createPanel());
   await store.createTicketInstance(createTicket("guild-1", "open-channel", "open", 100));
 
-  assert.equal(await countOpenTicketsForPanel("guild-1", "main"), 1);
-  await assert.rejects(() => deleteTicketPanelConfig("guild-1", "main"), /open tickets/);
+  assert.equal(await store.countOpenTicketsForPanel("guild-1", "main"), 1);
+  await assert.rejects(() => store.deleteTicketPanelConfig("guild-1", "main"), /open tickets/);
 
   await store.closeTicketInstance({
     guildId: "guild-1",
@@ -157,9 +153,9 @@ test("ticket panel deletion is blocked while the panel has open tickets", async 
     closedAtMs: 200,
     transcriptMessageId: null,
   });
-  await deleteTicketPanelConfig("guild-1", "main");
+  await store.deleteTicketPanelConfig("guild-1", "main");
 
-  assert.equal(await store.readTicketPanelConfigById?.("guild-1", "main"), null);
+  assert.equal(await store.readTicketPanelConfigById("guild-1", "main"), null);
 });
 
 test("updateTicketInstanceStaffThreadId updates staff_thread_id for a ticket", async () => {
@@ -529,7 +525,6 @@ test("createSqliteTicketStore lists closed tickets by guild with cursor paginati
 
 test("ticket history lists a member's open and closed tickets across panels newest first", async () => {
   const store = createStore();
-  assert.ok(store.listMemberTicketHistory);
 
   await store.createTicketInstance(
     createTicket("guild-1", "current", "open", 500, null, "support", "main"),
@@ -548,14 +543,14 @@ test("ticket history lists a member's open and closed tickets across panels newe
     createTicket("guild-2", "other-guild", "closed", 600, null, "support", "main"),
   );
 
-  const firstPage = await store.listMemberTicketHistory!({
+  const firstPage = await store.listMemberTicketHistory({
     guildId: "guild-1",
     openerUserId: "user-1",
     excludeChannelId: "current",
     limit: 1,
     beforeOpenedAtMs: null,
   });
-  const secondPage = await store.listMemberTicketHistory!({
+  const secondPage = await store.listMemberTicketHistory({
     guildId: "guild-1",
     openerUserId: "user-1",
     excludeChannelId: "current",

@@ -12,6 +12,7 @@ import {
 import { buildTicketTemplateReplyCustomId } from "../src/tickets";
 import type { DiscordInteraction, RuntimeStores } from "../src/runtime/app-types";
 import type { MessageTemplate, TicketInstance, TicketTemplateReply } from "../src/types";
+import { createProductionRuntimeStores } from "./support/production-runtime-stores";
 
 const ticket: TicketInstance = {
   guildId: "guild-1",
@@ -176,4 +177,121 @@ test("confirmed Staff Discussion Thread reply is delivered once and records the 
   assert.match(requests[0] ?? "", /channels\/ticket-1\/messages/);
   assert.equal(claimed[0]?.staffUserId, "staff-1");
   assert.deepEqual(completed, [{ interactionId: "interaction-1", botMessageId: "bot-message-1" }]);
+});
+
+test("Ticket Template Reply claim failure never sends or releases an unowned claim", async () => {
+  const originalFetch = globalThis.fetch;
+  let discordCalls = 0;
+  let releases = 0;
+  globalThis.fetch = async () => {
+    discordCalls += 1;
+    return Response.json({ id: "bot-message-1" });
+  };
+  const base = stores();
+  const runtimeStores = {
+    ...base,
+    tickets: {
+      ...base.tickets,
+      async claimTicketTemplateReply() {
+        throw new Error("claim unavailable");
+      },
+      async releaseTicketTemplateReply() {
+        releases += 1;
+      },
+    },
+  } as RuntimeStores;
+  const component = interaction(3);
+  component.data = {
+    custom_id: buildTicketTemplateReplyCustomId(
+      ticket.channelId,
+      template.id,
+      template.updatedAtMs,
+    ),
+  };
+
+  try {
+    const response = await handleMessageComponentInteraction(
+      component,
+      runtimeStores,
+      "token",
+      "https://runtime.example",
+    );
+    assert.equal(
+      ((await response.json()) as any).data.content,
+      "Failed to send this Ticket Template Reply.",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(discordCalls, 0);
+  assert.equal(releases, 0);
+});
+
+test("failed Ticket Template Reply delivery releases its claim so a retry sends once", async () => {
+  const fixture = createProductionRuntimeStores();
+  const originalFetch = globalThis.fetch;
+  let sends = 0;
+  globalThis.fetch = async () => {
+    sends += 1;
+    if (sends === 1) throw new Error("Discord unavailable");
+    return Response.json({ id: "bot-message-1" });
+  };
+  await fixture.stores.messageTemplates!.upsert(template);
+  await fixture.stores.tickets.createTicketInstance(ticket);
+  const component = interaction(3);
+  component.data = {
+    custom_id: buildTicketTemplateReplyCustomId(
+      ticket.channelId,
+      template.id,
+      template.updatedAtMs,
+    ),
+  };
+
+  try {
+    const first = await handleMessageComponentInteraction(
+      component,
+      fixture.stores,
+      "token",
+      "https://runtime.example",
+    );
+    assert.equal(
+      ((await first.json()) as any).data.content,
+      "Failed to send this Ticket Template Reply.",
+    );
+    assert.deepEqual(
+      await fixture.stores.tickets.listTicketTemplateReplies("guild-1", ticket.channelId),
+      [],
+    );
+
+    const retry = await handleMessageComponentInteraction(
+      component,
+      fixture.stores,
+      "token",
+      "https://runtime.example",
+    );
+    assert.equal(((await retry.json()) as any).data.content, "Sent **Appeal denied**.");
+
+    const duplicate = await handleMessageComponentInteraction(
+      component,
+      fixture.stores,
+      "token",
+      "https://runtime.example",
+    );
+    assert.equal(
+      ((await duplicate.json()) as any).data.content,
+      "This Ticket Template Reply was already sent.",
+    );
+    const stored = await fixture.stores.tickets.listTicketTemplateReplies(
+      "guild-1",
+      ticket.channelId,
+    );
+    assert.deepEqual(
+      stored.map(({ status, botMessageId }) => ({ status, botMessageId })),
+      [{ status: "sent", botMessageId: "bot-message-1" }],
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    fixture.close();
+  }
+  assert.equal(sends, 2);
 });

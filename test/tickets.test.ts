@@ -33,6 +33,11 @@ import {
 import { ticketPanelConfigSchema } from "../src/contracts/admin/tickets";
 import type { TicketInstance } from "../src/types";
 
+const ticketOpenPersistence = {
+  updateTicketOpeningMessageId: async () => {},
+  listMemberTicketHistory: async () => ({ tickets: [], total: 0, nextCursor: null }),
+};
+
 test("buildTicketModalResponse uses modal questions and Discord text input rows", () => {
   const response = buildTicketModalResponse({
     id: "appeals",
@@ -1116,6 +1121,7 @@ test("openTicket sends auto-reply message when autoReplyMessage is configured", 
   const instance = await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => 1,
       countOpenTicketsByUser: async () => 0,
       createTicketInstance: async () => {},
@@ -1203,6 +1209,7 @@ test("openTicket sends all matching response rules in configured order", async (
   await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => 1,
       countOpenTicketsByUser: async () => 0,
       createTicketInstance: async () => {},
@@ -1284,6 +1291,7 @@ test("openTicket sends a link reminder response with the platform link button", 
   await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => 1,
       countOpenTicketsByUser: async () => 0,
       createTicketInstance: async () => {},
@@ -1383,6 +1391,7 @@ test("openTicket skips response messages when no response rules match", async ()
   await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => 1,
       countOpenTicketsByUser: async () => 0,
       createTicketInstance: async () => {},
@@ -1453,6 +1462,7 @@ test("openTicket mentions support role when ticket type enables it", async () =>
   await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => 1,
       countOpenTicketsByUser: async () => 0,
       createTicketInstance: async () => {},
@@ -1519,6 +1529,7 @@ test("openTicket skips auto-reply when autoReplyMessage is null", async () => {
   const instance = await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => 1,
       countOpenTicketsByUser: async () => 0,
       createTicketInstance: async () => {},
@@ -1587,6 +1598,7 @@ test("openTicket rejects before creating a channel when the opener is at the con
     openTicket(
       {
         readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+        ...ticketOpenPersistence,
         reserveNextTicketNumber: async () => {
           calls.push("reserve-number");
           return 1;
@@ -1665,6 +1677,7 @@ test("openTicket bypasses the creation limit when the requested ticket type is e
   const instance = await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => {
         calls.push("reserve-number");
         return 1;
@@ -1736,6 +1749,7 @@ test("openTicket skips auto-reply when autoReplyEnabled is false", async () => {
   const instance = await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => 1,
       countOpenTicketsByUser: async () => 0,
       createTicketInstance: async () => {},
@@ -1809,6 +1823,7 @@ test("openTicket creates a staff thread and helper when Anonymous Support is ena
   const instance = await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => 1,
       countOpenTicketsByUser: async () => 0,
       createTicketInstance: async (ticket) => {
@@ -1895,6 +1910,7 @@ test("openTicket posts Ticket History Prompt only in the configured staff discus
   await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => 1,
       countOpenTicketsByUser: async () => 0,
       createTicketInstance: async () => {},
@@ -1961,6 +1977,7 @@ test("openTicket keeps the ticket open when auto-reply delivery fails", async ()
   const instance = await openTicket(
     {
       readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+      ...ticketOpenPersistence,
       reserveNextTicketNumber: async () => 1,
       countOpenTicketsByUser: async () => 0,
       createTicketInstance: async () => {
@@ -2036,6 +2053,7 @@ test("openTicket deletes the created channel when persistence fails", async () =
     openTicket(
       {
         readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+        ...ticketOpenPersistence,
         reserveNextTicketNumber: async () => 1,
         countOpenTicketsByUser: async () => 0,
         createTicketInstance: async () => {
@@ -2109,6 +2127,7 @@ test("openTicket deletes staff thread when anonymous ticket persistence fails", 
     openTicket(
       {
         readConfig: async () => ({ botUserId: "bot", guilds: {} }),
+        ...ticketOpenPersistence,
         reserveNextTicketNumber: async () => 1,
         countOpenTicketsByUser: async () => 0,
         createTicketInstance: async () => {

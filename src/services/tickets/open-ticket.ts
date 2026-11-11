@@ -58,9 +58,10 @@ export async function openTicket(
     | "countOpenTicketsByUser"
     | "createTicketInstance"
     | "deleteTicketInstance"
+    | "listMemberTicketHistory"
+    | "updateTicketOpeningMessageId"
   > &
-    Pick<BlocklistStore, "readConfig"> &
-    Partial<Pick<TicketStore, "listMemberTicketHistory" | "updateTicketOpeningMessageId">>,
+    Pick<BlocklistStore, "readConfig">,
   adapters: {
     createChannel: (config: CreateTicketChannelConfig) => Promise<{ id: string }>;
     deleteChannel: (channelId: string) => Promise<void>;
@@ -173,8 +174,6 @@ export async function openTicket(
       components: [],
     });
     if (openingMessage) {
-      if (!store.updateTicketOpeningMessageId)
-        throw new Error("Ticket opening message persistence is unavailable.");
       await store.updateTicketOpeningMessageId({
         guildId: instance.guildId,
         channelId: instance.channelId,
@@ -194,7 +193,6 @@ export async function openTicket(
     if (
       options.ticketType.ticketHistoryPromptVisibility === "staff-thread" &&
       staffThreadId &&
-      store.listMemberTicketHistory &&
       adapters.createTicketHistoryPrompt
     ) {
       try {

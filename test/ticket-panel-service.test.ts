@@ -166,7 +166,7 @@ test("Ticket Panel refuses to clone a legacy over-limit modal field", async () =
     assert.equal(result.code, "invalid-panel");
     assert.match(result.message, /Question label must be 45 characters or fewer/);
   }
-  assert.equal((await store.listTicketPanelConfigs?.("guild-1"))?.length, 1);
+  assert.equal((await store.listTicketPanelConfigs("guild-1"))?.length, 1);
 });
 
 test("Ticket Panel refuses to restore a legacy over-limit modal field", async () => {
@@ -227,7 +227,7 @@ test("Ticket Panel refuses to restore a legacy over-limit modal field", async ()
     /Question label must be 45 characters or fewer/,
   );
   assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelTitle,
+    (await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelTitle,
     "Updated",
   );
 });
@@ -264,7 +264,7 @@ test("Ticket Panel publishes through its Discord adapter and persists the return
 
   assert.equal(result.ok, true);
   assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelMessageId,
+    (await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelMessageId,
     "message-2",
   );
   assert.deepEqual(publishedPayloads, [buildTicketPanelMessage(createPanel())]);
@@ -304,10 +304,7 @@ test("Ticket Panel returns a typed provider failure without persisting a failed 
     code: "provider-failure",
     message: "Discord unavailable",
   });
-  assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelMessageId,
-    null,
-  );
+  assert.equal((await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelMessageId, null);
 });
 
 test("Ticket Panel preserves the canonical saved publication ID", async () => {
@@ -328,7 +325,7 @@ test("Ticket Panel preserves the canonical saved publication ID", async () => {
 
   assert.equal(result.ok, true);
   assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelMessageId,
+    (await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelMessageId,
     "canonical-message",
   );
 });
@@ -473,7 +470,7 @@ test("Ticket Panel recovers publication of an edited candidate over stale saved 
   } else {
     assert.fail("expected recoverable publication");
   }
-  const recovered = await store.readTicketPanelConfigById?.("guild-1", "panel-1");
+  const recovered = await store.readTicketPanelConfigById("guild-1", "panel-1");
   assert.equal(recovered?.panelTitle, "Edited before publish");
   assert.equal(recovered?.panelMessageId, "message-1");
 });
@@ -484,7 +481,7 @@ test("Ticket Panel recovery is idempotent after publish, unpublish, and delete",
   let deletes = 0;
   let audits = 0;
   const publishedStore = createStore([published]);
-  const canonicalPublished = await publishedStore.readTicketPanelConfigById?.("guild-1", "panel-1");
+  const canonicalPublished = await publishedStore.readTicketPanelConfigById("guild-1", "panel-1");
   assert.ok(canonicalPublished);
   publishedStore.upsertTicketPanelConfig = async () => {
     writes += 1;
@@ -514,7 +511,7 @@ test("Ticket Panel recovery is idempotent after publish, unpublish, and delete",
 
   const unpublished = createPanel();
   const unpublishedStore = createStore([unpublished]);
-  const canonicalUnpublished = await unpublishedStore.readTicketPanelConfigById?.(
+  const canonicalUnpublished = await unpublishedStore.readTicketPanelConfigById(
     "guild-1",
     "panel-1",
   );
@@ -596,10 +593,7 @@ test("Ticket Panel unpublish is resumable after persistence failure", async () =
   if (!partial.ok) assert.equal(partial.code, "partial-success");
   assert.equal(retried.ok, true);
   assert.deepEqual(deleted, ["message-1", "message-1"]);
-  assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelMessageId,
-    null,
-  );
+  assert.equal((await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelMessageId, null);
 });
 
 test("Ticket Panel unpublish recovery clears stale state after its first write fails", async () => {
@@ -633,10 +627,7 @@ test("Ticket Panel unpublish recovery clears stale state after its first write f
 
   assert.equal(recovered.ok, true);
   assert.equal(deletes, 0);
-  assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelMessageId,
-    null,
-  );
+  assert.equal((await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelMessageId, null);
 });
 
 test("Ticket Panel unpublish clears stale publication when its channel is missing", async () => {
@@ -660,10 +651,7 @@ test("Ticket Panel unpublish clears stale publication when its channel is missin
 
   assert.equal(result.ok, true);
   assert.equal(deletes, 0);
-  assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelMessageId,
-    null,
-  );
+  assert.equal((await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelMessageId, null);
 });
 
 test("Ticket Panel unpublish treats a deleted Discord message as already absent", async () => {
@@ -687,10 +675,7 @@ test("Ticket Panel unpublish treats a deleted Discord message as already absent"
   const result = await service.unpublishPanel({ guildId: "guild-1", panelId: "panel-1" });
 
   assert.equal(result.ok, true);
-  assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelMessageId,
-    null,
-  );
+  assert.equal((await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelMessageId, null);
 });
 
 test("Ticket Panel deletion removes stale cross-guild publication without Discord deletion", async () => {
@@ -727,7 +712,7 @@ test("Ticket Panel deletion removes stale cross-guild publication without Discor
 
   assert.equal(result.ok, true);
   assert.equal(deletes, 0);
-  assert.equal(await store.readTicketPanelConfigById?.("guild-1", "panel-1"), null);
+  assert.equal(await store.readTicketPanelConfigById("guild-1", "panel-1"), null);
 });
 
 test("Ticket Panel resets a stale main panel when its published channel is missing", async () => {
@@ -755,7 +740,7 @@ test("Ticket Panel resets a stale main panel when its published channel is missi
 
   assert.equal(result.ok, true);
   assert.equal(deletes, 0);
-  assert.equal(await store.readTicketPanelConfigById?.("guild-1", "main"), null);
+  assert.equal(await store.readTicketPanelConfigById("guild-1", "main"), null);
 });
 
 test("Ticket Panel deletion still blocks stale cleanup while Tickets are open", async () => {
@@ -784,7 +769,112 @@ test("Ticket Panel deletion still blocks stale cleanup while Tickets are open", 
     message: "Cannot delete a ticket panel while it has open tickets.",
   });
   assert.equal(deletes, 0);
-  assert.ok(await store.readTicketPanelConfigById?.("guild-1", "panel-1"));
+  assert.ok(await store.readTicketPanelConfigById("guild-1", "panel-1"));
+});
+
+test("Ticket Panel scopes deletion and recovery open-ticket checks to the requested panel", async () => {
+  const main = {
+    ...createPanel(),
+    panelId: "main",
+    panelName: "Main",
+    panelChannelId: "main-channel",
+    panelMessageId: "main-message",
+  };
+  const escalation = {
+    ...createPanel(),
+    panelId: "panel-escalation",
+    panelName: "Escalation",
+    panelChannelId: "escalation-channel",
+  };
+  const store = createStore([main, escalation]);
+  await store.createTicketInstance({
+    ...createTicket(),
+    channelId: "main-ticket",
+    panelId: "main",
+  });
+  const service = createTicketPanelService({
+    store,
+    entitlements: freeEntitlements(),
+    guildResources: createPermissiveGuildResourceValidator(),
+    discord: createDiscordAdapter(),
+  });
+
+  const deleted = await service.deletePanel({ guildId: "guild-1", panelId: "panel-escalation" });
+
+  assert.deepEqual(deleted, { ok: true, value: undefined });
+  assert.ok(await store.readTicketPanelConfigById("guild-1", "main"));
+  assert.equal(await store.readTicketPanelConfigById("guild-1", "panel-escalation"), null);
+
+  const blocked = await service.resumeRecovery({
+    operation: "delete",
+    guildId: "guild-1",
+    panelId: "main",
+    channelId: "main-channel",
+    messageId: "main-message",
+  });
+
+  assert.deepEqual(blocked, {
+    ok: false,
+    code: "open-tickets",
+    message: "Cannot recover deletion while the panel has open tickets.",
+  });
+  assert.equal(await store.countOpenTicketsForPanel("guild-1", "main"), 1);
+});
+
+test("Ticket Panel restore deletion refuses while the requested panel has open tickets", async () => {
+  const panel = { ...createPanel(), panelTitle: "Initial" };
+  const panels = [panel];
+  const store = createStore(panels);
+  const configurationRevisions = createTestConfigurationRevisionStore(panels);
+  const service = createTicketPanelService({
+    store,
+    entitlements: premiumEntitlements(),
+    configurationRevisions,
+    guildResources: createPermissiveGuildResourceValidator(),
+    discord: createDiscordAdapter(),
+  });
+  const actor = {
+    actorUserId: "admin-user",
+    source: "dashboard-save" as const,
+    operationId: "ticketsPanel.post",
+    correlationId: null,
+  };
+
+  assert.equal((await service.savePanel(panel, actor)).ok, true);
+  assert.equal(
+    (await service.deletePanel({ guildId: "guild-1", panelId: "panel-1" }, actor)).ok,
+    true,
+  );
+  const deletionHead = await configurationRevisions.readHead({
+    guildId: "guild-1",
+    feature: "tickets",
+    resourceKey: "panel-1",
+  });
+  assert.ok(deletionHead);
+  assert.equal((await service.savePanel(panel, actor)).ok, true);
+  await store.createTicketInstance(createTicket());
+
+  const preview = await service.preparePanelRestore({
+    guildId: "guild-1",
+    revisionId: deletionHead.id,
+    resources: validResources(),
+    signingSecret: "restore-secret-01234567890123456789",
+  });
+  const restored = await service.restorePanelRevision({
+    guildId: "guild-1",
+    revisionId: deletionHead.id,
+    previewToken: preview.previewToken,
+    resources: validResources(),
+    signingSecret: "restore-secret-01234567890123456789",
+    actor,
+  });
+
+  assert.deepEqual(restored, {
+    ok: false,
+    code: "open-tickets",
+    message: "Cannot restore deletion while this panel has open tickets.",
+  });
+  assert.ok(await store.readTicketPanelConfigById("guild-1", "panel-1"));
 });
 
 test("Ticket Panel preserves provider failures when a published channel still exists", async () => {
@@ -813,7 +903,7 @@ test("Ticket Panel preserves provider failures when a published channel still ex
     message: "Discord permission denied",
   });
   assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelMessageId,
+    (await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelMessageId,
     "message-1",
   );
 });
@@ -947,6 +1037,53 @@ test("Ticket Lifecycle owns effective configuration and creator eligibility", as
     assert.deepEqual(allowed.ticketType.responseRules, []);
     assert.equal(allowed.panel.ticketCreationLimit, 1);
   }
+});
+
+test("Ticket Lifecycle resolves opening and claiming against the requested non-main panel", async () => {
+  const main = {
+    ...createPanel(),
+    panelId: "main",
+    panelName: "Main",
+    panelMessageId: "published-main",
+    enableTicketClaiming: false,
+  };
+  const escalation = {
+    ...createPanel(),
+    panelId: "panel-escalation",
+    panelName: "Escalation",
+    panelMessageId: "published-escalation",
+    enableTicketClaiming: true,
+  };
+  const store = createStore([main, escalation]);
+  const lifecycle = createLifecycle(store);
+
+  const prepared = await lifecycle.prepareOpen({
+    guildId: "guild-1",
+    panelId: "panel-escalation",
+    ticketTypeId: "support",
+    memberRoleIds: [],
+  });
+
+  assert.equal(prepared.ok, true);
+  if (prepared.ok) {
+    assert.equal(prepared.panel.panelId, "panel-escalation");
+    assert.equal(prepared.ticketType.id, "support");
+  }
+
+  await store.createTicketInstance({
+    ...createTicket(),
+    panelId: "panel-escalation",
+  });
+  const claim = await lifecycle.claim({
+    guildId: "guild-1",
+    channelId: "ticket-channel",
+    actorUserId: "staff-user",
+    actorRoleIds: ["support-role"],
+    nowMs: 10,
+  });
+
+  assert.equal(claim.ok, true);
+  if (claim.ok) assert.equal(claim.claimedByUserId, "staff-user");
 });
 
 test("Ticket Lifecycle revalidates configuration inside the open command", async () => {
@@ -1457,7 +1594,7 @@ test("Ticket Panel save rejects foreign resources before persistence or Discord"
     service.savePanel({ ...createPanel(), panelChannelId: "foreign-text" }),
     GuildResourceValidationError,
   );
-  assert.deepEqual(await store.listTicketPanelConfigs?.("guild-1"), []);
+  assert.deepEqual(await store.listTicketPanelConfigs("guild-1"), []);
   assert.equal(auditCalls, 0);
 });
 
@@ -1493,10 +1630,7 @@ test("Ticket Panel publish rejects foreign resources before Discord or publicati
     GuildResourceValidationError,
   );
   assert.equal(publishCalls, 0);
-  assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelMessageId,
-    null,
-  );
+  assert.equal((await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelMessageId, null);
 });
 
 test("Ticket Panel test actions validate only the selected resource", async () => {
@@ -1580,7 +1714,7 @@ test("Ticket Panel unpublish treats a persisted channel from another Guild as al
     assert.equal(result.ok, true);
     assert.equal(discordCalls, 0);
     assert.equal(
-      (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.panelMessageId,
+      (await store.readTicketPanelConfigById("guild-1", "panel-1"))?.panelMessageId,
       null,
     );
   } finally {
@@ -2035,7 +2169,7 @@ test("Ticket Lifecycle rejects an open form after its panel is unpublished", asy
   assert.equal(result.ok, false);
   assert.equal(opened, false);
   assert.equal(
-    (await store.readTicketPanelConfigById?.("guild-1", "panel-1"))?.ticketTypes.length,
+    (await store.readTicketPanelConfigById("guild-1", "panel-1"))?.ticketTypes.length,
     1,
   );
 });
@@ -2056,7 +2190,7 @@ test("disabled Ticket Types are retained but neither rendered nor accepted", asy
     ).ok,
     false,
   );
-  const retained = await store.readTicketPanelConfigById?.("guild-1", "panel-1");
+  const retained = await store.readTicketPanelConfigById("guild-1", "panel-1");
   assert.equal(retained?.ticketTypes[0]?.enabled, false);
   retained!.ticketTypes[0]!.enabled = true;
   await store.upsertTicketPanelConfig(retained!);

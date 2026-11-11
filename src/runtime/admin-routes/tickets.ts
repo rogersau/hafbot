@@ -100,11 +100,7 @@ export function createTicketAdminRoutes(
       feature: "tickets",
       handler: async ({ query }) => {
         const panel = await options.stores.tickets.readTicketPanelConfig(query.guildId);
-        const panels = options.stores.tickets.listTicketPanelConfigs
-          ? await options.stores.tickets.listTicketPanelConfigs(query.guildId)
-          : panel
-            ? [panel]
-            : [];
+        const panels = await options.stores.tickets.listTicketPanelConfigs(query.guildId);
         return Response.json({ panel, panels });
       },
     }),
@@ -566,7 +562,7 @@ async function readTicketPanelForAdminAction(
   guildId: string,
   panelId: string | undefined,
 ): Promise<TicketPanelConfig | null> {
-  if (panelId && options.stores.tickets.readTicketPanelConfigById) {
+  if (panelId) {
     return await options.stores.tickets.readTicketPanelConfigById(guildId, panelId);
   }
   return await options.stores.tickets.readTicketPanelConfig(guildId);
