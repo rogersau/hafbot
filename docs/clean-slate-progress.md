@@ -12,14 +12,14 @@ types, contract drift and test compilation pass. Focused coordinator checks pass
 and P04 Event atomicity plus recurrence 7/7 real PostgreSQL. All focused runs have zero skips.
 The broad validation below predates these integrations and must be rerun after remaining work.
 
-| Area                                                          | Owner                    | Current state                                                                                  |
-| ------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
-| Native stores, fresh schema, Worker/D1 removal                | Architecture             | Implemented; final combined acceptance pending                                                 |
-| Shared validation, service capabilities and handler injection | Architecture integration | C03/C10/C11/C12 integrated individually                                                        |
-| Offering lifecycle consolidation C23                          | Task coordinator         | Released on verified `fa1fe4e`; approved bounded schema/store exception                        |
-| Direct native job outcomes R02                                | Architecture             | Original delegate failed from provider overload; preserved draft awaits same-provider recovery |
-| Shared HTTP/job service graph R01                             | Architecture             | Open; follows direct-job entrypoint changes                                                    |
-| Final contracts/builds/types/public/PG/container validation   | Architecture             | Pending remaining integrations                                                                 |
+| Area                                                          | Owner                    | Current state                                                              |
+| ------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------- |
+| Native stores, fresh schema, Worker/D1 removal                | Architecture             | Implemented; final combined acceptance pending                             |
+| Shared validation, service capabilities and handler injection | Architecture integration | C03/C10/C11/C12 integrated individually                                    |
+| Offering lifecycle consolidation C23                          | Task coordinator         | Released on verified `fa1fe4e`; approved bounded schema/store exception    |
+| Direct native job outcomes R02                                | Architecture             | Original provider-overload draft preserved; same-provider recovery running |
+| Shared HTTP/job service graph R01                             | Architecture             | Open; follows direct-job entrypoint changes                                |
+| Final contracts/builds/types/public/PG/container validation   | Architecture             | Pending remaining integrations                                             |
 
 ## Reconciled evidence
 
@@ -58,18 +58,18 @@ The broad validation below predates these integrations and must be rerun after r
 
 The global cap is five active implementers across both coordinators and all machines. Normal
 reservation is architecture two, task coordinator three; the temporary three/two loan has ended.
-All previous implementers are terminal. Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
+All previous implementers are terminal; new R02 recovery is active. Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
 worktrees, drafts, commits and evidence are preserved. No remote audit implementer is active.
 All new implementation tasks use isolated checkouts with OpenCode Go
 `opencode-go/deepseek-v4.1-flash`, `variant=max`, serial focused tests and disposable PostgreSQL
 limited to one CPU, 256 MB, `shared_buffers=32MB`, `max_connections=20`.
 
-| Reserved allocation  | Assignment             | State/base                                                              |
-| -------------------- | ---------------------- | ----------------------------------------------------------------------- |
-| Architecture 1       | R02 recovery           | Ready on current verified checkpoint; original task failed, not running |
-| Architecture 2       | R01 shared graph       | Dependency-gated; no delegate launched                                  |
-| Task coordinator 1   | C23 offering lifecycle | Released on `fa1fe4e`; awaiting launch receipt                          |
-| Task coordinator 2–3 | None                   | Empty; no work created solely to occupy slots                           |
+| Reserved allocation  | Assignment             | State/base                                             |
+| -------------------- | ---------------------- | ------------------------------------------------------ |
+| Architecture 1       | R02 recovery           | Running on `17acff9` (source equal verified `fa1fe4e`) |
+| Architecture 2       | R01 shared graph       | Dependency-gated; no delegate launched                 |
+| Task coordinator 1   | C23 offering lifecycle | Released on `fa1fe4e`; awaiting launch receipt         |
+| Task coordinator 2–3 | None                   | Empty; no work created solely to occupy slots          |
 
 Completed implementation task IDs (all terminal):
 
@@ -80,6 +80,8 @@ Completed implementation task IDs (all terminal):
 - C12: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A8ed3b428-ef6f-4ca5-bd81-8126a88cdd02`.
 - P04: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aca78aeb1-fdb9-4303-940c-29ccd508d410`.
 - C06: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A4ea26bd9-298b-4d35-9410-b037c9ce5b89`.
+
+Active R02 recovery: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A1af5370d-6900-430c-af56-541c95c2fabc`, base `17acff9b61396043a74938de43d19c34ca7be9c3`. Owned production paths are queue contracts/consumers, narrow Billing/Commerce queue entrypoints, native job metadata/outcome handling and Node job registration; tests cover those seams and native settlement. No SQL stores, offering domain/schema or HTTP composition.
 
 Failed original R02 task (terminal, cancelled to prevent continuation):
 `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A7681cfcd-44cd-4501-bce9-488a0e1c6aea`.
@@ -142,7 +144,7 @@ required. It is not a claim that the original finding is closed by the existence
 | P08              | Integrated `3d1bb9e`; 8 real-PG moderation checks pass, including race and rollback regressions                          |
 | P09–P14          | Native remaining stores, credentials, auth and context selection at checkpoint                                           |
 | R01              | Open: one selected service graph shared by HTTP/jobs/handlers                                                            |
-| R02              | Open: failed delegate preserved; same-provider recovery queued for direct native outcomes and durable settlement         |
+| R02              | Running: same-provider recovery reuses preserved draft for direct outcomes and durable settlement                        |
 | R03              | Checkpoint: production Worker/DO/D1 host and SQL bridge removed; SQLite fixtures are test-only                           |
 | B01              | Current fresh schema at checkpoint; C23 will change only its offering baseline                                           |
 | B02              | Checkpoint: supported Node/test boundaries and retained tooling; final clean artifact build required                     |
