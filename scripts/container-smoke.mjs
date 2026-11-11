@@ -25,6 +25,12 @@ try {
     network,
     "--network-alias",
     "postgres",
+    "--cpus",
+    "1",
+    "--memory",
+    "256m",
+    "--memory-swap",
+    "256m",
     "--tmpfs",
     "/var/lib/postgresql/data:rw,noexec,nosuid,size=512m",
     "--env",
@@ -34,6 +40,10 @@ try {
     "--env",
     "POSTGRES_PASSWORD=haf_smoke_only",
     postgresImage,
+    "-c",
+    "shared_buffers=32MB",
+    "-c",
+    "max_connections=20",
   ]);
   await waitForPostgres(20_000);
 
