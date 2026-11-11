@@ -35326,7 +35326,8 @@
                                 "type": "string"
                               },
                               "credentialId": {
-                                "minLength": 1,
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                                 "type": "string"
                               }
                             },
@@ -35343,7 +35344,6 @@
                                 "type": "string"
                               },
                               "url": {
-                                "minLength": 1,
                                 "type": "string"
                               }
                             },
@@ -35376,10 +35376,12 @@
                     "items": {
                       "properties": {
                         "flags": {
+                          "pattern": "^[gimsuy]*$",
                           "type": "string"
                         },
                         "id": {
                           "minLength": 1,
+                          "pattern": "^[A-Za-z0-9_-]{1,64}$",
                           "type": "string"
                         },
                         "label": {
@@ -35387,9 +35389,11 @@
                           "type": "string"
                         },
                         "pattern": {
+                          "maxLength": 256,
                           "type": "string"
                         },
                         "replacement": {
+                          "maxLength": 1024,
                           "minLength": 1,
                           "type": "string"
                         }
@@ -35408,6 +35412,7 @@
                   "defaultDestinationIds": {
                     "items": {
                       "minLength": 1,
+                      "pattern": "^[A-Za-z0-9_-]{1,64}$",
                       "type": "string"
                     },
                     "minItems": 1,
@@ -35425,7 +35430,8 @@
                                   "type": "string"
                                 },
                                 "credentialId": {
-                                  "minLength": 1,
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                                   "type": "string"
                                 }
                               },
@@ -35442,7 +35448,6 @@
                                   "type": "string"
                                 },
                                 "url": {
-                                  "minLength": 1,
                                   "type": "string"
                                 }
                               },
@@ -35456,6 +35461,7 @@
                         },
                         "id": {
                           "minLength": 1,
+                          "pattern": "^[A-Za-z0-9_-]{1,64}$",
                           "type": "string"
                         },
                         "label": {
@@ -35492,7 +35498,7 @@
                         "type": "string"
                       },
                       {
-                        "minLength": 1,
+                        "pattern": "^[A-Za-z0-9_-]{16,64}$",
                         "type": "string"
                       }
                     ]
@@ -35503,16 +35509,19 @@
                         "destinationIds": {
                           "items": {
                             "minLength": 1,
+                            "pattern": "^[A-Za-z0-9_-]{1,64}$",
                             "type": "string"
                           },
                           "minItems": 1,
                           "type": "array"
                         },
                         "flags": {
+                          "pattern": "^[imsuy]*$",
                           "type": "string"
                         },
                         "id": {
                           "minLength": 1,
+                          "pattern": "^[A-Za-z0-9_-]{1,64}$",
                           "type": "string"
                         },
                         "label": {
@@ -35520,6 +35529,7 @@
                           "type": "string"
                         },
                         "pattern": {
+                          "maxLength": 256,
                           "type": "string"
                         }
                       },

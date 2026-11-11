@@ -61,7 +61,10 @@ export function projectZodSchema(schema: AnySchema, location = "schema"): JsonSc
       if (check.check === "custom") continue;
       if (check.check === "min_length") result.minLength = check.minimum;
       else if (check.check === "max_length") result.maxLength = check.maximum;
-      else if (check.check === "string_format" && check.format === "regex" && check.pattern) {
+      else if (check.check === "string_format" && check.format === "uuid") {
+        result.format = "uuid";
+        if (check.pattern) result.pattern = check.pattern.source;
+      } else if (check.check === "string_format" && check.format === "regex" && check.pattern) {
         result.pattern = check.pattern.source;
       } else {
         throw new Error(
