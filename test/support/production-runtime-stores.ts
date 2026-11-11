@@ -26,6 +26,7 @@ import { createSqliteReactionLimitStore } from "./sqlite/runtime/sqlite-reaction
 import { createSqliteReactionRoleStore } from "./sqlite/runtime/sqlite-reaction-role-store";
 import { createSqliteSuggestionStore } from "./sqlite/runtime/sqlite-suggestion-store";
 import { createSqliteAdminFeedbackStore } from "./sqlite/runtime/sqlite-admin-feedback-store";
+import { createSqliteOperationalIncidentStore } from "./sqlite/runtime/sqlite-operational-incident-store";
 import { createSqliteTicketStore } from "./sqlite/runtime/sqlite-ticket-store";
 import { createSqliteTimedRoleStore } from "./sqlite/runtime/sqlite-timed-role-store";
 import { createSqliteUserPreferencesStore } from "./sqlite/runtime/sqlite-user-preferences-store";
@@ -89,6 +90,7 @@ export function createProductionRuntimeStores(
     guildServiceSuspensions: createSqliteGuildServiceSuspensionStore(d1),
     featureSetup: createSqliteFeatureSetupStore(d1),
     suggestions: createSqliteSuggestionStore(d1),
+    operationalIncidents: createSqliteOperationalIncidentStore(d1),
     adminFeedback: createSqliteAdminFeedbackStore(d1),
     oneTimeTokens: createSqliteOneTimeTokenStore(d1),
     serverLevels: createSqliteServerLevelStore(d1),

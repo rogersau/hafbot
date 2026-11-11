@@ -53,10 +53,12 @@ import { createPostgresReputationStore } from "../reputation/store";
 import { createReputationRuntime } from "../reputation/runtime";
 import { createPostgresBanAppealStore } from "../moderation-appeals/store";
 import { createBanAppealRuntime } from "../moderation-appeals/runtime";
-import { createNodeApplicationContext } from "./application-context";
+import { createNodeApplicationContext, type NodeSelectedRuntimes } from "./application-context";
 import type { RuntimeAppContext } from "../runtime/app-context";
+import type { ApplicationServices } from "../runtime/app-types";
 import type { GuildR2QuotaStore } from "../runtime/contracts";
 import type { GatewayEventStores } from "../runtime/gateway-events/contracts";
+import type { GatewayEventDependencies } from "../runtime/gateway-events/capabilities";
 import { deliverGatewayEvent } from "../runtime/gateway-event-queue-consumer";
 import {
   findGuildIdInValue,
@@ -70,31 +72,15 @@ import {
   createPortableTicketTranscriptBlobStore,
 } from "../runtime/portable-blob-stores";
 import { deliverR2Quota } from "../runtime/r2-quota-queue-consumer";
-import { createServiceFactory } from "../runtime/service-factory";
 import { deliverSteamBanLookup } from "../runtime/steam-ban-lookup-queue-consumer";
 import { deliverTicketRecovery } from "../runtime/ticket-recovery-queue-consumer";
-import {
-  createServerLevelProcessor,
-  deliverServerLevel,
-  maintainServerLevels,
-} from "../runtime/server-level-queue-consumer";
+import { deliverServerLevel, maintainServerLevels } from "../runtime/server-level-queue-consumer";
+import { composeApplicationServices } from "../runtime/service-composition";
 import { deliverWebhookProxyDelivery } from "../runtime/webhook-proxy-delivery-queue-consumer";
-import {
-  createPostgresBillingRuntime,
-  deliverBillingSync,
-} from "../runtime/billing/postgres-runtime";
-import {
-  createPostgresBillingDeliveryRuntime,
-  deliverBillingDelivery,
-} from "../runtime/billing/postgres-delivery-runtime";
-import {
-  createPostgresCommerceRuntime,
-  deliverCommerceSync,
-} from "../runtime/commerce/postgres-runtime";
-import {
-  createPostgresPaidRoleRuntime,
-  deliverCommerceRole,
-} from "../runtime/commerce/postgres-paid-role-runtime";
+import { deliverBillingSync } from "../runtime/billing/postgres-runtime";
+import { deliverBillingDelivery } from "../runtime/billing/postgres-delivery-runtime";
+import { deliverCommerceSync } from "../runtime/commerce/postgres-runtime";
+import { deliverCommerceRole } from "../runtime/commerce/postgres-paid-role-runtime";
 import { createPostgresEvidenceVaultStore } from "../runtime/postgres/postgres-evidence-vault-store";
 import { createPostgresReactionRoleStore } from "../runtime/postgres/postgres-reaction-role-store";
 import { createPostgresPlatformLinkStore } from "../runtime/postgres/postgres-platform-link-store";
@@ -166,6 +152,7 @@ export async function createPostgresNodeRuntime(
       ...createNodeEnvironment(environment, queueBindings),
       discordE2eActors: options.discordE2eActors,
     };
+    const waitUntil = options.lifecycle.waitUntil;
     const context = createNodeContext({
       environment,
       env,
@@ -178,6 +165,9 @@ export async function createPostgresNodeRuntime(
     if (httpDatabase !== database && !(await httpDatabase.isReady())) {
       throw new Error("The read-only PostgreSQL HTTP pool is unavailable.");
     }
+    // Maintenance HTTP keeps a separately composed read-only graph over the
+    // read-only pool; it never receives writable services. Jobs and scheduled
+    // maintenance share the single writable composition below.
     const httpContext = maintenanceMode
       ? createHttpMaintenanceContext({ environment, database: httpDatabase, objects: objectStore })
       : context;
@@ -207,41 +197,61 @@ export async function createPostgresNodeRuntime(
       start: () => gateway.start(),
       status: () => Promise.resolve(gateway.status?.() ?? { configured: true }),
     };
-    const writableProductAnalytics = withProductAnalyticsWaitUntil(
+    const productAnalytics = withProductAnalyticsWaitUntil(
       context.productAnalytics,
       options.lifecycle.waitUntil,
     );
+    const writableServices = composeApplicationServices({
+      ...context.app,
+      gateway: gatewayController,
+      waitUntil,
+      productAnalytics,
+    });
+    const httpServices = maintenanceMode
+      ? composeApplicationServices({
+          ...httpContext.app,
+          gateway: gatewayController,
+          waitUntil,
+        })
+      : writableServices;
+    const sweepServerLevels = () =>
+      maintainServerLevels(env, context.app, {
+        processor: writableServices.serverLevelProcessor!,
+      });
     const runtimeApp = createRuntimeApp({
       ...httpContext.app,
+      services: httpServices,
       gateway: gatewayController,
       environment: env.STAGING_MODE === "true" ? "staging" : "production",
-      ...(maintenanceMode
-        ? {}
-        : {
-            productAnalytics: withProductAnalyticsWaitUntil(
-              httpContext.productAnalytics,
-              options.lifecycle.waitUntil,
-            ),
-          }),
-      waitUntil: options.lifecycle.waitUntil,
-      sweepServerLevels: () => maintainServerLevels(env, context.app),
+      ...(maintenanceMode ? {} : { productAnalytics }),
+      waitUntil,
+      sweepServerLevels,
     });
     const schedulerRuntimeApp = maintenanceMode
       ? createRuntimeApp({
           ...context.app,
+          services: writableServices,
           gateway: gatewayController,
           environment: env.STAGING_MODE === "true" ? "staging" : "production",
-          productAnalytics: writableProductAnalytics,
-          waitUntil: options.lifecycle.waitUntil,
-          sweepServerLevels: () => maintainServerLevels(env, context.app),
+          productAnalytics,
+          waitUntil,
+          sweepServerLevels,
         })
       : runtimeApp;
+    const gatewayDependencies = createGatewayDependencies({
+      context: context.app,
+      database,
+      paidRoles: context.selected.paidRoles,
+    });
     const jobWorker = jobsEnabled
       ? createPostgresJobWorker({
           queue: jobs,
           handlers: createJobHandlers({
             env,
             context: context.app,
+            services: writableServices,
+            selected: context.selected,
+            gatewayDependencies,
             database,
             guildObjects: context.guildObjects,
           }),
@@ -441,6 +451,7 @@ function createNodeContext(input: {
   objects: ObjectStore | null;
 }): {
   app: RuntimeAppContext;
+  selected: NodeSelectedRuntimes;
   guildObjects: GuildR2QuotaStore;
   objects: ObjectStore | null;
   objectStoreKind: string;
@@ -503,7 +514,12 @@ function createNodeContext(input: {
     process: createInMemoryWebhookIngressGuard(),
     durable: createPostgresWebhookIngressGuard(input.database),
   });
-  const app = createNodeApplicationContext(baseEnv, input.database, stores, webhookIngressGuard);
+  const { app, selected } = createNodeApplicationContext(
+    baseEnv,
+    input.database,
+    stores,
+    webhookIngressGuard,
+  );
   const resolveCommunityBot = app.resolveGuildBotIdentity;
   app.communityTools = createCommunityToolsRuntime({
     database: input.database,
@@ -572,6 +588,7 @@ function createNodeContext(input: {
   );
   return {
     app,
+    selected,
     guildObjects,
     objects: input.objects,
     objectStoreKind: objectStoreKind(input.environment, input.objects),
@@ -582,35 +599,13 @@ function createNodeContext(input: {
 function createJobHandlers(input: {
   env: Env;
   context: RuntimeAppContext;
+  services: ApplicationServices;
+  selected: NodeSelectedRuntimes;
+  gatewayDependencies: GatewayEventDependencies;
   database: PostgresDatabaseCapability;
   guildObjects: GuildR2QuotaStore;
 }): Partial<Record<PortableQueueName, PostgresJobHandler>> {
-  const services = createServiceFactory({
-    stores: input.context.stores,
-    discordBotToken: input.env.DISCORD_BOT_TOKEN,
-    discordBotUserId: input.env.BOT_USER_ID,
-    discordCache: input.context.discordCache,
-    steamWebApiKey: input.context.steamWebApiKey,
-    wardogs: input.context.wardogs,
-    banEnforcementStore: input.context.banEnforcementStore,
-    banIncidentStore: input.context.banIncidentStore,
-    banCasesEnabled: input.context.features?.banCases,
-    wardogsPlayerCountEnabled: input.context.wardogsPlayerCountEnabled,
-    playerCountEnabled: input.context.features.playerCount,
-    webhookProxyLogPersistenceEnabled: input.context.webhookProxyLogPersistenceEnabled,
-    webhookProxyDeliveryQueue: input.context.webhookProxyDeliveryQueue,
-    steamBanLookupQueue: input.context.steamBanLookupQueue,
-    ticketRecoveryQueue: input.context.ticketRecoveryQueue,
-    evidenceVaultBlobs: input.context.evidenceVaultBlobs,
-    publicManagedMedia: input.context.publicManagedMedia,
-    webhookCredentialService: input.context.webhookCredentialService,
-    publicUrl: input.context.publicUrl,
-    waitUntil: (promise) => void promise.catch(() => undefined),
-    playerCountStreakReportedStore: input.context.playerCountStreakReportedStore,
-    whiteLabelBotStore: input.context.stores.whiteLabelBots,
-    componentIdSigner: input.context.componentIdSigner,
-    serverLevelsEnabled: input.context.features.serverLevels,
-  });
+  const services = input.services;
   const recheckIntervalMs = readOptionalPositiveInteger(
     input.env.STEAM_BAN_LOOKUP_RECHECK_INTERVAL_MS,
   );
@@ -622,16 +617,11 @@ function createJobHandlers(input: {
     ),
     ...(recheckIntervalMs ? { recheckIntervalMs } : {}),
   });
-  const gatewayDependencies = createGatewayDependencies(input.context, input.env, input.database);
-  const billingSync = createPostgresBillingRuntime(input.env, input.database);
-  const billingDelivery = createPostgresBillingDeliveryRuntime(input.env, input.database);
-  const commerceSync = createPostgresCommerceRuntime(
-    input.env,
-    input.database,
-    input.context.commerceAdmin?.sellerReviews,
-  );
-  const commerceRoles = createPostgresPaidRoleRuntime(input.env, input.database);
-  const serverLevelProcessor = createServerLevelProcessor(input.env, input.context, Date.now);
+  const billingSync = input.selected.billing;
+  const billingDelivery = input.selected.billingDelivery;
+  const commerceSync = input.selected.commerce;
+  const commerceRoles = input.selected.paidRoles;
+  const serverLevelProcessor = services.serverLevelProcessor;
   const policy = new GuildServicePolicy(input.context.stores.guildServiceSuspensions);
   const protectedHandler =
     (
@@ -654,7 +644,7 @@ function createJobHandlers(input: {
     ),
     "gateway-events": protectedHandler(
       (payload, metadata) =>
-        deliverGatewayEvent(payload, metadata, input.env, console, gatewayDependencies),
+        deliverGatewayEvent(payload, metadata, input.env, console, input.gatewayDependencies),
       isGatewayGuildLifecycleEvent,
     ),
     "webhook-proxy-deliveries": protectedHandler((payload, metadata) =>
@@ -696,7 +686,9 @@ function createJobHandlers(input: {
     "server-levels": protectedHandler((payload, metadata) =>
       deliverServerLevel(payload, metadata, {
         serverLevels: input.context.stores.serverLevels,
-        processor: serverLevelProcessor,
+        // The maintenance processor selected by composition; the same instance
+        // serves Platform Link reconciliation and scheduled processing.
+        processor: serverLevelProcessor!,
         now: Date.now,
       }),
     ),
@@ -847,13 +839,15 @@ export const __testing = {
   createNodeEnvironment,
   createQueueBindings,
   createGatewayDependencies,
+  createJobHandlers,
 };
 
-function createGatewayDependencies(
-  context: RuntimeAppContext,
-  env: Env,
-  database: PostgresDatabaseCapability,
-) {
+function createGatewayDependencies(input: {
+  context: RuntimeAppContext;
+  database: PostgresDatabaseCapability;
+  paidRoles: NodeSelectedRuntimes["paidRoles"];
+}) {
+  const context = input.context;
   const gatewayStores: GatewayEventStores = {
     communityTools: context.communityTools,
     reputationServiceForGuild: context.reputationServiceForGuild,
@@ -873,24 +867,27 @@ function createGatewayDependencies(
     mentionProtection: context.stores.mentionProtection,
     platformLink: context.stores.platformLink,
     reactionLimit: context.stores.reactionLimits,
-    reactionMutations: createPostgresGatewayReactionStore(database),
+    reactionMutations: createPostgresGatewayReactionStore(input.database),
     reactionRole: context.stores.reactionRoles,
     ticket: context.stores.tickets,
     timedRole: context.stores.timedRoles,
     whiteLabel: context.stores.whiteLabelBots,
     suggestion: context.stores.suggestions,
     serverLevel: context.stores.serverLevels!,
-    observations: createPostgresObservationStore(database),
-    webhookCredential: createPostgresWebhookCredentialStore(database),
+    observations: createPostgresObservationStore(input.database),
+    webhookCredential: createPostgresWebhookCredentialStore(input.database),
   };
-  const commerceRoles = createPostgresPaidRoleRuntime(env, database);
+  // The Gateway Commerce lifecycle uses the SAME selected Paid Role store and
+  // provider-action processing as the composed feature services and direct
+  // queue delivery. When Commerce is genuinely disabled, Guild cleanup still
+  // records deletions through the native Paid Role store.
   const commerceLifecycle = createGatewayCommerceLifecycle(
-    commerceRoles?.store ?? new PostgresPaidRoleStore(database),
-    commerceRoles?.processProviderActions,
+    input.paidRoles?.store ?? new PostgresPaidRoleStore(input.database),
+    input.paidRoles?.processProviderActions,
   );
   return {
     stores: gatewayStores,
     commerceLifecycle,
-    operationStore: createPostgresGatewayEventOperationStore(database),
+    operationStore: createPostgresGatewayEventOperationStore(input.database),
   };
 }

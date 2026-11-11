@@ -44,6 +44,7 @@ import type {
 } from "./contracts";
 import type { FeatureFlags } from "./features";
 import type { ServiceFactory } from "./service-factory";
+import type { GatewayService } from "../services/gateway-service";
 import type { CustomerAuth } from "./auth/customer-auth";
 import type { CustomerSession } from "./auth/customer-session";
 import type { DiscordAccountStore } from "./contracts/discord-account-store";
@@ -136,13 +137,25 @@ export interface RuntimeStores {
   messageTemplates?: MessageTemplateStore;
   guildServiceSuspensions?: GuildServiceSuspensionStore;
   featureSetup?: FeatureSetupStore;
-  suggestions?: SuggestionStore;
-  operationalIncidents?: OperationalIncidentStore;
+  suggestions: SuggestionStore;
+  operationalIncidents: OperationalIncidentStore;
   adminFeedback?: AdminFeedbackStore;
   oneTimeTokens: OneTimeTokenStore;
   productAnalyticsPreferences?: ProductAnalyticsPreferenceStore;
   serverLevels?: ServerLevelStore;
 }
+
+/**
+ * The complete writable feature-service graph built once by service composition.
+ *
+ * Production callers consume this selected graph; nothing rebuilds or partially
+ * overrides it at request time. Every member reflects the composition's real
+ * capability selection, so genuinely optional capabilities stay optional.
+ */
+export type ApplicationServices = ServiceFactory & {
+  /** The composed Gateway controller service with command-sync wired. */
+  gatewayService: GatewayService;
+};
 
 export interface RuntimeAppOptions {
   banAppealServiceForGuild?: import("../moderation-appeals/routes").BanAppealServiceFactory;
@@ -234,7 +247,8 @@ export interface RuntimeAppOptions {
     banCase: BanCaseSourceCache;
   };
   features?: FeatureFlags;
-  services?: Partial<ServiceFactory>;
+  /** The selected feature-service graph composed once before the app is created. */
+  services: ApplicationServices;
   guildResources?: GuildResourceValidator;
   waitUntil?: (promise: Promise<unknown>) => void;
   steamWebApiKey?: string;

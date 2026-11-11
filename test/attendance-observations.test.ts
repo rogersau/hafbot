@@ -13,7 +13,7 @@ import { createWardogsObservationProvider } from "../src/server-levels/observati
 import { createPlatformLinkIdentityReader } from "../src/services/platform-link-identity-reader";
 import { createAdminApiHandler } from "./helpers/admin-api";
 import { createAttendanceObservationRuntime } from "./support/sqlite/observation-store";
-import { createRuntimeApp, type RuntimeAppOptions } from "../src/runtime/app";
+import { createTestRuntimeApp } from "./support/create-runtime-app";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { createPermissiveGuildResourceValidator } from "./helpers/guild-resource-validator";
 import { processGatewayEventQueueMessages } from "./support/gateway-event-consumer";
@@ -622,7 +622,7 @@ async function publicRuntime(
   h: Awaited<ReturnType<typeof fixture>>,
   t: import("node:test").TestContext,
   scheduledOptions: Pick<
-    RuntimeAppOptions,
+    import("./support/create-runtime-app").TestRuntimeAppOptions,
     "sweepBillingSyncOutbox" | "reportOperationalEvent"
   > = {},
 ) {
@@ -693,7 +693,7 @@ async function publicRuntime(
       wait: async (ms) => h.advance(ms),
     });
   const newWorker = () =>
-    createRuntimeApp({
+    createTestRuntimeApp({
       stores: h.f.stores,
       discordPublicKey: "a".repeat(64),
       discordBotToken: "fake",

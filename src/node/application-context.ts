@@ -71,12 +71,32 @@ import { createComponentIdSigner, type ComponentIdSigner } from "../security/com
 import { postMemberAuditEvent } from "../services/guild-audit-log-service";
 import { logServerLevelTelemetry } from "../server-levels/telemetry";
 
+/**
+ * Native processing runtimes selected once by the Node application context.
+ *
+ * This is the node-private composition result: job registration and the
+ * Gateway consume these ports directly instead of constructing duplicate
+ * Billing, Commerce or Paid Role runtimes. The generic RuntimeAppContext never
+ * carries these concrete runtime types.
+ */
+export interface NodeSelectedRuntimes {
+  paidRoles: ReturnType<typeof createPostgresPaidRoleRuntime>;
+  billing: ReturnType<typeof createPostgresBillingRuntime>;
+  billingDelivery: ReturnType<typeof createPostgresBillingDeliveryRuntime>;
+  commerce: ReturnType<typeof createPostgresCommerceRuntime>;
+}
+
+export interface NodeApplicationContext {
+  app: RuntimeAppContext;
+  selected: NodeSelectedRuntimes;
+}
+
 export function createNodeApplicationContext(
   env: Env,
   database: PostgresDatabaseCapability,
   stores: RuntimeAppContext["stores"],
   webhookIngressGuard?: WebhookIngressGuardNamespace,
-): RuntimeAppContext {
+): NodeApplicationContext {
   const selfHostedSite = readSelfHostedSite(env);
   const componentIdSigningSecret = normalizeOptionalString(env.COMPONENT_ID_SIGNING_SECRET);
   if (!componentIdSigningSecret && env.STAGING_MODE !== "true") {
@@ -410,7 +430,15 @@ export function createNodeApplicationContext(
     componentIdSigner,
   };
 
-  return context;
+  return {
+    app: context,
+    selected: {
+      paidRoles,
+      billing,
+      billingDelivery,
+      commerce,
+    },
+  };
 }
 
 function createCommerceAdminServices(

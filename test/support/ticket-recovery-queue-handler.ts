@@ -4,19 +4,17 @@ import type { Env } from "./test-env";
 
 import { createSqliteContext } from "./sqlite/runtime/sqlite-context";
 
-import { createServiceFactory } from "../../src/runtime/service-factory";
 import { deliverTicketRecovery } from "../../src/runtime/ticket-recovery-queue-consumer";
+
 export async function handleTicketRecovery(payload: unknown, metadata: QueueJobMetadata, env: Env) {
+  // One composed context graph; the direct delivery consumes its selected
+  // Ticket lifecycle and panel services rather than rebuilding a factory.
   const context = createSqliteContext(env);
-  const services = createServiceFactory({
-    stores: context.stores,
-    discordBotToken: env.DISCORD_BOT_TOKEN,
-  });
   return deliverTicketRecovery(
     payload,
     metadata,
-    services.ticketLifecycle,
-    services.ticketPanelService,
+    context.services.ticketLifecycle,
+    context.services.ticketPanelService,
     env.DISCORD_BOT_TOKEN,
   );
 }

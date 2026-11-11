@@ -1,5 +1,4 @@
 import type { QueueJobMetadata } from "./queue-types";
-import { fetchGuildMember } from "../discord/members";
 import { createChannelMessage } from "../discord/messages";
 import { DiscordApiError } from "../discord/client";
 import type { Env } from "../env";
@@ -45,6 +44,19 @@ export interface ServerLevelDeliveryPorts {
   now: () => number;
 }
 
+/**
+ * Scheduled maintenance consumes the composition-selected processor that link
+ * reconciliation and direct queue delivery already share, so processing,
+ * checkpointing and roster reconciliation run with the same credentials,
+ * entitlement policy and telemetry for every caller.
+ */
+export interface ServerLevelMaintenancePorts {
+  processor: Pick<
+    ServerLevelProcessor,
+    "processAvailableForServer" | "checkpointAvailableForServer" | "reconcileCurrentRoster"
+  >;
+}
+
 export async function deliverServerLevel(
   payload: unknown,
   metadata: QueueJobMetadata,
@@ -85,9 +97,11 @@ export async function deliverServerLevel(
 export async function maintainServerLevels(
   env: Env,
   context: ServerLevelRuntimeContext,
+  ports: ServerLevelMaintenancePorts,
   now: () => number = Date.now,
   emitTelemetry: ServerLevelTelemetryEmitter = logServerLevelTelemetry,
 ): Promise<{ published: number; servers: number }> {
+  const processor = ports.processor;
   const published = env.SERVER_LEVELS_QUEUE
     ? await sweepServerLevelIngressOutbox({
         store: context.stores.serverLevels,
@@ -95,7 +109,6 @@ export async function maintainServerLevels(
         now,
       })
     : 0;
-  const processor = createServerLevelProcessor(env, context, now, emitTelemetry);
   const dataApi = context.serverLevelCredentialService
     ? new CftoolsDataApiClient({ credentials: context.serverLevelCredentialService, now })
     : null;
@@ -223,25 +236,6 @@ async function serverLevelAnnouncementNonce(announcementId: string): Promise<str
   return `sl_${Array.from(new Uint8Array(digest).slice(0, 8))
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("")}`;
-}
-
-export function createServerLevelProcessor(
-  env: Env,
-  context: ServerLevelRuntimeContext,
-  now: () => number,
-  emitTelemetry: ServerLevelTelemetryEmitter = logServerLevelTelemetry,
-): ServerLevelProcessor {
-  return new ServerLevelProcessor({
-    store: context.stores.serverLevels,
-    platformLinks: context.stores.platformLink,
-    readEntitlementTier: async (guildId) =>
-      (await context.stores.guildEntitlements.readGuildEntitlement(guildId)).tier,
-    isCurrentGuildMember: async (guildId, userId) =>
-      (await fetchGuildMember(guildId, userId, env.DISCORD_BOT_TOKEN)) !== null,
-    isKillSwitchEnabled: () => context.features.serverLevels === false,
-    now,
-    emitTelemetry,
-  });
 }
 
 function parseServerLevelMessage(value: unknown): ServerLevelIngressMessage | null {

@@ -86,10 +86,18 @@ import type {
 } from "../../../../src/runtime/contracts";
 import type { EvidenceVaultBlobStore, RuntimeAppOptions } from "../../../../src/runtime/app-types";
 import type { PublicManagedMediaStore } from "../../../../src/managed-media";
+import {
+  createEnvironmentProductAnalytics,
+  withGuildAnalyticsPreference,
+  withProductAnalyticsWaitUntil,
+} from "../../../../src/product-analytics";
 
 import type { FeatureFlags } from "../../../../src/runtime/features";
 import type { WorkspaceStore } from "../../../../src/runtime/workspace-store";
 import { createEffectiveGuildPlanStore } from "../../../../src/runtime/effective-guild-plan";
+import { composeApplicationServices } from "../../../../src/runtime/service-composition";
+import type { ApplicationServices } from "../../../../src/runtime/app-types";
+import { createOperationalReporter } from "../../../../src/observability/operational-reporter";
 import type { PlayerCountStreakReportedStore } from "../../../../src/services/player-count-service";
 import { createSqliteBillingRuntime } from "./billing/sqlite-billing-runtime";
 import { createSqliteBillingDeliveryRuntime } from "./billing/sqlite-delivery-runtime";
@@ -217,12 +225,15 @@ export interface RuntimeAppContext {
   serverLevelCredentialService?: ServerLevelCredentialService;
   serverLevelProcessingAvailable?: boolean;
   features: FeatureFlags;
+  /** The single composed feature-service graph for this context. */
+  services: ApplicationServices;
   steamWebApiKey?: string;
   xboxOAuthClientId?: string;
   xboxOAuthClientSecret?: string;
   discordSupportInvite?: string;
   discordCache?: Cache<string>;
   playerCountStreakReportedStore?: PlayerCountStreakReportedStore;
+  productAnalytics?: ReturnType<typeof createEnvironmentProductAnalytics>;
   imageRulesClassifierEnv?: ImageRulesClassifierEnv;
   aiTranscriptSummarizerEnv?: AiTranscriptSummarizerEnv;
   publicUrl?: string;
@@ -233,9 +244,17 @@ export interface RuntimeAppContext {
   componentIdSigner?: ComponentIdSigner;
 }
 
+export interface SqliteContextComposition {
+  /** Host lifecycle for background work tracked by the composed services. */
+  waitUntil?: (promise: Promise<unknown>) => void;
+  /** Shared public webhook source caches across separately created runtimes. */
+  publicWebhookSourceCaches?: RuntimeAppOptions["publicWebhookSourceCaches"];
+}
+
 export function createSqliteContext(
   env: Env,
   stores: Partial<RuntimeAppContext["stores"]> = {},
+  composition: SqliteContextComposition = {},
 ): RuntimeAppContext {
   if (!env.HAF_DB) throw new Error("HAF_DB binding is required.");
   const selfHostedSite = readSelfHostedSite(env);
@@ -566,7 +585,7 @@ export function createSqliteContext(
   const evidenceMediaCapability = env.EVIDENCE_MEDIA_SIGNING_SECRET
     ? createEvidenceMediaCapability(env.EVIDENCE_MEDIA_SIGNING_SECRET)
     : undefined;
-  const context: RuntimeAppContext = {
+  const context: Omit<RuntimeAppContext, "services"> = {
     resolveGuildBotIdentity: async (guildId) => {
       const bot = await whiteLabelBotStore.readWhiteLabelBot(guildId);
       return bot?.status === "active"
@@ -741,7 +760,28 @@ export function createSqliteContext(
     botToken: env.DISCORD_BOT_TOKEN,
     botUserId: env.BOT_USER_ID,
   });
-  return context;
+  // One feature-service graph composed from this context's selected stores,
+  // blobs, credentials and Gateway controller. HTTP, queue handlers and
+  // scheduled maintenance all consume these same instances.
+  const environment = env.STAGING_MODE === "true" ? "staging" : "production";
+  const baseProductAnalytics = createEnvironmentProductAnalytics(env);
+  const preferenceAwareProductAnalytics = context.stores.productAnalyticsPreferences
+    ? withGuildAnalyticsPreference(baseProductAnalytics, (guildId) =>
+        context.stores.productAnalyticsPreferences!.readEnabled(guildId),
+      )
+    : baseProductAnalytics;
+  const productAnalytics = composition.waitUntil
+    ? withProductAnalyticsWaitUntil(preferenceAwareProductAnalytics, composition.waitUntil)
+    : preferenceAwareProductAnalytics;
+  const services = composeApplicationServices({
+    ...context,
+    environment,
+    reportOperationalEvent: createOperationalReporter(environment),
+    productAnalytics,
+    waitUntil: composition.waitUntil,
+    publicWebhookSourceCaches: composition.publicWebhookSourceCaches,
+  });
+  return { ...context, services, productAnalytics };
 }
 
 function createCommerceAdminServices(

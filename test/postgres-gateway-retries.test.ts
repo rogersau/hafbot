@@ -250,16 +250,19 @@ async function deliverNext(
         if (name === "queue_delivery" && event.reasonCode) reasons.push(event.reasonCode);
       },
     },
-    runtimeTesting.createGatewayDependencies(
-      runtimeTesting.createNodeContext({
+    (() => {
+      const composition = runtimeTesting.createNodeContext({
         environment: { NODE_ENV: "test", STAGING_MODE: "true" },
         env: { ...env, STAGING_MODE: "true" },
         database,
         objects: new InMemoryObjectStore(),
-      }).app,
-      env,
-      database,
-    ),
+      });
+      return runtimeTesting.createGatewayDependencies({
+        context: composition.app,
+        database,
+        paidRoles: composition.selected.paidRoles,
+      });
+    })(),
   );
   return {
     state: await queue.settle(job, outcome, new Date(Date.now())),

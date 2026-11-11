@@ -1173,12 +1173,12 @@ test("queued acknowledgements retain the opposite-action block even when another
 });
 
 test("maintenance executes durable server work with Player Count disabled before unsent expiry", async () => {
-  const { createRuntimeApp } = await import("../src/runtime/app");
+  const { createTestRuntimeApp } = await import("./support/create-runtime-app");
   const f = await setup();
   try {
     const op = await f.confirm();
     f.clock.now += 5 * 60000;
-    const runtime = createRuntimeApp({
+    const runtime = createTestRuntimeApp({
       stores: f.fixture.stores,
       discordBotToken: "synthetic-discord",
       discordPublicKey: "unused",

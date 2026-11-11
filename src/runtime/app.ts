@@ -1,9 +1,7 @@
 import { APIError } from "better-auth/api";
-import { syncApplicationCommands, syncGuildApplicationCommands } from "../discord";
 import { isRecord } from "../unknown-parse";
 import { reportOperationalEvent } from "../observability/operational-reporter";
 import { logScheduledCompletion } from "../observability/scheduled-telemetry";
-import { getSlashCommandDefinitions } from "../discord-commands";
 import { createAdminSpaRoutes } from "./admin-spa-routes";
 import { createAuthRoutes } from "../routes/auth-routes";
 import { browserPrivacySignalEnabled, createInsertionId } from "../product-analytics";
@@ -15,7 +13,6 @@ import { createCommerceBuyerRoutes } from "../routes/commerce-buyer-routes";
 import { createCommerceSupportRoutes } from "../routes/commerce-support-routes";
 import { createPlatformLinkRoutes } from "../routes/platform-link-routes";
 import { AdminOverviewService } from "../services/admin-overview-service";
-import { GatewayService } from "../services/gateway-service";
 import { fetchGuildMember } from "../discord/members";
 import { listGuildRoles } from "../discord/guilds";
 import { createAdminApiHandler } from "./admin-api";
@@ -52,7 +49,6 @@ import {
   hasDiscordAdministrator,
   type GuildMemberRolesFetcher,
 } from "./guild-admin-access";
-import { createServiceFactory, type ServiceFactory } from "./service-factory";
 import { createXboxPlatformConfig } from "../services/xbox-platform-config";
 import { createSteamPlatformConfig } from "../services/steam-platform-config";
 import type { WorkspaceRole, WorkspaceSummary } from "./workspace-types";
@@ -87,8 +83,28 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
       operationalReporter,
     );
   const guildServicePolicy = new GuildServicePolicy(options.stores.guildServiceSuspensions);
-  const serviceStores = createSuspensionAwareScheduledStores(options.stores, guildServicePolicy);
   const features = options.features ?? ALL_FEATURES_ENABLED;
+  // The selected feature-service graph is composed once before the app is
+  // created and is consumed as-is here. HTTP dispatch, direct job delivery and
+  // scheduled maintenance all exercise these same instances; nothing rebuilds
+  // or partially overrides the graph at request time.
+  const services = options.services;
+  const {
+    timedRoleService,
+    blocklistService,
+    webhookProxyService,
+    platformLinkService,
+    lfgService,
+    eventsService,
+    eventTeamDeliveryService,
+    playerCountService,
+    banCaseService,
+    managedMessageService,
+    operationalIncidentService,
+    clanService,
+    suggestionService,
+  } = services;
+  const gatewayService = services.gatewayService;
   const readCustomerAdminSession =
     options.readCustomerAdminSession ??
     (async (request: Request) => readCustomerSession(request, options.customerAuth));
@@ -153,80 +169,6 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
       })
     : async () => null;
   const customerAdminMode = Boolean(options.customerAuth);
-  const gatewayService = new GatewayService(options.gateway, {
-    discordApplicationId: options.discordApplicationId,
-    syncApplicationCommands: options.discordApplicationId
-      ? async (appId) => {
-          const commands = getSlashCommandDefinitions(features);
-          const globalCommands = commands.filter((command) => command.name !== "haf-admin");
-          const hafAdminCommand = commands.find((command) => command.name === "haf-admin");
-
-          await syncApplicationCommands(appId, options.discordBotToken, globalCommands);
-          if (options.hafAdminGuildId && hafAdminCommand) {
-            await syncGuildApplicationCommands(
-              appId,
-              options.hafAdminGuildId,
-              options.discordBotToken,
-              [hafAdminCommand],
-            );
-          }
-        }
-      : undefined,
-  });
-  const services = {
-    ...createServiceFactory({
-      stores: serviceStores,
-      discordBotToken: options.discordBotToken,
-      discordBotUserId: options.discordBotUserId,
-      discordCache: options.discordCache,
-      steamWebApiKey: options.steamWebApiKey,
-      webhookProxyLogPersistenceEnabled: options.webhookProxyLogPersistenceEnabled,
-      ticketRecoveryQueue: options.ticketRecoveryQueue,
-      webhookProxyDeliveryQueue: options.webhookProxyDeliveryQueue,
-      steamBanLookupQueue: options.steamBanLookupQueue,
-      webhookCredentialService: options.webhookCredentialService,
-      evidenceVaultBlobs: options.evidenceVaultBlobs,
-      publicManagedMedia: options.publicManagedMedia,
-      publicUrl: options.publicUrl,
-      turnstileSiteKey: options.turnstileSiteKey,
-      turnstileSecretKey: options.turnstileSecretKey,
-      steamLinkAvailable: features.steamLink,
-      waitUntil: options.waitUntil,
-      playerCountStreakReportedStore: options.playerCountStreakReportedStore,
-      whiteLabelBotStore: options.stores.whiteLabelBots,
-      publicWebhookSourceCaches: options.publicWebhookSourceCaches,
-      guildResources: options.guildResources,
-      componentIdSigner: options.componentIdSigner,
-      productAnalytics: options.productAnalytics,
-      serverLevelsEnabled: features.serverLevels,
-      wardogs: options.wardogs,
-      banEnforcementStore: options.banEnforcementStore,
-      banIncidentStore: options.banIncidentStore,
-      banCasesEnabled: features.banCases,
-      wardogsPlayerCountEnabled: options.wardogsPlayerCountEnabled,
-      playerCountEnabled: features.playerCount,
-      reportOperationalEvent: operationalReporter,
-    }),
-    ...options.services,
-    gatewayService,
-  };
-
-  const {
-    timedRoleService,
-    blocklistService,
-    webhookProxyService,
-    platformLinkService,
-    lfgService,
-    eventsService,
-    eventTeamDeliveryService,
-    playerCountService,
-    banCaseService,
-    managedMessageService,
-    operationalIncidentService,
-    clanService,
-    suggestionService,
-  } = services;
-
   const adminOverviewService = new AdminOverviewService(
     options.stores.blocklist,
     options.stores.timedRoles,
@@ -911,61 +853,12 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
   };
 }
 
-function createSuspensionAwareScheduledStores(
-  stores: RuntimeAppOptions["stores"],
-  policy: GuildServicePolicy,
-): RuntimeAppOptions["stores"] {
-  const filter = async <T>(items: T[], guildId: (item: T) => string | null | undefined) => {
-    const allowed: T[] = [];
-    for (const item of items) {
-      if (!(await policy.isGuildSuspended(guildId(item)))) allowed.push(item);
-    }
-    return allowed;
-  };
-  return {
-    ...stores,
-    timedRoles: {
-      ...stores.timedRoles,
-      listExpiredTimedRoles: async (nowMs) =>
-        filter(await stores.timedRoles.listExpiredTimedRoles(nowMs), (item) => item.guildId),
-    },
-    lfg: {
-      ...stores.lfg,
-      listDueLfgPostExpiries: async (nowMs, limit) => {
-        const suspendedGuildIds = await policy.listSuspendedGuildIds();
-        return stores.lfg.listDueLfgPostExpiries(nowMs, limit, suspendedGuildIds);
-      },
-      listDueLfgRenewalReminders: async (nowMs, limit) => {
-        const suspendedGuildIds = await policy.listSuspendedGuildIds();
-        return stores.lfg.listDueLfgRenewalReminders(nowMs, limit, suspendedGuildIds);
-      },
-    },
-    events: {
-      ...stores.events,
-      listDueReminders: async (nowMs, limit) =>
-        filter(await stores.events.listDueReminders(nowMs, limit), (item) => item.event.guildId),
-      listDueLifecycleEvents: async (nowMs, limit) =>
-        filter(await stores.events.listDueLifecycleEvents(nowMs, limit), (item) => item.guildId),
-    },
-    playerCount: {
-      ...stores.playerCount,
-      listAllPlayerCountServers: async () =>
-        filter(await stores.playerCount.listAllPlayerCountServers(), (item) => item.guildId),
-    },
-    managedMessages: {
-      ...stores.managedMessages,
-      claimDueDrafts: async (nowMs, limit) =>
-        filter(
-          await stores.managedMessages.claimDueDrafts(nowMs, limit),
-          (item) => item.draft.guildId,
-        ),
-    },
-  };
-}
-
 async function readOpaqueRouteGuildId(
   url: URL,
-  services: Pick<ServiceFactory, "platformLinkService" | "memberVerificationService">,
+  services: Pick<
+    RuntimeAppOptions["services"],
+    "platformLinkService" | "memberVerificationService"
+  >,
 ): Promise<string | null> {
   const state = url.searchParams.get("state");
   if (state && (url.pathname === "/auth/steam/start" || url.pathname === "/auth/steam/callback")) {

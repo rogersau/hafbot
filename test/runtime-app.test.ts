@@ -8,10 +8,10 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createRuntimeApp as createBaseRuntimeApp, escapeHtmlAttribute } from "../src/runtime/app";
+import { escapeHtmlAttribute } from "../src/runtime/app";
+import { createTestRuntimeApp, type TestRuntimeAppOptions } from "./support/create-runtime-app";
 import { buildTicketOpeningMessage } from "../src/services/tickets/ticket-lifecycle";
 import { createDiscordGuildResourceValidator } from "../src/discord/guild-resource-validator";
-import type { RuntimeAppOptions } from "../src/runtime/app-types";
 import { isRecord } from "../src/unknown-parse";
 import { renderAdminShell } from "../src/runtime/admin-shell";
 import { createCustomerAuth } from "./support/sqlite/runtime/auth/auth";
@@ -65,8 +65,8 @@ import {
   testChannel,
 } from "./helpers/guild-resource-validator";
 
-function createRuntimeApp(options: RuntimeAppOptions) {
-  return createBaseRuntimeApp({
+function createRuntimeApp(options: TestRuntimeAppOptions) {
+  return createTestRuntimeApp({
     customerAuth: createCustomerAuthMock({
       organizations: [{ id: "workspace-1", name: "Workspace", slug: "workspace", role: "owner" }],
     }),
@@ -76,7 +76,7 @@ function createRuntimeApp(options: RuntimeAppOptions) {
   });
 }
 
-const createUnauthenticatedRuntimeApp = createBaseRuntimeApp;
+const createUnauthenticatedRuntimeApp = createTestRuntimeApp;
 
 const runtimeStoreFixtures = new Set<ProductionRuntimeStoresFixture>();
 
@@ -678,7 +678,7 @@ test("renderAdminShell serves static admin shell references with runtime data", 
 
 test("createRuntimeApp signs out customer admins through Better Auth on admin logout", async () => {
   const handledAuthPaths: Array<{ pathname: string; method: string; cookie: string | null }> = [];
-  const app = createBaseRuntimeApp({
+  const app = createTestRuntimeApp({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
     customerAuth: {
@@ -738,7 +738,7 @@ test("createRuntimeApp logs out real Discord sessions through the browser form b
     discordOAuthClientSecret: "logout-test-client-secret",
     database: fixture.database.d1,
   });
-  const app = createBaseRuntimeApp({
+  const app = createTestRuntimeApp({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
     customerAuth,
@@ -3650,7 +3650,7 @@ test("createRuntimeApp filters customer overview and guild directory to linked w
   }) as typeof fetch;
 
   try {
-    const app = createBaseRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "bot-token",
       customerAuth: createCustomerAuthMock({
@@ -3719,7 +3719,7 @@ test("createRuntimeApp filters customer overview and guild directory to linked w
 });
 
 test("createRuntimeApp allows workspace-linked guild reads on the blocklist route", async () => {
-  const app = createBaseRuntimeApp({
+  const app = createTestRuntimeApp({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
     customerAuth: createCustomerAuthMock({
@@ -3763,7 +3763,7 @@ test("createRuntimeApp allows workspace-linked guild reads on the blocklist rout
 
 test("createRuntimeApp allows workspace-linked guild writes on the blocklist route", async () => {
   const writes: string[] = [];
-  const app = createBaseRuntimeApp({
+  const app = createTestRuntimeApp({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
     customerAuth: createCustomerAuthMock({
@@ -4172,7 +4172,7 @@ test("createRuntimeApp authorizes guild admin users for guild-scoped admin APIs"
   try {
     const writes: string[] = [];
     const guildAdminRoleWrites: Array<{ guildId: string; roleId: string | null }> = [];
-    const app = createBaseRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "guild-admin-bot-token",
       customerAuth: createCustomerAuthMock({ organizations: [] }),
@@ -4322,7 +4322,7 @@ test("createRuntimeApp exposes bot guilds where social users have Discord manage
   }) as typeof fetch;
 
   try {
-    const app = createBaseRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "manager-bot-token",
       customerAuth: createCustomerAuthMock({ organizations: [] }),
@@ -4455,7 +4455,7 @@ test("createRuntimeApp caches guild-admin directory lookups until refresh is req
   }) as typeof fetch;
 
   try {
-    const app = createBaseRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "refresh-directory-bot-token",
       customerAuth: createCustomerAuthMock({ organizations: [] }),
@@ -4524,7 +4524,7 @@ test("createRuntimeApp reads current user guilds from KV on a fresh guild-admin 
   }) as typeof fetch;
 
   try {
-    const app = createBaseRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "kv-user-directory-bot-token",
       customerAuth: createCustomerAuthMock({ organizations: [] }),
@@ -4595,7 +4595,7 @@ test("createRuntimeApp refresh bypasses KV current user guilds and updates the c
   }) as typeof fetch;
 
   try {
-    const app = createBaseRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "refresh-kv-bot-token",
       customerAuth: createCustomerAuthMock({ organizations: [] }),
@@ -4736,7 +4736,7 @@ test("createRuntimeApp exposes bot guilds where the social user is the Discord g
   }) as typeof fetch;
 
   try {
-    const app = createBaseRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "owner-bot-token",
       customerAuth: createCustomerAuthMock({ organizations: [] }),
@@ -4792,7 +4792,7 @@ test("createRuntimeApp does not allow guild admin access to workspace APIs", asy
   }) as typeof fetch;
 
   try {
-    const app = createBaseRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "guild-admin-isolation-bot-token",
       customerAuth: createCustomerAuthMock({ organizations: [], activeRole: "none" as never }),
@@ -5062,7 +5062,7 @@ test("createRuntimeApp rejects legacy global admin sessions", async () => {
   }) as typeof fetch;
 
   try {
-    const app = createBaseRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "bot-token",
       customerAuth: createCustomerAuthMock({
@@ -5840,7 +5840,7 @@ test("createRuntimeApp passes customer Discord profile data into the admin shell
       }),
     },
   } as never;
-  const app = createBaseRuntimeApp({
+  const app = createTestRuntimeApp({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
     customerAuth,
@@ -5931,7 +5931,7 @@ test("createRuntimeApp authorizes customer workspace admin API requests", async 
     }),
     upsertEntitlement: async () => {},
   } as never;
-  const app = createBaseRuntimeApp({
+  const app = createTestRuntimeApp({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
     customerAuth,
@@ -6045,7 +6045,7 @@ test("Commerce seller connect initializes an old session's active organization b
   }) as typeof fetch;
 
   try {
-    const app = createBaseRuntimeApp({
+    const app = createTestRuntimeApp({
       discordPublicKey: "a".repeat(64),
       discordBotToken: "commerce-active-organization-token",
       customerAuth,
@@ -11220,7 +11220,7 @@ test("self-service access separates feature, delegation and owner policy capabil
             ]);
           throw new Error(`Unexpected isolated Discord call: ${url}`);
         }) as typeof fetch;
-        const app = createBaseRuntimeApp({
+        const app = createTestRuntimeApp({
           discordPublicKey: "a".repeat(64),
           discordBotToken: `matrix-${persona}-${enabled}`,
           customerAuth: createCustomerAuthMock({ organizations: [] }),
