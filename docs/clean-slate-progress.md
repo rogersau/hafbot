@@ -6,7 +6,7 @@ there are no active deployments, inherited compatibility requirements or upgrade
 
 ## Current checkpoint and ownership
 
-Verified source checkpoint: `8a0917f3ca5636fb88e3f2115eec9db38f9ef7d2`. Current Admin and Node
+Verified source checkpoint: `3b7595fc04b9301bd9430ae31e4a171ec8e17ff8`. Current Admin and Node
 types, contract drift and test compilation pass. Focused coordinator checks pass: C06 Admin
 149/149, C11 service/runtime 262/262 and real PostgreSQL 3/3, C12 handler/runtime 368/368,
 and P04 Event atomicity plus recurrence 7/7 real PostgreSQL. All focused runs have zero skips.
@@ -58,18 +58,18 @@ The broad validation below predates these integrations and must be rerun after r
 
 The global cap is five active implementers across both coordinators and all machines. Normal
 reservation is architecture two, task coordinator three; the temporary three/two loan has ended.
-Earlier failed implementers are terminal. R01, C23 and required Ticket tasks are active (global three). Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
+Earlier failed implementers are terminal. R01, C23, Ticket handler injection and current-port cleanup are active (global four). Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
 worktrees, drafts, commits and evidence are preserved. No remote audit implementer is active.
 All new implementation tasks use isolated checkouts with OpenCode Go
 `opencode-go/deepseek-v4.1-flash`, `variant=max`, serial focused tests and disposable PostgreSQL
 limited to one CPU, 256 MB, `shared_buffers=32MB`, `max_connections=20`.
 
-| Reserved allocation  | Assignment                                   | State/base                                                             |
-| -------------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
-| Architecture 1       | R01 shared graph                             | GLM 5.3 Flash/max fallback running on `751cec8`                        |
-| Architecture 2       | None                                         | Empty; root coordinates native retry reason/schema follow-up after C23 |
-| Task coordinator 1   | C23 offering lifecycle                       | Running restored-access attempt on `d1ff7ad`                           |
-| Task coordinator 2–3 | Required Ticket persistence / one empty slot | Ticket running on verified `8a0917f`                                   |
+| Reserved allocation  | Assignment                                           | State/base                                                                |
+| -------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| Architecture 1       | R01 shared graph                                     | GLM 5.3 Flash/max fallback running on `751cec8`                           |
+| Architecture 2       | Required current ports / atomic Platform Link config | Running on `3b7595f`; no schema or R01/shared fixture edits               |
+| Task coordinator 1   | C23 offering lifecycle                               | Running restored-access attempt on `d1ff7ad`                              |
+| Task coordinator 2–3 | Ticket handler injection / one empty slot            | Handler task running on verified `d72367c`; prior Ticket ports integrated |
 
 Terminal failed Ticket replacement: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Adf8136b7-7c3b-435f-937e-aa875892e28d`, base `2a07da4beadeaac6376c74395c5d80f705f0ca0c`. It owns the Ticket contract, dedicated Ticket services/Admin Ticket callsites/tests only; no stores/schema/queue or shared C23 fixtures. Those failed attempts use no active slots; current assignments are listed above. R01 shared composition remains queued until its dependencies release.
 
@@ -83,7 +83,13 @@ Current R01 GLM fallback: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb
 
 R01 original DeepSeek task `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Ab15027f9-41a9-481e-8ffb-64a615df6978` is terminal failed/cancelled after inference overload, with a clean preserved checkout and no implementation/test result. User-authorized GLM fallback reuses the exact scope/design/acceptance in the same slot; no extra task or provider was substituted.
 
-Current required Ticket: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A085a21eb-9ab5-415a-a64c-05dd83bd8b28`, same verified `8a0917f` base. The task coordinator owns this within its three reserved slots. Scope remains the seven Ticket contract/service/Admin Ticket files and dedicated tests; shared Guild/runtime fixtures and all native/schema/queue/composition files remain excluded. Current allocation: architecture one active, task coordinator two active, global three.
+Completed required Ticket: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A085a21eb-9ab5-415a-a64c-05dd83bd8b28`, same verified `8a0917f` base. The task coordinator owns this within its three reserved slots. Scope remains the seven Ticket contract/service/Admin Ticket files and dedicated tests; shared Guild/runtime fixtures and all native/schema/queue/composition files remain excluded. Current allocation: architecture one active, task coordinator two active, global three.
+
+Current required-port/atomic-config task: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A638b91ef-e0e2-4284-9399-19b617c420d9`, exact base `3b7595fc04b9301bd9430ae31e4a171ec8e17ff8`, DeepSeek Go/max. It owns eight required methods in five current store contracts, scoped mutation/lease callers, and only the native/SQLite Platform Link config UPSERT for atomic metadata+provided-enabled persistence. Public service/store rollback regression uses real PG, with omitted enabled preserving existing state. No schema, R01/shared fixture, Ticket, Offering or queue work.
+
+Current Ticket handler injection: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Ad1070517-9344-48d0-92c8-67ee5cb92701`, exact base `d72367c7129595a884cb4d1dedc3567a196e567b`. It owns the Ticket interaction handler plus only Ticket dispatch calls in the two injected parent handlers, dedicated Ticket/UX tests and one meaningful injection regression. It removes the final optional lifecycle constructor path without touching R01 types/factory/context/shared tests. Global allocation is now architecture two active, task coordinator two active (four total).
+
+Required Ticket persistence is integrated as `ce2fa5d` (source `a5816b3`) plus `d72367c` required interaction reads/dead unsupported failure removal. Root test compilation/contract drift and Node/Admin types pass; 352 combined Ticket/interaction/runtime checks pass with zero skips. The Guild overview Ticket list fallback waits for C23 to release the file. Admin terminology cleanup `3b7595f` passes 138 focused Admin/Marketplace/route checks with zero skips and test compilation.
 
 Completed implementation task IDs (all terminal):
 
@@ -175,6 +181,8 @@ R01 must build services from selected stores and supply the same instances to HT
 handlers. Preserve scheduled suspension filtering, lifecycle tracking, request origin semantics and
 the genuine read-only maintenance boundary. It does not reopen C12 handler reconstruction work.
 
+Flat `RuntimeStore` and `ClosableRuntimeStore` types in `src/runtime/contracts.ts` have no production consumer; they support only the old flat runtime-app test override fixture. Root will move those types to test support after R01 releases that fixture, without rebuilding a production compatibility facade.
+
 ## Shared-composition review notes
 
 R01 source review confirms that HTTP builds feature services then spreads overrides, whereas job
@@ -204,43 +212,43 @@ This design is prepared for implementation; no R01 source change is claimed.
 "Checkpoint" means implemented in the architecture baseline; final combined acceptance is still
 required. It is not a claim that the original finding is closed by the existence of a port.
 
-| Task             | Current reconciliation                                                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| C01              | Direct supported database driver; query failure/single-read regressions retained                                               |
-| C02              | Integrated `02cbf2e`; 33 loading/error checks pass                                                                             |
-| C03              | Integrated `230b35b`; 33 validation/contract checks pass; whitespace regression corrected                                      |
-| C04              | Fresh-install policy documented; old private-upgrade requirements superseded by user policy                                    |
-| C05              | Checkpoint: disabled persistence factories removed from production                                                             |
-| C06              | Integrated `fa1fe4e` (source `9701e7f`); 149 focused Admin/error/loader checks and current types pass                          |
-| C07              | Integrated `4af4df0`; abandoned prototype removed                                                                              |
-| C08              | Checkpoint: unused Worker/dev/test tooling removed; retain test-only Workers types                                             |
-| C09              | Integrated `408d976` + unused claims `537036a`; event aliases already removed; 14 focused client checks pass                   |
-| C10              | Integrated `f8d7bd7` + composition `10743b5`; 91 focused checks and Node/Admin/shared/test types pass                          |
-| C11              | Integrated `5eb98c8` (source `7b98124`); required ports, atomic whole-set rules; 262 focused + 3 real-PG checks pass           |
-| C12              | Integrated `d1988ea` (source `ecf465b`); required narrow services; 368 handler/runtime checks pass; R01 remains separate       |
-| C13              | Native identity/API checkpoint + UI `0bbc4b6` + final aliases `537036a`; 195 checks/types/Admin build/budgets pass             |
-| C14              | Checkpoint: one ordered Reaction Role panel table and explicit panel identity                                                  |
-| C15              | Checkpoint: current Ticket response rules and independent feature flags                                                        |
-| C16              | Checkpoint: Evidence Vault role list and private object metadata                                                               |
-| C17              | Checkpoint: encrypted credential references in config/history/queues/logs                                                      |
-| C18              | Checkpoint: current signed controls; actor/generation enforcement and key rotation                                             |
-| C19              | Checkpoint: strict current Gateway document and event key                                                                      |
-| C20              | Integrated `b8edd9a`; explicit media classification and no old metadata decoder                                                |
-| C21              | Checkpoint: one stored entitlement plan field                                                                                  |
-| C22              | Checkpoint: current Billing prices and self-hosted policy                                                                      |
-| C23              | Running same-scope restored-access replacement on `d1ff7ad`; earlier clean failed checkout preserved                           |
-| C24              | Canonical public error fields/client parsing; complete endpoint/transport acceptance still pending                             |
-| P01–P03, P05–P07 | Native identity, roles, Tickets, content, social and community stores at checkpoint                                            |
-| P04              | Integrated `9f02d5b` + `62b315e` (sources `a3f3f09` + `e9cd8ba`); 7 real-PG Event atomicity/recurrence checks pass             |
-| P08              | Integrated `3d1bb9e`; 8 real-PG moderation checks pass, including race and rollback regressions                                |
-| P09–P14          | Native remaining stores, credentials, auth and context selection at checkpoint                                                 |
-| R01              | Running: one selected graph, scheduled suspension filters, selected processing ports and read-only maintenance isolation       |
-| R02              | Integrated `d69aba9`; direct protocol/native settlement 109+11 pass; transient retry reason persistence remains root follow-up |
-| R03              | Checkpoint: production Worker/DO/D1 host and SQL bridge removed; SQLite fixtures are test-only                                 |
-| B01              | Current fresh schema at checkpoint; C23 will change only its offering baseline                                                 |
-| B02              | Checkpoint: supported Node/test boundaries and retained tooling; final clean artifact build required                           |
-| B03              | Current install docs at checkpoint; reconcile final service/queue/offering changes                                             |
-| V01              | Pending exact combined source validation, including fresh container and concurrency contracts                                  |
+| Task             | Current reconciliation                                                                                                              |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| C01              | Direct supported database driver; query failure/single-read regressions retained                                                    |
+| C02              | Integrated `02cbf2e`; 33 loading/error checks pass                                                                                  |
+| C03              | Integrated `230b35b`; 33 validation/contract checks pass; whitespace regression corrected                                           |
+| C04              | Fresh-install policy documented; old private-upgrade requirements superseded by user policy                                         |
+| C05              | Native ports selected; residual disabled factory removal in R01; test-only flat RuntimeStore type relocation remains root follow-up |
+| C06              | Integrated `fa1fe4e` (source `9701e7f`); 149 focused Admin/error/loader checks and current types pass                               |
+| C07              | Integrated `4af4df0`; abandoned prototype removed                                                                                   |
+| C08              | Checkpoint: unused Worker/dev/test tooling removed; retain test-only Workers types                                                  |
+| C09              | Integrated `408d976` + unused claims `537036a`; event aliases already removed; 14 focused client checks pass                        |
+| C10              | Integrated `f8d7bd7` + composition `10743b5`; 91 focused checks and Node/Admin/shared/test types pass                               |
+| C11              | Integrated `5eb98c8` (source `7b98124`); required ports, atomic whole-set rules; 262 focused + 3 real-PG checks pass                |
+| C12              | Four-handler injection `d1988ea` verified; final Ticket lifecycle constructor fallback cleanup running separately                   |
+| C13              | Native identity/API checkpoint + UI `0bbc4b6` + final aliases `537036a`; 195 checks/types/Admin build/budgets pass                  |
+| C14              | Checkpoint: one ordered Reaction Role panel table and explicit panel identity                                                       |
+| C15              | Checkpoint: current Ticket response rules and independent feature flags                                                             |
+| C16              | Checkpoint: Evidence Vault role list and private object metadata                                                                    |
+| C17              | Checkpoint: encrypted credential references in config/history/queues/logs                                                           |
+| C18              | Checkpoint: current signed controls; actor/generation enforcement and key rotation                                                  |
+| C19              | Checkpoint: strict current Gateway document and event key                                                                           |
+| C20              | Integrated `b8edd9a`; explicit media classification and no old metadata decoder                                                     |
+| C21              | Checkpoint: one stored entitlement plan field                                                                                       |
+| C22              | Checkpoint: current Billing prices and self-hosted policy                                                                           |
+| C23              | Running same-scope restored-access replacement on `d1ff7ad`; earlier clean failed checkout preserved                                |
+| C24              | Canonical public error fields/client parsing; complete endpoint/transport acceptance still pending                                  |
+| P01–P03, P05–P07 | Native identity, roles, Tickets, content, social and community stores at checkpoint                                                 |
+| P04              | Integrated `9f02d5b` + `62b315e` (sources `a3f3f09` + `e9cd8ba`); 7 real-PG Event atomicity/recurrence checks pass                  |
+| P08              | Integrated `3d1bb9e`; 8 real-PG moderation checks pass, including race and rollback regressions                                     |
+| P09–P14          | Native remaining stores, credentials, auth and context selection at checkpoint                                                      |
+| R01              | Running: one selected graph, scheduled suspension filters, selected processing ports and read-only maintenance isolation            |
+| R02              | Integrated `d69aba9`; direct protocol/native settlement 109+11 pass; transient retry reason persistence remains root follow-up      |
+| R03              | Checkpoint: production Worker/DO/D1 host and SQL bridge removed; SQLite fixtures are test-only                                      |
+| B01              | Current fresh schema at checkpoint; C23 will change only its offering baseline                                                      |
+| B02              | Checkpoint: supported Node/test boundaries and retained tooling; final clean artifact build required                                |
+| B03              | Current install docs at checkpoint; reconcile final service/queue/offering changes                                                  |
+| V01              | Pending exact combined source validation, including fresh container and concurrency contracts                                       |
 
 ## Historical broad checkpoint validation
 
