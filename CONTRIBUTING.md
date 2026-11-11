@@ -10,8 +10,10 @@ Read [CONTEXT.md](CONTEXT.md) for vocabulary. Install the pinned pnpm dependency
 Runtime/database changes also need `pnpm test:postgres` on a disposable local `_test` database.
 Use your own development Discord identity; automated public CI uses no real Discord account.
 
-Keep PRs focused. Aim for a description under 100 words: one or two sentences on the problem and
-resulting behaviour, then one validation line. Include details or caveats only when needed for review.
+Follow [T3 Code's PR conventions](https://github.com/pingdotgg/t3code/blob/main/AGENTS.md#pull-requests):
+a plain-language conventional title, the problem in one or two sentences, then how the change fixes it.
+Aim for a body under 100 words, with relevant verification and observed results. Include details or
+caveats only when needed for review. Agents should end with a short model and harness attribution.
 Preserve Discord authorization, tenant boundaries, job/operation identities and secret redaction. Update
 the current installation schema directly; this baseline contains no migration or historical
 compatibility path. Public CI validates fork PRs on fresh GitHub-hosted runners with read-only
