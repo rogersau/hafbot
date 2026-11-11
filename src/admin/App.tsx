@@ -14,12 +14,10 @@ import { useGuildDirectory } from "./hooks/use-guild-directory";
 import { useEntitlement } from "./hooks/use-entitlement";
 import { useUserPreferences } from "./hooks/use-user-preferences";
 import { resetGuildResourcesCache } from "./lib/guild-resources-cache";
-import type { PageDataPolicy } from "./types";
 import {
   buildAdminDashboardHref,
   encodeGuildIdForSearch,
   getDiscordSignInCallbackUrl,
-  getDashboardPageDataPolicy,
 } from "./lib/dashboard-urls";
 import { routeTree } from "./routes/route-tree";
 import type { AdminPageMetadata, AdminRouterContext } from "./routes/context";
@@ -36,7 +34,6 @@ export {
   getSelectedWorkspaceIdFromSearch,
   buildAdminDashboardHref,
   getDiscordSignInCallbackUrl,
-  getDashboardPageDataPolicy,
   buildAdminOverviewApiPath,
   buildAdminGuildDirectoryApiPath,
 } from "./lib/dashboard-urls";
@@ -118,15 +115,9 @@ export default function App({
       return match?.loaderData as LoadedAdminRouteData<GuildShellLoaderData> | undefined;
     },
   });
-  const effectivePageDataPolicy = getEffectiveDashboardPageDataPolicy(
-    currentRouteState.currentPath,
-  );
   const [guildResourcesRefreshVersion, setGuildResourcesRefreshVersion] = useState(0);
   // Workspace authorization remains server-side for existing grants. Dashboard
   // startup no longer depends on discovering or selecting an organization.
-  const workspaces: AdminRouterContext["workspaces"] = [];
-  const workspacesLoading = false;
-  const workspaceLookupError = null;
   const entitlementResult = useEntitlement(
     currentRouteState.selectedWorkspaceId,
     currentRouteState.selectedGuildId,
@@ -144,14 +135,8 @@ export default function App({
       : null;
 
   const { guildDirectory, guildLookupError, refreshGuildDirectory } = useGuildDirectory(
-    shouldEnableGuildDirectory(
-      authenticated,
-      currentRouteState.selectedWorkspaceId,
-      workspacesLoading,
-      workspaces.length,
-    ),
+    authenticated,
     currentRouteState.selectedWorkspaceId,
-    effectivePageDataPolicy,
   );
   const {
     preferences: userPreferences,
@@ -190,32 +175,12 @@ export default function App({
     [router],
   );
 
-  const handleSelectedWorkspaceChange = useCallback(
-    (nextWorkspaceId: string) => {
-      const normalizedWorkspaceId = nextWorkspaceId.trim();
-      const routeState = getAdminRouteState({
-        pathname: router.state.location.pathname,
-        search: router.state.location.searchStr,
-      });
-
-      if (typeof window !== "undefined") {
-        void router.navigate({
-          to: buildAdminDashboardHref(routeState.currentPath, normalizedWorkspaceId, ""),
-          replace: true,
-        });
-      }
-    },
-    [router],
-  );
-
   const handleRefresh = useCallback(async () => {
     resetGuildResourcesCache();
     await router.invalidate({ sync: true });
     setGuildResourcesRefreshVersion((current) => current + 1);
-    if (effectivePageDataPolicy.loadGuildDirectory) {
-      await refreshGuildDirectory();
-    }
-  }, [router, refreshGuildDirectory, effectivePageDataPolicy.loadGuildDirectory]);
+    await refreshGuildDirectory();
+  }, [router, refreshGuildDirectory]);
 
   const routerContext: AdminRouterContext = {
     currentPath: currentRouteState.currentPath,
@@ -240,12 +205,8 @@ export default function App({
     }),
     guildDirectory,
     guildLookupError,
-    workspaces,
-    workspacesLoading,
-    workspaceLookupError,
     guildResourcesRefreshVersion,
     onSelectedGuildChange: handleSelectedGuildChange,
-    onSelectedWorkspaceChange: handleSelectedWorkspaceChange,
     refreshGuildDirectory,
     onRefresh: handleRefresh,
     playstationLinkEnabled: initialPlayStationLinkEnabled,
@@ -288,32 +249,12 @@ export default function App({
   );
 }
 
-export function shouldEnableGuildDirectory(
-  authenticated: boolean,
-  selectedWorkspaceId: string,
-  workspacesLoading: boolean,
-  workspaceCount: number,
-): boolean {
-  return (
-    authenticated && (Boolean(selectedWorkspaceId) || (!workspacesLoading && workspaceCount === 0))
-  );
-}
-
 export function buildGuildScopedViewInstanceKey(
   workspaceId: string,
   guildId: string,
   refreshVersion: number,
 ): string {
   return `${workspaceId}:${guildId || "no-guild"}:${refreshVersion}`;
-}
-
-export function getEffectiveDashboardPageDataPolicy(path: string): PageDataPolicy {
-  const pageDataPolicy = getDashboardPageDataPolicy(path);
-  return {
-    ...pageDataPolicy,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  };
 }
 
 function createRouterContext(): AdminRouterContext {
@@ -330,12 +271,8 @@ function createRouterContext(): AdminRouterContext {
     defaultRedirectTarget: null,
     guildDirectory: null,
     guildLookupError: null,
-    workspaces: [],
-    workspacesLoading: false,
-    workspaceLookupError: null,
     guildResourcesRefreshVersion: 0,
     onSelectedGuildChange: () => {},
-    onSelectedWorkspaceChange: () => {},
     refreshGuildDirectory: async () => {},
     onRefresh: async () => {},
     playstationLinkEnabled: true,

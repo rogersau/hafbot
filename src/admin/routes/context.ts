@@ -4,7 +4,6 @@ import type {
   UserPreferences,
   UserPreferencesPatch,
 } from "../../runtime/admin-types";
-import type { WorkspaceSummary } from "../../runtime/workspace-types";
 import type { EntitlementInfo } from "../hooks/use-entitlement";
 import type { ApplyUserPreferencesOptions } from "../hooks/use-user-preferences";
 import type {
@@ -34,12 +33,8 @@ export interface AdminRouterContext {
   defaultRedirectTarget: string | null;
   guildDirectory: AdminGuildDirectoryEntry[] | null;
   guildLookupError: string | null;
-  workspaces: WorkspaceSummary[];
-  workspacesLoading: boolean;
-  workspaceLookupError: string | null;
   guildResourcesRefreshVersion: number;
   onSelectedGuildChange: (nextGuildId: string) => void;
-  onSelectedWorkspaceChange: (workspaceId: string) => void;
   refreshGuildDirectory: () => Promise<void>;
   onRefresh: () => Promise<void>;
   playstationLinkEnabled: boolean;

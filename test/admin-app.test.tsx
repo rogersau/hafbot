@@ -11,11 +11,7 @@ import { JSDOM } from "jsdom";
 
 import "./support/admin-page-test-loader";
 
-import App, {
-  combineDashboardErrors,
-  getDiscordSignInCallbackUrl,
-  shouldEnableGuildDirectory,
-} from "../src/admin/App";
+import App, { combineDashboardErrors, getDiscordSignInCallbackUrl } from "../src/admin/App";
 import * as AdminAppModule from "../src/admin/App";
 import { getAdminLoginLocation } from "../src/runtime/admin-shell";
 import { AdminBottomActionBar } from "../src/admin/components/admin-bottom-action-bar";
@@ -99,14 +95,6 @@ test("getDiscordSignInCallbackUrl: non-dashboard path next returns /admin", () =
 test("unauthenticated admin App renders the Discord sign-in prompt", () => {
   const html = renderToString(<App />);
   assert.match(html, /Continue with Discord/);
-});
-
-test("Guild directory waits for automatic workspace selection", () => {
-  assert.equal(shouldEnableGuildDirectory(true, "", true, 0), false);
-  assert.equal(shouldEnableGuildDirectory(true, "", false, 1), false);
-  assert.equal(shouldEnableGuildDirectory(true, "workspace-1", true, 1), true);
-  assert.equal(shouldEnableGuildDirectory(true, "", false, 0), true);
-  assert.equal(shouldEnableGuildDirectory(false, "workspace-1", false, 1), false);
 });
 
 test("checkout-aware sign in explains that the selected plan will continue after Discord", () => {
@@ -1176,80 +1164,6 @@ test("timed role DM preview renders supported placeholders", () => {
   );
 });
 
-test("getDashboardPageDataPolicy scopes loads to the active page", () => {
-  const helper = (AdminAppModule as Record<string, unknown>).getDashboardPageDataPolicy;
-
-  assert.equal(typeof helper, "function");
-  const getDashboardPageDataPolicy = helper as (path: string) => {
-    loadOverview: boolean;
-    loadGuildDirectory: boolean;
-    monitorGateway: boolean;
-    refreshOverviewAfterGatewayStart: boolean;
-  };
-
-  assert.deepEqual(getDashboardPageDataPolicy("/admin"), {
-    loadOverview: true,
-    loadGuildDirectory: true,
-    monitorGateway: true,
-    refreshOverviewAfterGatewayStart: true,
-  });
-  assert.deepEqual(getDashboardPageDataPolicy("/admin/guild-1/blocklist"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-  assert.deepEqual(getDashboardPageDataPolicy("/admin/guild-1/timed-roles"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-  assert.deepEqual(getDashboardPageDataPolicy("/admin/guild-1/tickets"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-  assert.deepEqual(getDashboardPageDataPolicy("/admin/guild-1/troubleshooting"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-  assert.deepEqual(getDashboardPageDataPolicy("/admin/guild-1/webhooks"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-});
-
-test("getEffectiveDashboardPageDataPolicy keeps customer guild directory available on overview", () => {
-  const helper = (AdminAppModule as Record<string, unknown>).getEffectiveDashboardPageDataPolicy;
-
-  assert.equal(typeof helper, "function");
-  const getEffectiveDashboardPageDataPolicy = helper as (path: string) => {
-    loadOverview: boolean;
-    loadGuildDirectory: boolean;
-    monitorGateway: boolean;
-    refreshOverviewAfterGatewayStart: boolean;
-  };
-
-  assert.deepEqual(getEffectiveDashboardPageDataPolicy("/admin"), {
-    loadOverview: true,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-  assert.deepEqual(getEffectiveDashboardPageDataPolicy("/admin/guild-1/tickets"), {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  });
-});
-
 test("getSelectedGuildIdFromPath reads the guild from the dashboard path", () => {
   const helper = (AdminAppModule as Record<string, unknown>).getSelectedGuildIdFromPath;
 
@@ -2149,12 +2063,8 @@ function createTestAdminRouterContext(
     defaultRedirectTarget: null,
     guildDirectory: null,
     guildLookupError: null,
-    workspaces: [],
-    workspacesLoading: false,
-    workspaceLookupError: null,
     guildResourcesRefreshVersion: 0,
     onSelectedGuildChange: () => {},
-    onSelectedWorkspaceChange: () => {},
     refreshGuildDirectory: async () => {},
     onRefresh: async () => {},
     playstationLinkEnabled: true,

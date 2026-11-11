@@ -5,7 +5,6 @@ import type {
   AdminGuildDirectoryResponse,
 } from "../../runtime/admin-types";
 import { describeError } from "../lib/api";
-import type { PageDataPolicy } from "../types";
 
 interface UseGuildDirectoryResult {
   guildDirectory: AdminGuildDirectoryEntry[] | null;
@@ -17,7 +16,6 @@ interface UseGuildDirectoryResult {
 export function useGuildDirectory(
   enabled: boolean,
   selectedWorkspaceId: string,
-  pageDataPolicy: PageDataPolicy,
 ): UseGuildDirectoryResult {
   const [guildDirectory, setGuildDirectory] = useState<AdminGuildDirectoryEntry[] | null>(null);
   const { run, cancel, error: guildLookupError, setError } = useAdminApi();
@@ -34,7 +32,7 @@ export function useGuildDirectory(
   );
 
   useEffect(() => {
-    if (!enabled || !pageDataPolicy.loadGuildDirectory) {
+    if (!enabled) {
       setGuildDirectory(null);
       cancel();
       setError(null);
@@ -50,7 +48,7 @@ export function useGuildDirectory(
       },
     );
     return cancel;
-  }, [enabled, loadGuildDirectory, pageDataPolicy.loadGuildDirectory, run, cancel, setError]);
+  }, [enabled, loadGuildDirectory, run, cancel, setError]);
 
   const refreshGuildDirectory = useCallback(async () => {
     await run(
