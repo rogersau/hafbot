@@ -3,14 +3,20 @@ name: Public source validation
 on:
   pull_request:
   push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
-  group: public-ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Each main commit keeps its run; superseded PR runs can still be cancelled.
+  group: public-ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
@@ -33,6 +39,7 @@ jobs:
       - run: pnpm lint && pnpm format:check
       - run: pnpm build && pnpm typecheck && pnpm typecheck:shared
       - run: pnpm test:prebuilt
+      - run: node --test test/release-version.test.mjs
       - run: pnpm docs:build
       - run: pnpm audit --prod --audit-level=high
 
@@ -81,5 +88,92 @@ jobs:
         with:
           node-version: "22"
           package-manager-cache: false
-      - run: docker build --target runtime --tag haf-public-ci:${{ github.sha }} .
+      - run: >-
+          docker build --target runtime --tag haf-public-ci:${{ github.sha }}
+          --label org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          --label org.opencontainers.image.revision=${{ github.sha }} .
       - run: node scripts/container-smoke.mjs haf-public-ci:${{ github.sha }}
+      - name: Save tested release image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rogersau/hafbot'
+        run: docker save haf-public-ci:${{ github.sha }} | gzip > ${{ runner.temp }}/release-image.tar.gz
+      - name: Upload tested release image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rogersau/hafbot'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-image-${{ github.sha }}
+          path: ${{ runner.temp }}/release-image.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [validate, postgres, container]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rogersau/hafbot'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    concurrency:
+      group: public-release
+      queue: max
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Plan deterministic release version
+        id: version
+        run: node scripts/release-version.mjs
+      - name: Create or resume draft release
+        id: draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+        run: |
+          if state=$(gh release view "$TAG" --json isDraft --jq .isDraft); then
+            if [ "$state" = false ]; then
+              echo 'Published release already exists; nothing to do.'
+              echo 'publish=false' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --draft \
+              --title "HAF Bot $TAG" --generate-notes --notes-start-tag "$PREVIOUS"
+          fi
+          echo 'publish=true' >> "$GITHUB_OUTPUT"
+      - name: Download tested image
+        if: steps.draft.outputs.publish == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-image-${{ github.sha }}
+          path: ${{ runner.temp }}/release-image
+      - name: Publish image and release assets
+        if: steps.draft.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+          LATEST: ${{ steps.version.outputs.latest }}
+        run: |
+          docker load --input "$RUNNER_TEMP/release-image/release-image.tar.gz"
+          docker image inspect "haf-public-ci:$GITHUB_SHA" \
+            --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' | grep -Fx "$GITHUB_SHA"
+          docker tag "haf-public-ci:$GITHUB_SHA" "hafbot:$TAG"
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          cd "$RUNNER_TEMP/release-assets"
+          docker image inspect "hafbot:$TAG" --format '{{.Id}}' > image-id.txt
+          docker save "hafbot:$TAG" | gzip > "hafbot-image-$TAG-linux-amd64.tar.gz"
+          git -C "$GITHUB_WORKSPACE" archive --format=tar --prefix="hafbot-$TAG/" "$GITHUB_SHA" \
+            | gzip -n > "hafbot-source-$TAG.tar.gz"
+          sha256sum "hafbot-source-$TAG.tar.gz" "hafbot-image-$TAG-linux-amd64.tar.gz" image-id.txt > SHA256SUMS
+          gh release upload "$TAG" "hafbot-source-$TAG.tar.gz" "hafbot-image-$TAG-linux-amd64.tar.gz" image-id.txt SHA256SUMS --clobber
+          gh release view "$TAG" --json body --jq .body > notes.md
+          printf '\n## Tested container (Linux amd64)\n\nSource commit: `%s`\n\nVerify assets with `sha256sum -c SHA256SUMS`, then run:\n\n```sh\ndocker load --input hafbot-image-%s-linux-amd64.tar.gz\n```\n\nSet `HAF_IMAGE=hafbot:%s` in your self-hosting environment. Image ID: `%s`.\n' \
+            "$GITHUB_SHA" "$TAG" "$TAG" "$(cat image-id.txt)" >> notes.md
+          gh release edit "$TAG" --notes-file notes.md --draft=false --latest="$LATEST"

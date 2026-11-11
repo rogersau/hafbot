@@ -6,7 +6,7 @@ Discord application, PostgreSQL and private object storage. Set `HAF_DEPLOYMENT_
 to enable core feature capabilities without a hosted HAF subscription. Existing resource, provider,
 Discord and abuse limits still apply.
 
-This is the initial public source release of [rogersau/hafbot](https://github.com/rogersau/hafbot).
+This is the public source repository of [rogersau/hafbot](https://github.com/rogersau/hafbot).
 The hosted service at [hafbot.xyz](https://hafbot.xyz/) is separately operated.
 
 The public codebase targets fresh installations. Startup initializes an empty database from
@@ -17,8 +17,9 @@ current provider prices and publish controls using your installation's own signi
 The source build, PostgreSQL contracts and local container readiness and fresh-initialization path are validated.
 A fresh independent live Discord/OAuth, Tunnel/private-object and end-to-end backup/restore
 rehearsal has not been completed for this release. Verify your own credentials, operator policies
-and integrations before inviting users. This release provides a build-from-source path; it does
-not publish or grant access to the hosted service's private container images or infrastructure.
+and integrations before inviting users. Build from source or download the tested Linux amd64
+container archive from an automated [GitHub release](https://github.com/rogersau/hafbot/releases).
+The hosted service's private container images and infrastructure remain separately controlled.
 See [initial release notes](RELEASE_NOTES.md) for the validation scope and live-test limits.
 
 ## Run your own installation
