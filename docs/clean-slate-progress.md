@@ -14,13 +14,15 @@ there are no active deployments, inherited compatibility requirements or upgrade
 | Canonical persisted and queue documents             | Architecture thread                | Implemented; current signatures, Gateway envelopes and encrypted webhook references |
 | Server error contract                               | Architecture thread                | Current fields only; 65 focused checks and type/test builds pass                    |
 | Admin loading/error UI and prototypes               | Architecture integration           | C02 and C07 integrated as `02cbf2e` and `4af4df0`; 33 checks and Admin types pass   |
-| Shared validation and required service capabilities | Task thread adaptations            | Distinct-fix manifest requested; C03, C10 and C11 remain open                       |
+| Shared validation and required service capabilities | Task thread adaptations            | Manifest reconciled; C03, C10 and C11 adaptations remain open                       |
 | Service atomicity and regressions                   | Integration by architecture thread | Preserve and reconcile distinct task fixes individually                             |
 | Final combined validation                           | Architecture thread                | Pending combined integration                                                        |
 
 ## Reconciliation queue
 
-- Read the task thread's distinct-fix manifest and map its task IDs to this inventory.
+- The distinct-fix manifest is preserved in [`task-audit-handoff.md`](task-audit-handoff.md).
+  C01/C05 and native/schema portions of C13/P08 are superseded implementations whose useful
+  regression evidence must remain. C02/C07 are integrated; C03/C10/C11 are distinct adaptations.
 - Port the configuration/clear versus burst-recording serialization invariant from `94baa1a`,
   preserving its PostgreSQL concurrency regression. Do not overwrite native adapters with the
   overlapping `fb3065a` ports.
