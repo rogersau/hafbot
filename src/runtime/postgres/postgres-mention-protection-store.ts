@@ -1,6 +1,6 @@
 import type { PostgresDatabaseCapability } from "./postgres-capability";
-import { executePostgresCommands, type PostgresCommand } from "./postgres-statements";
-import { and, eq, lt } from "drizzle-orm";
+import type { PostgresCommand } from "./postgres-statements";
+import { and, eq, gte, lt, lte, sql } from "drizzle-orm";
 import {
   mentionProtectionActionOutcomes,
   mentionProtectionBreaches,
@@ -19,6 +19,8 @@ import type { MentionProtectionStore } from "../contracts/mention-protection-sto
 type ConfigRow = typeof mentionProtectionConfigs.$inferSelect;
 
 const ENFORCEMENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000;
+const CONFIG_LOCK_NAMESPACE = 7_308_201;
+const BURST_LOCK_NAMESPACE = 7_308_203;
 
 export function createPostgresMentionProtectionStore(
   database: PostgresDatabaseCapability,
@@ -37,74 +39,108 @@ export function createPostgresMentionProtectionStore(
     },
 
     async upsertConfig(config) {
-      const previous = await store.readConfig(config.guildId);
       const values = configToRow(config);
-      await db
-        .insert(mentionProtectionConfigs)
-        .values(values)
-        .onConflictDoUpdate({
-          target: mentionProtectionConfigs.guildId,
-          set: {
-            adminEnabled: values.adminEnabled,
-            spamEnabled: values.spamEnabled,
-            protectedAdminRoleIdsJson: values.protectedAdminRoleIdsJson,
-            channelMode: values.channelMode,
-            channelIdsJson: values.channelIdsJson,
-            excludedRoleIdsJson: values.excludedRoleIdsJson,
-            massMentionThreshold: values.massMentionThreshold,
-            burstMessageThreshold: values.burstMessageThreshold,
-            burstWindowSeconds: values.burstWindowSeconds,
-            adminRepeatPeriodMs: values.adminRepeatPeriodMs,
-            spamRepeatPeriodMs: values.spamRepeatPeriodMs,
-            adminInitialResponseJson: values.adminInitialResponseJson,
-            adminRepeatResponseJson: values.adminRepeatResponseJson,
-            spamInitialResponseJson: values.spamInitialResponseJson,
-            spamRepeatResponseJson: values.spamRepeatResponseJson,
-            updatedAtMs: values.updatedAtMs,
-          },
-        })
-        .execute();
-      if (previous && burstConfigurationChanged(previous, config)) {
-        await store.clearBurstWindow(config.guildId);
-      }
+      await db.transaction(async (transaction) => {
+        await lockConfig(transaction, config.guildId);
+        const row = await transaction
+          .select()
+          .from(mentionProtectionConfigs)
+          .where(eq(mentionProtectionConfigs.guildId, config.guildId))
+          .limit(1)
+          .then((rows) => rows[0]);
+        const previous = row
+          ? rowToConfig(row)
+          : createDefaultMentionProtectionConfig(config.guildId);
+        await transaction
+          .insert(mentionProtectionConfigs)
+          .values(values)
+          .onConflictDoUpdate({
+            target: mentionProtectionConfigs.guildId,
+            set: {
+              adminEnabled: values.adminEnabled,
+              spamEnabled: values.spamEnabled,
+              protectedAdminRoleIdsJson: values.protectedAdminRoleIdsJson,
+              channelMode: values.channelMode,
+              channelIdsJson: values.channelIdsJson,
+              excludedRoleIdsJson: values.excludedRoleIdsJson,
+              massMentionThreshold: values.massMentionThreshold,
+              burstMessageThreshold: values.burstMessageThreshold,
+              burstWindowSeconds: values.burstWindowSeconds,
+              adminRepeatPeriodMs: values.adminRepeatPeriodMs,
+              spamRepeatPeriodMs: values.spamRepeatPeriodMs,
+              adminInitialResponseJson: values.adminInitialResponseJson,
+              adminRepeatResponseJson: values.adminRepeatResponseJson,
+              spamInitialResponseJson: values.spamInitialResponseJson,
+              spamRepeatResponseJson: values.spamRepeatResponseJson,
+              updatedAtMs: values.updatedAtMs,
+            },
+          })
+          .execute();
+        if (burstConfigurationChanged(previous, config)) {
+          await clearBurstWindow(transaction, config.guildId);
+        }
+      });
     },
 
     async deleteConfig(guildId) {
-      await db
-        .delete(mentionProtectionConfigs)
-        .where(eq(mentionProtectionConfigs.guildId, guildId))
-        .execute();
-      await store.clearBurstWindow(guildId);
+      await db.transaction(async (transaction) => {
+        await lockConfig(transaction, guildId);
+        await transaction
+          .delete(mentionProtectionConfigs)
+          .where(eq(mentionProtectionConfigs.guildId, guildId))
+          .execute();
+        await clearBurstWindow(transaction, guildId);
+      });
     },
 
     async clearBurstWindow(guildId) {
-      await db
-        .delete(mentionProtectionBurstEvents)
-        .where(eq(mentionProtectionBurstEvents.guildId, guildId))
-        .execute();
+      await db.transaction(async (transaction) => {
+        await lockConfig(transaction, guildId);
+        await clearBurstWindow(transaction, guildId);
+      });
     },
 
     async recordBurstMessage(input) {
       const cutoff = input.messageTimestampMs - input.windowMs;
-      await executePostgresCommands(database, [
-        {
-          statement:
-            "INSERT INTO mention_protection_burst_events (guild_id, user_id, message_id, message_timestamp_ms) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
-          values: [input.guildId, input.userId, input.messageId, input.messageTimestampMs],
-        },
-        {
-          statement:
-            "DELETE FROM mention_protection_burst_events WHERE guild_id = $1 AND user_id = $2 AND message_timestamp_ms < $3",
-          values: [input.guildId, input.userId, cutoff],
-        },
-      ]);
-      const row = await database
-        .query<{ count?: unknown }>(
-          "SELECT COUNT(*) AS count FROM mention_protection_burst_events WHERE guild_id = $1 AND user_id = $2 AND message_timestamp_ms >= $3 AND message_timestamp_ms <= $4",
-          [input.guildId, input.userId, cutoff, input.messageTimestampMs],
-        )
-        .then((rows) => rows[0] ?? null);
-      return typeof row?.count === "number" ? row.count : Number(row?.count ?? 0);
+      return db.transaction(async (transaction) => {
+        // Configuration replacement clears every member's burst window.
+        // Burst recordings share the guild lock; replacements take it exclusively.
+        await lockConfig(transaction, input.guildId, "shared");
+        await lockBurstWindow(transaction, input.guildId, input.userId);
+        await transaction
+          .insert(mentionProtectionBurstEvents)
+          .values({
+            guildId: input.guildId,
+            userId: input.userId,
+            messageId: input.messageId,
+            messageTimestampMs: input.messageTimestampMs,
+          })
+          .onConflictDoNothing()
+          .execute();
+        await transaction
+          .delete(mentionProtectionBurstEvents)
+          .where(
+            and(
+              eq(mentionProtectionBurstEvents.guildId, input.guildId),
+              eq(mentionProtectionBurstEvents.userId, input.userId),
+              lt(mentionProtectionBurstEvents.messageTimestampMs, cutoff),
+            ),
+          )
+          .execute();
+        const row = await transaction
+          .select({ count: sql<number>`count(*)::integer` })
+          .from(mentionProtectionBurstEvents)
+          .where(
+            and(
+              eq(mentionProtectionBurstEvents.guildId, input.guildId),
+              eq(mentionProtectionBurstEvents.userId, input.userId),
+              gte(mentionProtectionBurstEvents.messageTimestampMs, cutoff),
+              lte(mentionProtectionBurstEvents.messageTimestampMs, input.messageTimestampMs),
+            ),
+          )
+          .then((rows) => rows[0] ?? null);
+        return row?.count ?? 0;
+      });
     },
 
     async claimMessageBreaches(input) {
@@ -417,6 +453,43 @@ function parseRecord(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+type MentionProtectionTransaction = Parameters<
+  Parameters<PostgresDatabaseCapability["drizzle"]["transaction"]>[0]
+>[0];
+
+async function lockConfig(
+  transaction: MentionProtectionTransaction,
+  guildId: string,
+  mode: "shared" | "exclusive" = "exclusive",
+): Promise<void> {
+  const key = `mention-protection-config:${guildId}`;
+  await transaction.execute(
+    mode === "shared"
+      ? sql`SELECT pg_advisory_xact_lock_shared(hashtextextended(${key}, ${CONFIG_LOCK_NAMESPACE}))`
+      : sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, ${CONFIG_LOCK_NAMESPACE}))`,
+  );
+}
+
+async function lockBurstWindow(
+  transaction: MentionProtectionTransaction,
+  guildId: string,
+  userId: string,
+): Promise<void> {
+  await transaction.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`mention-protection-burst:${guildId}:${userId}`}, ${BURST_LOCK_NAMESPACE}))`,
+  );
+}
+
+async function clearBurstWindow(
+  transaction: MentionProtectionTransaction,
+  guildId: string,
+): Promise<void> {
+  await transaction
+    .delete(mentionProtectionBurstEvents)
+    .where(eq(mentionProtectionBurstEvents.guildId, guildId))
+    .execute();
 }
 
 function burstConfigurationChanged(
