@@ -475,9 +475,7 @@ function ticketPanelFailureResponse(
           ? 502
           : failure.code === "open-tickets"
             ? 409
-            : failure.code === "unsupported"
-              ? 501
-              : 400;
+            : 400;
   return Response.json({ error: failure.message }, { status });
 }
 

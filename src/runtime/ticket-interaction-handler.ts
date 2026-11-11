@@ -680,9 +680,6 @@ async function buildTicketHistoryMessage(options: {
   excludeChannelId: string | null;
   beforeOpenedAtMs: number | null;
 }) {
-  if (!options.stores.tickets.listMemberTicketHistory) {
-    return { content: "Ticket History is temporarily unavailable.", components: [] };
-  }
   const page = await options.stores.tickets.listMemberTicketHistory({
     guildId: options.guildId,
     openerUserId: options.targetUserId,
@@ -690,9 +687,7 @@ async function buildTicketHistoryMessage(options: {
     limit: 10,
     beforeOpenedAtMs: options.beforeOpenedAtMs,
   });
-  const panels = options.stores.tickets.listTicketPanelConfigs
-    ? await options.stores.tickets.listTicketPanelConfigs(options.guildId)
-    : [];
+  const panels = await options.stores.tickets.listTicketPanelConfigs(options.guildId);
   const panelById = new Map(panels.map((panel) => [panel.panelId ?? "main", panel]));
   const fields = page.tickets.map((ticket) => {
     const opened = `<t:${Math.floor(ticket.openedAtMs / 1000)}:d>`;
@@ -1013,7 +1008,7 @@ async function readInteractionTicketPanel(
   guildId: string,
   panelId: string | undefined,
 ): Promise<TicketPanelConfig | null> {
-  if (panelId && store.readTicketPanelConfigById) {
+  if (panelId) {
     return store.readTicketPanelConfigById(guildId, panelId);
   }
   return store.readTicketPanelConfig(guildId);

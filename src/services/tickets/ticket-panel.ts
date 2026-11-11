@@ -159,8 +159,7 @@ export type TicketPanelFailureCode =
   | "provider-failure"
   | "persistence-failure"
   | "partial-success"
-  | "open-tickets"
-  | "unsupported";
+  | "open-tickets";
 
 export type TicketPanelResult<T> =
   | { ok: true; value: T }
