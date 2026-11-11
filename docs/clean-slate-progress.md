@@ -12,14 +12,14 @@ types, contract drift and test compilation pass. Focused coordinator checks pass
 and P04 Event atomicity plus recurrence 7/7 real PostgreSQL. All focused runs have zero skips.
 The broad validation below predates these integrations and must be rerun after remaining work.
 
-| Area                                                          | Owner                    | Current state                                                              |
-| ------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------- |
-| Native stores, fresh schema, Worker/D1 removal                | Architecture             | Implemented; final combined acceptance pending                             |
-| Shared validation, service capabilities and handler injection | Architecture integration | C03/C10/C11/C12 integrated individually                                    |
-| Offering lifecycle consolidation C23                          | Task coordinator         | Approved brief preserved; implementation access-blocked by Go subscription |
-| Direct native job outcomes R02                                | Architecture             | Preserved draft; implementation access-blocked by Go subscription          |
-| Shared HTTP/job service graph R01                             | Architecture             | Open; follows direct-job entrypoint changes                                |
-| Final contracts/builds/types/public/PG/container validation   | Architecture             | Pending remaining integrations                                             |
+| Area                                                          | Owner                    | Current state                                                          |
+| ------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------- |
+| Native stores, fresh schema, Worker/D1 removal                | Architecture             | Implemented; final combined acceptance pending                         |
+| Shared validation, service capabilities and handler injection | Architecture integration | C03/C10/C11/C12 integrated individually                                |
+| Offering lifecycle consolidation C23                          | Task coordinator         | Approved brief released after user reports restored Go access          |
+| Direct native job outcomes R02                                | Architecture             | Preserved draft completion running; actual access confirmation pending |
+| Shared HTTP/job service graph R01                             | Architecture             | Open; follows direct-job entrypoint changes                            |
+| Final contracts/builds/types/public/PG/container validation   | Architecture             | Pending remaining integrations                                         |
 
 ## Reconciled evidence
 
@@ -58,20 +58,20 @@ The broad validation below predates these integrations and must be rerun after r
 
 The global cap is five active implementers across both coordinators and all machines. Normal
 reservation is architecture two, task coordinator three; the temporary three/two loan has ended.
-All implementers are terminal; global active count is zero. Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
+Earlier failed implementers are terminal. One new R02 attempt is active; C23 replacement is released. Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
 worktrees, drafts, commits and evidence are preserved. No remote audit implementer is active.
 All new implementation tasks use isolated checkouts with OpenCode Go
 `opencode-go/deepseek-v4.1-flash`, `variant=max`, serial focused tests and disposable PostgreSQL
 limited to one CPU, 256 MB, `shared_buffers=32MB`, `max_connections=20`.
 
-| Reserved allocation  | Assignment                  | State/base                                                      |
-| -------------------- | --------------------------- | --------------------------------------------------------------- |
-| Architecture 1       | R02 recovery                | Access-blocked; terminal failed, draft preserved                |
-| Architecture 2       | Required Ticket persistence | Access-blocked; terminal failed, clean checkout preserved       |
-| Task coordinator 1   | C23 offering lifecycle      | Access-blocked; terminal failed at verified `fa1fe4e`, no edits |
-| Task coordinator 2–3 | None                        | Empty; no work created solely to occupy slots                   |
+| Reserved allocation  | Assignment                     | State/base                                                  |
+| -------------------- | ------------------------------ | ----------------------------------------------------------- |
+| Architecture 1       | R02 preserved-draft completion | Running on `d1ff7ad`, restored-access attempt               |
+| Architecture 2       | Required Ticket persistence    | Queued; earlier attempts terminal, no implementation result |
+| Task coordinator 1   | C23 offering lifecycle         | Released for replacement on `d1ff7ad`; awaiting receipt     |
+| Task coordinator 2–3 | None                           | Empty; no work created solely to occupy slots               |
 
-Terminal failed Ticket replacement: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Adf8136b7-7c3b-435f-937e-aa875892e28d`, base `2a07da4beadeaac6376c74395c5d80f705f0ca0c`. It owns the Ticket contract, dedicated Ticket services/Admin Ticket callsites/tests only; no stores/schema/queue or shared C23 fixtures. Architecture and the task coordinator have zero active implementers (global zero). R01 shared composition remains queued until its dependencies release.
+Terminal failed Ticket replacement: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Adf8136b7-7c3b-435f-937e-aa875892e28d`, base `2a07da4beadeaac6376c74395c5d80f705f0ca0c`. It owns the Ticket contract, dedicated Ticket services/Admin Ticket callsites/tests only; no stores/schema/queue or shared C23 fixtures. Those failed attempts use no active slots; current assignments are listed above. R01 shared composition remains queued until its dependencies release.
 
 Terminal failed C23: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Acc83b1ee-a638-4257-b4e3-6506a2063fc6`, exact base `fa1fe4e3d9d40a3fa17d75654b8e20a374adb598`. Approved reader exceptions and all R02 exclusions below remain in force.
 
@@ -98,28 +98,36 @@ worktree unchanged. Recovery must reuse it, resolve meaningful failed assertions
 native retry reasons/backoff. PostgreSQL settlement regressions belong in a discovered
 `test/postgres-queue-outcomes.test.ts`, separate from pure direct-port tests.
 
-## Go subscription access failure
+## Go access recovery and authorized fallback
 
-R02 recovery `1af5370d` and Ticket replacement `df8136b7` both failed with:
-“An active OpenCode Go subscription is required to use OpenCode Go models.” C23 `cc83b1ee`
-failed identically. All are terminal cancelled with no queued continuation or pending request.
-The model catalog still advertises Go/max, but actual execution rejects access. No replacement,
-provider/model substitution or further Go retry is authorized. The user chose to restore
-OpenCode Go access; further implementation/delegation is held until restoration is confirmed.
-All checkpoints, drafts and approved briefs remain preserved.
+R02 `1af5370d`, Ticket `df8136b7` and C23 `cc83b1ee` failed with an active-Go-subscription
+requirement. All are terminal cancelled with no queued continuation or pending request.
+The user initially chose to restore Go access, then reported it should be ready and authorized
+resumption. New attempts use the same bounded scopes; earlier checkouts remain preserved.
 
-R02 recovery made no changes to the original draft: both complete patches have SHA-256
+Current R02: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A87580670-82d9-4f4c-b4e2-006283264438`,
+base `d1ff7ad3ea01de310e4e52be720ef5b146ff3f9e`, OpenCode Go DeepSeek V4.1 Flash/max.
+Actual execution, not catalog availability, must confirm restored access. C23 replacement is
+released on that same explicit base, which differs from verified `fa1fe4e` only in inventory docs.
+
+The user explicitly authorized GLM 5.3 Flash if DeepSeek fails. Discovery confirms provider
+`opencode`, model `opencode-go/glm-5.3-flash`, `variant=max`. Keep DeepSeek first; a failed
+attempt may be preserved/cancelled and replaced by one new same-scope GLM task within the
+same reserved slot. No other provider/model substitution is authorized. If Go access rejects
+both models, preserve/report instead of retrying indefinitely.
+
+R02's two preserved complete patches are identical, SHA-256
 `300818c476e299f20905706567be38c3dab2faddbc94a514d533c0cb06dd3e6a` (149,846 bytes).
 The second copy and manifest are `/tmp/haf-R02-preserved-subscription.patch` and
-`/tmp/haf-R02-preserved-subscription.json`; both tracked and untracked files are preserved.
-The draft is not integrated/accepted: known timing/backoff assertions still need correction and
-its two PG settlement cases must move into a `postgres-*.test.ts` file so final PG discovery runs them.
+`/tmp/haf-R02-preserved-subscription.json`; tracked and untracked files are preserved.
+No draft is integrated/accepted: timing/backoff assertions need correction and its two PG
+settlement cases must move into a discovered `postgres-*.test.ts` file.
 
-Ticket replacement checkout is clean at `2a07da4`; no implementation result exists. C23 checkout
-is clean at `fa1fe4e`; approved task and reader exceptions are preserved in
+The failed Ticket checkout is clean at `2a07da4`; no implementation result exists. Failed C23
+checkout is clean at `fa1fe4e`; approved brief and reader exceptions are preserved in
 `/tmp/hafbot-C23-approved-task-brief.md`, recovery manifest in
-`/tmp/hafbot-C23-subscription-blocked-manifest.md`. The older incomplete offering draft remains
-read-only design evidence. No SQL/schema work has been accepted from it.
+`/tmp/hafbot-C23-subscription-blocked-manifest.md`. The old incomplete offering draft remains
+read-only design evidence, with no accepted SQL/schema result.
 
 ## Remaining integration boundaries
 
@@ -197,14 +205,14 @@ required. It is not a claim that the original finding is closed by the existence
 | C20              | Integrated `b8edd9a`; explicit media classification and no old metadata decoder                                          |
 | C21              | Checkpoint: one stored entitlement plan field                                                                            |
 | C22              | Checkpoint: current Billing prices and self-hosted policy                                                                |
-| C23              | Approved task terminal failed from Go subscription rejection; no source result; complete brief preserved                 |
+| C23              | Approved replacement released on `d1ff7ad`; earlier subscription-failed checkout clean/preserved                         |
 | C24              | Canonical public error fields/client parsing; complete endpoint/transport acceptance still pending                       |
 | P01–P03, P05–P07 | Native identity, roles, Tickets, content, social and community stores at checkpoint                                      |
 | P04              | Integrated `9f02d5b` + `62b315e` (sources `a3f3f09` + `e9cd8ba`); 7 real-PG Event atomicity/recurrence checks pass       |
 | P08              | Integrated `3d1bb9e`; 8 real-PG moderation checks pass, including race and rollback regressions                          |
 | P09–P14          | Native remaining stores, credentials, auth and context selection at checkpoint                                           |
 | R01              | Open: one selected service graph shared by HTTP/jobs/handlers                                                            |
-| R02              | Draft preserved and not accepted; recovery terminal failed from Go subscription rejection                                |
+| R02              | Running preserved-draft completion on `d1ff7ad`; earlier failed tasks preserved, no accepted source yet                  |
 | R03              | Checkpoint: production Worker/DO/D1 host and SQL bridge removed; SQLite fixtures are test-only                           |
 | B01              | Current fresh schema at checkpoint; C23 will change only its offering baseline                                           |
 | B02              | Checkpoint: supported Node/test boundaries and retained tooling; final clean artifact build required                     |
