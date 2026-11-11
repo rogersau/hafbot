@@ -16,8 +16,8 @@ The broad validation below predates these integrations and must be rerun after r
 | ------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------- |
 | Native stores, fresh schema, Worker/D1 removal                | Architecture             | Implemented; final combined acceptance pending                             |
 | Shared validation, service capabilities and handler injection | Architecture integration | C03/C10/C11/C12 integrated individually                                    |
-| Offering lifecycle consolidation C23                          | Task coordinator         | Released on verified `fa1fe4e`; approved bounded schema/store exception    |
-| Direct native job outcomes R02                                | Architecture             | Original provider-overload draft preserved; same-provider recovery running |
+| Offering lifecycle consolidation C23                          | Task coordinator         | Approved brief preserved; implementation access-blocked by Go subscription |
+| Direct native job outcomes R02                                | Architecture             | Preserved draft; implementation access-blocked by Go subscription          |
 | Shared HTTP/job service graph R01                             | Architecture             | Open; follows direct-job entrypoint changes                                |
 | Final contracts/builds/types/public/PG/container validation   | Architecture             | Pending remaining integrations                                             |
 
@@ -58,22 +58,22 @@ The broad validation below predates these integrations and must be rerun after r
 
 The global cap is five active implementers across both coordinators and all machines. Normal
 reservation is architecture two, task coordinator three; the temporary three/two loan has ended.
-All previous implementers are terminal; new R02 recovery and C23 are active. Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
+All implementers are terminal; global active count is zero. Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
 worktrees, drafts, commits and evidence are preserved. No remote audit implementer is active.
 All new implementation tasks use isolated checkouts with OpenCode Go
 `opencode-go/deepseek-v4.1-flash`, `variant=max`, serial focused tests and disposable PostgreSQL
 limited to one CPU, 256 MB, `shared_buffers=32MB`, `max_connections=20`.
 
-| Reserved allocation  | Assignment                  | State/base                                                             |
-| -------------------- | --------------------------- | ---------------------------------------------------------------------- |
-| Architecture 1       | R02 recovery                | Running on `17acff9` (source equal verified `fa1fe4e`)                 |
-| Architecture 2       | Required Ticket persistence | Running on `2a07da4`; excludes C23/shared fixtures and R02 queue paths |
-| Task coordinator 1   | C23 offering lifecycle      | Running on `fa1fe4e`; approved readers included                        |
-| Task coordinator 2–3 | None                        | Empty; no work created solely to occupy slots                          |
+| Reserved allocation  | Assignment                  | State/base                                                      |
+| -------------------- | --------------------------- | --------------------------------------------------------------- |
+| Architecture 1       | R02 recovery                | Access-blocked; terminal failed, draft preserved                |
+| Architecture 2       | Required Ticket persistence | Access-blocked; terminal failed, clean checkout preserved       |
+| Task coordinator 1   | C23 offering lifecycle      | Access-blocked; terminal failed at verified `fa1fe4e`, no edits |
+| Task coordinator 2–3 | None                        | Empty; no work created solely to occupy slots                   |
 
-Active Ticket residual replacement: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Adf8136b7-7c3b-435f-937e-aa875892e28d`, base `2a07da4beadeaac6376c74395c5d80f705f0ca0c`. It owns the Ticket contract, dedicated Ticket services/Admin Ticket callsites/tests only; no stores/schema/queue or shared C23 fixtures. Architecture has two active implementers; the task coordinator has one (global three). R01 shared composition remains queued until its dependencies release.
+Terminal failed Ticket replacement: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Adf8136b7-7c3b-435f-937e-aa875892e28d`, base `2a07da4beadeaac6376c74395c5d80f705f0ca0c`. It owns the Ticket contract, dedicated Ticket services/Admin Ticket callsites/tests only; no stores/schema/queue or shared C23 fixtures. Architecture and the task coordinator have zero active implementers (global zero). R01 shared composition remains queued until its dependencies release.
 
-Active C23: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Acc83b1ee-a638-4257-b4e3-6506a2063fc6`, exact base `fa1fe4e3d9d40a3fa17d75654b8e20a374adb598`. Approved reader exceptions and all R02 exclusions below remain in force.
+Terminal failed C23: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Acc83b1ee-a638-4257-b4e3-6506a2063fc6`, exact base `fa1fe4e3d9d40a3fa17d75654b8e20a374adb598`. Approved reader exceptions and all R02 exclusions below remain in force.
 
 Original Ticket task `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A7e5d3f49-d1f4-46d9-bb28-c5a7f1e0bacf` failed from provider overload before commands/edits and is terminal cancelled. Its clean checkout is preserved. Capability discovery still offers the approved model; replacement uses the same provider/model/max without adding a slot.
 
@@ -89,7 +89,7 @@ Completed implementation task IDs (all terminal):
 - P04: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aca78aeb1-fdb9-4303-940c-29ccd508d410`.
 - C06: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3A4ea26bd9-298b-4d35-9410-b037c9ce5b89`.
 
-Active R02 recovery: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A1af5370d-6900-430c-af56-541c95c2fabc`, base `17acff9b61396043a74938de43d19c34ca7be9c3`. Owned production paths are queue contracts/consumers, narrow Billing/Commerce queue entrypoints, native job metadata/outcome handling and Node job registration; tests cover those seams and native settlement. No SQL stores, offering domain/schema or HTTP composition.
+Terminal failed R02 recovery: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A1af5370d-6900-430c-af56-541c95c2fabc`, base `17acff9b61396043a74938de43d19c34ca7be9c3`. Owned production paths are queue contracts/consumers, narrow Billing/Commerce queue entrypoints, native job metadata/outcome handling and Node job registration; tests cover those seams and native settlement. No SQL stores, offering domain/schema or HTTP composition.
 
 Failed original R02 task (terminal, cancelled to prevent continuation):
 `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A7681cfcd-44cd-4501-bce9-488a0e1c6aea`.
@@ -97,6 +97,28 @@ Full tracked/untracked draft: `/tmp/haf-R02-preserved-overload.patch` (149,846 b
 worktree unchanged. Recovery must reuse it, resolve meaningful failed assertions and preserve
 native retry reasons/backoff. PostgreSQL settlement regressions belong in a discovered
 `test/postgres-queue-outcomes.test.ts`, separate from pure direct-port tests.
+
+## Go subscription access failure
+
+R02 recovery `1af5370d` and Ticket replacement `df8136b7` both failed with:
+“An active OpenCode Go subscription is required to use OpenCode Go models.” C23 `cc83b1ee`
+failed identically. All are terminal cancelled with no queued continuation or pending request.
+The model catalog still advertises Go/max, but actual execution rejects access. No replacement,
+provider/model substitution or further Go retry is authorized while the user's restore-Go versus
+direct-root-continuation choice is pending. Coordinator review and preservation continue.
+
+R02 recovery made no changes to the original draft: both complete patches have SHA-256
+`300818c476e299f20905706567be38c3dab2faddbc94a514d533c0cb06dd3e6a` (149,846 bytes).
+The second copy and manifest are `/tmp/haf-R02-preserved-subscription.patch` and
+`/tmp/haf-R02-preserved-subscription.json`; both tracked and untracked files are preserved.
+The draft is not integrated/accepted: known timing/backoff assertions still need correction and
+its two PG settlement cases must move into a `postgres-*.test.ts` file so final PG discovery runs them.
+
+Ticket replacement checkout is clean at `2a07da4`; no implementation result exists. C23 checkout
+is clean at `fa1fe4e`; approved task and reader exceptions are preserved in
+`/tmp/hafbot-C23-approved-task-brief.md`, recovery manifest in
+`/tmp/hafbot-C23-subscription-blocked-manifest.md`. The older incomplete offering draft remains
+read-only design evidence. No SQL/schema work has been accepted from it.
 
 ## Remaining integration boundaries
 
@@ -120,6 +142,30 @@ R02 may also update `test/postgres-gateway-retries.test.ts` only for direct queu
 R01 must build services from selected stores and supply the same instances to HTTP/jobs/scheduled
 handlers. Preserve scheduled suspension filtering, lifecycle tracking, request origin semantics and
 the genuine read-only maintenance boundary. It does not reopen C12 handler reconstruction work.
+
+## Shared-composition review notes
+
+R01 source review confirms that HTTP builds feature services then spreads overrides, whereas job
+registration constructs a second graph. Node application context builds Billing/Commerce/Paid Role
+runtimes which job registration and Gateway dependencies reconstruct. This is current open work.
+
+The intended composition is one writable application graph after all stores, blobs, credentials,
+Gateway controller, analytics and lifecycle tracking are selected. HTTP, scheduled services and
+native job handlers receive that graph and already-selected processing ports. `createRuntimeApp`
+should consume required services; a test-only builder may supply partial test overrides before
+construction. No request-time factory, build-then-replace capture, generic DI container or first-request
+origin cache is needed. Preserve actual `waitUntil` tracking through host shutdown.
+
+Move current scheduled-store filtering to the composition stage: timed roles, LFG, Events,
+Player Count and Managed Message scheduled scans must still exclude suspended Guilds. The
+maintenance HTTP context remains an explicit separate read-only graph/pool; sharing writable
+services into it would violate its existing security boundary.
+
+A second confirmed residual is `service-factory.ts`'s disabled Suggestion store and in-memory
+incident store substitution. Native and test contexts already provide these stores. Required
+current persistence must be selected before graph construction, not supplied by hidden no-op
+fallbacks. Optional external capabilities and disabled current product features remain explicit.
+This design is prepared for implementation; no R01 source change is claimed.
 
 ## Original task coverage
 
@@ -150,14 +196,14 @@ required. It is not a claim that the original finding is closed by the existence
 | C20              | Integrated `b8edd9a`; explicit media classification and no old metadata decoder                                          |
 | C21              | Checkpoint: one stored entitlement plan field                                                                            |
 | C22              | Checkpoint: current Billing prices and self-hosted policy                                                                |
-| C23              | Released to task coordinator on verified `fa1fe4e`; one offering row, explicit prior repair state and real-PG invariants |
+| C23              | Approved task terminal failed from Go subscription rejection; no source result; complete brief preserved                 |
 | C24              | Canonical public error fields/client parsing; complete endpoint/transport acceptance still pending                       |
 | P01–P03, P05–P07 | Native identity, roles, Tickets, content, social and community stores at checkpoint                                      |
 | P04              | Integrated `9f02d5b` + `62b315e` (sources `a3f3f09` + `e9cd8ba`); 7 real-PG Event atomicity/recurrence checks pass       |
 | P08              | Integrated `3d1bb9e`; 8 real-PG moderation checks pass, including race and rollback regressions                          |
 | P09–P14          | Native remaining stores, credentials, auth and context selection at checkpoint                                           |
 | R01              | Open: one selected service graph shared by HTTP/jobs/handlers                                                            |
-| R02              | Running: same-provider recovery reuses preserved draft for direct outcomes and durable settlement                        |
+| R02              | Draft preserved and not accepted; recovery terminal failed from Go subscription rejection                                |
 | R03              | Checkpoint: production Worker/DO/D1 host and SQL bridge removed; SQLite fixtures are test-only                           |
 | B01              | Current fresh schema at checkpoint; C23 will change only its offering baseline                                           |
 | B02              | Checkpoint: supported Node/test boundaries and retained tooling; final clean artifact build required                     |
