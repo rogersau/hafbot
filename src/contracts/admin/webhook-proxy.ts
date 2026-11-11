@@ -94,12 +94,15 @@ const credentialActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("replace"), url: httpsUrlFieldSchema }),
 ]);
 
+const webhookLabelSchema = z
+  .string()
+  .min(1, "Missing label")
+  .refine((value) => value.trim().length > 0, "Missing label")
+  .transform((value) => value.trim());
+
 const destinationSchema = z.object({
   id: webhookProxyIdSchema,
-  label: z
-    .string()
-    .min(1, "Missing label")
-    .transform((value) => value.trim()),
+  label: webhookLabelSchema,
   credential: credentialActionSchema,
 });
 
@@ -121,10 +124,7 @@ const adminContentReplacementSchema = z.object({
 
 const routingRuleSchema = adminRoutingRuleSchema.extend({
   id: webhookProxyIdSchema,
-  label: z
-    .string()
-    .min(1, "Missing label")
-    .transform((value) => value.trim()),
+  label: webhookLabelSchema,
   pattern: compilableRegexSchema,
   flags: routingRegexFlagsSchema.optional(),
   destinationIds: z.array(webhookProxyIdSchema).min(1, "Missing destinationIds"),
@@ -132,10 +132,7 @@ const routingRuleSchema = adminRoutingRuleSchema.extend({
 
 const contentReplacementSchema = adminContentReplacementSchema.extend({
   id: webhookProxyIdSchema,
-  label: z
-    .string()
-    .min(1, "Missing label")
-    .transform((value) => value.trim()),
+  label: webhookLabelSchema,
   pattern: compilableRegexSchema,
   flags: replacementRegexFlagsSchema.optional(),
   replacement: z
@@ -152,6 +149,7 @@ export const webhookProxyConfigBodySchema = z
     name: z
       .string()
       .min(1, "Missing name")
+      .refine((value) => value.trim().length > 0, "Missing name")
       .transform((value) => value.trim()),
     enabled: z.boolean({ error: () => "Missing enabled" }),
     banLookupEnabled: z.boolean().optional().default(false),

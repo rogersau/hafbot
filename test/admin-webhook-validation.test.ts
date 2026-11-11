@@ -122,6 +122,42 @@ test("Webhook Proxy save rejects invalid IDs, URLs, regexes, flags and reference
     message: string;
   }> = [
     {
+      name: "blank configuration name",
+      mutate: (body) => {
+        body.name = " \t ";
+      },
+      field: "name",
+      message: "Missing name",
+    },
+    {
+      name: "blank destination label",
+      mutate: (body) => {
+        body.destinations[0]!.label = " \t ";
+      },
+      field: "destinations.0.label",
+      message: "Missing label",
+    },
+    {
+      name: "blank routing label",
+      mutate: (body) => {
+        body.routingRules = [
+          { id: "errors", label: " \t ", pattern: "error", destinationIds: ["main"] },
+        ];
+      },
+      field: "routingRules.0.label",
+      message: "Missing label",
+    },
+    {
+      name: "blank replacement label",
+      mutate: (body) => {
+        body.contentReplacements = [
+          { id: "clean", label: " \t ", pattern: "error", replacement: "warning" },
+        ];
+      },
+      field: "contentReplacements.0.label",
+      message: "Missing label",
+    },
+    {
       name: "invalid public ID",
       mutate: (body) => {
         body.publicId = "bad id";
@@ -363,7 +399,7 @@ test("Webhook Proxy save rejects invalid IDs, URLs, regexes, flags and reference
     assert.equal(payload.action, "fix_fields", invalid.name);
     assert.equal(payload.retryable, false, invalid.name);
     assert.match(payload.correlationId ?? "", /^[^ ]+$/, invalid.name);
-    assert.equal(payload.issues, undefined, `${invalid.name} used the retired fieldIssues alias`);
+    assert.equal(payload.issues, undefined, `${invalid.name} used the retired issues alias`);
     assert.ok(
       payload.fieldIssues?.some(
         (issue) => issue.path === invalid.field && issue.message === invalid.message,

@@ -10,9 +10,13 @@ PostgreSQL stores before constructing services, authentication, queue consumers 
 capabilities. Feature services receive persistence through contracts. They do not construct stores
 or choose a database based on an absent binding.
 
-Production contains no Worker entrypoint, Durable Objects, D1 facade, SQL dialect translator,
-synthetic Worker bindings or database-absence fallback implementations. Process caches use a small
-cache contract. S3 and Azure object stores are current provider adapters.
+Production contains no Worker entrypoint, Durable Objects, D1 facade or SQL dialect translator.
+Process caches use a small cache contract. S3 and Azure object stores are current provider adapters.
+
+Two composition gaps remain open during integration: interaction/command handlers still rebuild
+feature services, and native jobs still synthesize the former queue batch/callback shape.
+Gateway dependencies are selected explicitly; that does not complete handler injection or the
+single-graph/direct-job audit tasks. Their remaining scope is tracked in the combined inventory.
 
 SQLite implementations and their current schema fixture live under `test/support` for isolated
 service tests. Production cannot import those fixtures. Architecture tests enforce that boundary,
