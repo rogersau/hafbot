@@ -58,7 +58,7 @@ The broad validation below predates these integrations and must be rerun after r
 
 The global cap is five active implementers across both coordinators and all machines. Normal
 reservation is architecture two, task coordinator three; the temporary three/two loan has ended.
-All previous implementers are terminal; new R02 recovery is active. Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
+All previous implementers are terminal; new R02 recovery and C23 are active. Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
 worktrees, drafts, commits and evidence are preserved. No remote audit implementer is active.
 All new implementation tasks use isolated checkouts with OpenCode Go
 `opencode-go/deepseek-v4.1-flash`, `variant=max`, serial focused tests and disposable PostgreSQL
@@ -68,8 +68,12 @@ limited to one CPU, 256 MB, `shared_buffers=32MB`, `max_connections=20`.
 | -------------------- | ---------------------- | ------------------------------------------------------ |
 | Architecture 1       | R02 recovery           | Running on `17acff9` (source equal verified `fa1fe4e`) |
 | Architecture 2       | R01 shared graph       | Dependency-gated; no delegate launched                 |
-| Task coordinator 1   | C23 offering lifecycle | Released on `fa1fe4e`; awaiting launch receipt         |
+| Task coordinator 1   | C23 offering lifecycle | Running on `fa1fe4e`; approved readers included        |
 | Task coordinator 2–3 | None                   | Empty; no work created solely to occupy slots          |
+
+Active C23: `node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Acc83b1ee-a638-4257-b4e3-6506a2063fc6`, exact base `fa1fe4e3d9d40a3fa17d75654b8e20a374adb598`. Approved reader exceptions and all R02 exclusions below remain in force.
+
+Residual Ticket persistence is confirmed open: current adapters implement multi-panel reads/list/delete, scoped open counts, member history and template-reply claims, but contracts/services still allow weaker missing-method paths. A bounded second architecture assignment will require these ports without schema/native/queue work. It excludes C23-owned `guild-overview.ts` and `test/runtime-app.test.ts`; root will update their Ticket-only callsites after integration.
 
 Completed implementation task IDs (all terminal):
 
