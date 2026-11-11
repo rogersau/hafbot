@@ -104,8 +104,9 @@ R02 recovery `1af5370d` and Ticket replacement `df8136b7` both failed with:
 “An active OpenCode Go subscription is required to use OpenCode Go models.” C23 `cc83b1ee`
 failed identically. All are terminal cancelled with no queued continuation or pending request.
 The model catalog still advertises Go/max, but actual execution rejects access. No replacement,
-provider/model substitution or further Go retry is authorized while the user's restore-Go versus
-direct-root-continuation choice is pending. Coordinator review and preservation continue.
+provider/model substitution or further Go retry is authorized. The user chose to restore
+OpenCode Go access; further implementation/delegation is held until restoration is confirmed.
+All checkpoints, drafts and approved briefs remain preserved.
 
 R02 recovery made no changes to the original draft: both complete patches have SHA-256
 `300818c476e299f20905706567be38c3dab2faddbc94a514d533c0cb06dd3e6a` (149,846 bytes).
