@@ -31,11 +31,11 @@ import {
   buildTicketTranscriptPath,
 } from "../src/tickets";
 import type {
-  ManualAssignmentTimedRoleConfig,
   ReactionLimitConfig,
   TicketInstance,
   TicketPanelConfig,
   TimedRoleAssignment,
+  TimedRoleAutomationRule,
   WebhookProxyConfig,
   WebhookProxyForwardLog,
 } from "../src/types";
@@ -174,29 +174,6 @@ function createRuntimeStoresWithOverrides(oldStore: object): RuntimeStores {
   }
 
   const legacy = oldStore as Record<string, unknown>;
-  const upsertNewMember = legacy.upsertNewMemberTimedRoleConfig;
-  const upsertManualAssignment = legacy.upsertManualAssignmentTimedRoleConfig;
-  if (typeof upsertNewMember === "function" || typeof upsertManualAssignment === "function") {
-    const productionUpsertRules = fixture.stores.timedRoles.upsertTimedRoleConfigRules?.bind(
-      fixture.stores.timedRoles,
-    );
-    addOverride(
-      "timedRoles",
-      "upsertTimedRoleConfigRules",
-      async (guildId: string, configType: string, roles: unknown[]) => {
-        if (configType === "new-member" && typeof upsertNewMember === "function") {
-          await Reflect.apply(upsertNewMember, legacy, [{ guildId, roles }]);
-          return;
-        }
-        if (configType === "manual-assignment" && typeof upsertManualAssignment === "function") {
-          await Reflect.apply(upsertManualAssignment, legacy, [{ guildId, roles }]);
-          return;
-        }
-        await productionUpsertRules?.(guildId, configType as never, roles as never);
-      },
-    );
-  }
-
   const readTicketPanel = legacy.readTicketPanelConfig;
   if (typeof readTicketPanel === "function") {
     if (!("readTicketPanelConfigById" in legacy)) {
@@ -5353,7 +5330,7 @@ test("createRuntimeApp exposes timed-role admin APIs through session auth", asyn
 test("createRuntimeApp exposes new member timed-role config through session auth", async () => {
   let config = {
     guildId: "guild-1",
-    roles: [] as Array<{ roleId: string; durationInput: string; dmMessage?: string | null }>,
+    roles: [] as TimedRoleAutomationRule[],
   };
 
   const app = createRuntimeApp({
@@ -5361,11 +5338,18 @@ test("createRuntimeApp exposes new member timed-role config through session auth
     discordBotToken: "bot-token",
     verifyDiscordRequest: async () => true,
     stores: createRuntimeStoresWithOverrides({
-      async readNewMemberTimedRoleConfig(guildId: string) {
-        return guildId === config.guildId ? config : { guildId, roles: [] };
+      async readTimedRoleConfigRules(
+        guildId: string,
+        configType: "new-member" | "manual-assignment",
+      ) {
+        return guildId === config.guildId && configType === "new-member" ? config.roles : [];
       },
-      async upsertNewMemberTimedRoleConfig(nextConfig: typeof config) {
-        config = nextConfig;
+      async upsertTimedRoleConfigRules(
+        guildId: string,
+        configType: "new-member" | "manual-assignment",
+        roles: TimedRoleAutomationRule[],
+      ) {
+        if (configType === "new-member") config = { guildId, roles };
       },
     }),
     gateway: {} as GatewayController,
@@ -5433,9 +5417,9 @@ test("createRuntimeApp exposes new member timed-role config through session auth
 });
 
 test("createRuntimeApp exposes manual-assignment timed-role config through session auth", async () => {
-  let config: ManualAssignmentTimedRoleConfig = {
+  let config = {
     guildId: "guild-1",
-    roles: [],
+    roles: [] as TimedRoleAutomationRule[],
   };
 
   const app = createRuntimeApp({
@@ -5443,11 +5427,18 @@ test("createRuntimeApp exposes manual-assignment timed-role config through sessi
     discordBotToken: "bot-token",
     verifyDiscordRequest: async () => true,
     stores: createRuntimeStoresWithOverrides({
-      async readManualAssignmentTimedRoleConfig(guildId: string) {
-        return guildId === config.guildId ? config : { guildId, roles: [] };
+      async readTimedRoleConfigRules(
+        guildId: string,
+        configType: "new-member" | "manual-assignment",
+      ) {
+        return guildId === config.guildId && configType === "manual-assignment" ? config.roles : [];
       },
-      async upsertManualAssignmentTimedRoleConfig(nextConfig: ManualAssignmentTimedRoleConfig) {
-        config = nextConfig;
+      async upsertTimedRoleConfigRules(
+        guildId: string,
+        configType: "new-member" | "manual-assignment",
+        roles: TimedRoleAutomationRule[],
+      ) {
+        if (configType === "manual-assignment") config = { guildId, roles };
       },
     }),
     gateway: {} as GatewayController,

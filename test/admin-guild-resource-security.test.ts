@@ -501,8 +501,8 @@ test("Timed Role config rejects a foreign role with HTTP 400 before persistence"
     );
 
     assert.equal(response?.status, 400);
-    const config = await fixture.stores.timedRoles.readNewMemberTimedRoleConfig?.("guild-1");
-    assert.deepEqual(config?.roles ?? [], []);
+    const rules = await fixture.stores.timedRoles.readTimedRoleConfigRules("guild-1", "new-member");
+    assert.deepEqual(rules, []);
   } finally {
     fixture.close();
   }

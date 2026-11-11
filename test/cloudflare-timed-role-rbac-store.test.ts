@@ -21,18 +21,14 @@ test("Timed Role and Guild RBAC stores use the migrated unified database without
     durationInput: "1h",
     expiresAtMs: 200,
   });
-  assert.ok(timedRoles.upsertNewMemberTimedRoleConfig);
-  assert.ok(timedRoles.upsertManualAssignmentTimedRoleConfig);
-  assert.ok(timedRoles.readNewMemberTimedRoleConfig);
-  assert.ok(timedRoles.readManualAssignmentTimedRoleConfig);
-  await timedRoles.upsertNewMemberTimedRoleConfig({
-    guildId: "guild-1",
-    roles: [{ roleId: "role-new", durationInput: "2h" }],
-  });
-  await timedRoles.upsertManualAssignmentTimedRoleConfig({
-    guildId: "guild-1",
-    roles: [{ roleId: "role-manual", durationInput: "3h" }],
-  });
+  assert.ok(timedRoles.upsertTimedRoleConfigRules);
+  assert.ok(timedRoles.readTimedRoleConfigRules);
+  await timedRoles.upsertTimedRoleConfigRules("guild-1", "new-member", [
+    { roleId: "role-new", durationInput: "2h" },
+  ]);
+  await timedRoles.upsertTimedRoleConfigRules("guild-1", "manual-assignment", [
+    { roleId: "role-manual", durationInput: "3h" },
+  ]);
   await rbac.upsertGuildAdminRoleId("guild-1", "admin-role-1");
 
   assert.deepEqual(await timedRoles.listExpiredTimedRoles(250), [
@@ -44,14 +40,12 @@ test("Timed Role and Guild RBAC stores use the migrated unified database without
       expiresAtMs: 200,
     },
   ]);
-  assert.deepEqual(await timedRoles.readNewMemberTimedRoleConfig("guild-1"), {
-    guildId: "guild-1",
-    roles: [{ roleId: "role-new", durationInput: "2h" }],
-  });
-  assert.deepEqual(await timedRoles.readManualAssignmentTimedRoleConfig("guild-1"), {
-    guildId: "guild-1",
-    roles: [{ roleId: "role-manual", durationInput: "3h" }],
-  });
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "new-member"), [
+    { roleId: "role-new", durationInput: "2h" },
+  ]);
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "manual-assignment"), [
+    { roleId: "role-manual", durationInput: "3h" },
+  ]);
   assert.equal(await rbac.readGuildAdminRoleId("guild-1"), "admin-role-1");
   assert.equal(database.execCalls, 0);
 });
@@ -167,32 +161,21 @@ test("Timed Role store reads, writes, and clears new-member config", async () =>
   const database = new SqliteD1Database();
   const timedRoles = createSqliteTimedRoleStore(database as unknown as D1Database);
 
-  assert.ok(timedRoles.readNewMemberTimedRoleConfig);
-  assert.ok(timedRoles.upsertNewMemberTimedRoleConfig);
-  assert.deepEqual(await timedRoles.readNewMemberTimedRoleConfig("guild-1"), {
-    guildId: "guild-1",
-    roles: [],
-  });
+  assert.ok(timedRoles.readTimedRoleConfigRules);
+  assert.ok(timedRoles.upsertTimedRoleConfigRules);
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "new-member"), []);
 
-  await timedRoles.upsertNewMemberTimedRoleConfig({
-    guildId: "guild-1",
-    roles: [{ roleId: "role-new", durationInput: "2h", dmMessage: "Welcome {user}" }],
-  });
+  await timedRoles.upsertTimedRoleConfigRules("guild-1", "new-member", [
+    { roleId: "role-new", durationInput: "2h", dmMessage: "Welcome {user}" },
+  ]);
 
-  assert.deepEqual(await timedRoles.readNewMemberTimedRoleConfig("guild-1"), {
-    guildId: "guild-1",
-    roles: [{ roleId: "role-new", durationInput: "2h", dmMessage: "Welcome {user}" }],
-  });
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "new-member"), [
+    { roleId: "role-new", durationInput: "2h", dmMessage: "Welcome {user}" },
+  ]);
 
-  await timedRoles.upsertNewMemberTimedRoleConfig({
-    guildId: "guild-1",
-    roles: [],
-  });
+  await timedRoles.upsertTimedRoleConfigRules("guild-1", "new-member", []);
 
-  assert.deepEqual(await timedRoles.readNewMemberTimedRoleConfig("guild-1"), {
-    guildId: "guild-1",
-    roles: [],
-  });
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "new-member"), []);
   assert.equal(database.execCalls, 0);
 });
 
@@ -200,37 +183,26 @@ test("Timed Role store reads, writes, and clears manual-assignment config", asyn
   const database = new SqliteD1Database();
   const timedRoles = createSqliteTimedRoleStore(database as unknown as D1Database);
 
-  assert.ok(timedRoles.readManualAssignmentTimedRoleConfig);
-  assert.ok(timedRoles.upsertManualAssignmentTimedRoleConfig);
-  assert.deepEqual(await timedRoles.readManualAssignmentTimedRoleConfig("guild-1"), {
-    guildId: "guild-1",
-    roles: [],
-  });
+  assert.ok(timedRoles.readTimedRoleConfigRules);
+  assert.ok(timedRoles.upsertTimedRoleConfigRules);
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "manual-assignment"), []);
   assert.equal(
     database.prepareCalls.some((query) => query.includes("manual_assignment_timed_role_configs")),
     false,
     "empty current config must not query the dropped legacy table",
   );
 
-  await timedRoles.upsertManualAssignmentTimedRoleConfig({
-    guildId: "guild-1",
-    roles: [{ roleId: "role-manual", durationInput: "3h" }],
-  });
+  await timedRoles.upsertTimedRoleConfigRules("guild-1", "manual-assignment", [
+    { roleId: "role-manual", durationInput: "3h" },
+  ]);
 
-  assert.deepEqual(await timedRoles.readManualAssignmentTimedRoleConfig("guild-1"), {
-    guildId: "guild-1",
-    roles: [{ roleId: "role-manual", durationInput: "3h" }],
-  });
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "manual-assignment"), [
+    { roleId: "role-manual", durationInput: "3h" },
+  ]);
 
-  await timedRoles.upsertManualAssignmentTimedRoleConfig({
-    guildId: "guild-1",
-    roles: [],
-  });
+  await timedRoles.upsertTimedRoleConfigRules("guild-1", "manual-assignment", []);
 
-  assert.deepEqual(await timedRoles.readManualAssignmentTimedRoleConfig("guild-1"), {
-    guildId: "guild-1",
-    roles: [],
-  });
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "manual-assignment"), []);
   assert.equal(database.execCalls, 0);
 });
 
@@ -318,25 +290,71 @@ test("Timed Role store persists explicitly configured suspended roles", async ()
   const database = new SqliteD1Database();
   const timedRoles = createSqliteTimedRoleStore(database as unknown as D1Database);
 
-  await timedRoles.upsertNewMemberTimedRoleConfig!({
-    guildId: "guild-1",
-    roles: [
-      {
-        roleId: "timed-role",
-        durationInput: "1h",
-        suspendedRoleIds: ["access-a", "access-b"],
-      },
-    ],
-  });
+  await timedRoles.upsertTimedRoleConfigRules("guild-1", "new-member", [
+    {
+      roleId: "timed-role",
+      durationInput: "1h",
+      suspendedRoleIds: ["access-a", "access-b"],
+    },
+  ]);
 
-  assert.deepEqual(await timedRoles.readNewMemberTimedRoleConfig!("guild-1"), {
-    guildId: "guild-1",
-    roles: [
-      {
-        roleId: "timed-role",
-        durationInput: "1h",
-        suspendedRoleIds: ["access-a", "access-b"],
-      },
-    ],
-  });
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "new-member"), [
+    {
+      roleId: "timed-role",
+      durationInput: "1h",
+      suspendedRoleIds: ["access-a", "access-b"],
+    },
+  ]);
 });
+
+test("Timed Role rule replacement keeps the previous rules when the insert fails", async () => {
+  const database = new SqliteD1Database();
+  const timedRoles = createSqliteTimedRoleStore(database as unknown as D1Database);
+  const previousRule = { roleId: "old-role", durationInput: "2h", dmMessage: "Old {user}" };
+  const otherConfigRule = { roleId: "manual-role", durationInput: "3h" };
+  await timedRoles.upsertTimedRoleConfigRules("guild-1", "new-member", [previousRule]);
+  await timedRoles.upsertTimedRoleConfigRules("guild-1", "manual-assignment", [otherConfigRule]);
+
+  const failingStore = createSqliteTimedRoleStore(databaseWithFailingRuleInsert(database));
+  await assert.rejects(
+    failingStore.upsertTimedRoleConfigRules("guild-1", "new-member", [
+      { roleId: "replacement-role", durationInput: "1h" },
+    ]),
+    /injected timed-role rule insert failure/,
+  );
+
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "new-member"), [
+    previousRule,
+  ]);
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "manual-assignment"), [
+    otherConfigRule,
+  ]);
+
+  const replacement = { roleId: "replacement-role", durationInput: "1h" };
+  await timedRoles.upsertTimedRoleConfigRules("guild-1", "new-member", [replacement]);
+  assert.deepEqual(await timedRoles.readTimedRoleConfigRules("guild-1", "new-member"), [
+    replacement,
+  ]);
+});
+
+function databaseWithFailingRuleInsert(database: SqliteD1Database): D1Database {
+  const underlying = database.d1;
+  const failingStatement = {
+    bind: () => failingStatement,
+    runSync: () => {
+      throw new Error("injected timed-role rule insert failure");
+    },
+  };
+  return {
+    ...underlying,
+    prepare(query: string) {
+      if (/insert\s+into\s+["`]?timed_role_config_rules/i.test(query)) {
+        return failingStatement as unknown as D1PreparedStatement;
+      }
+      return underlying.prepare(query);
+    },
+    batch(statements: D1PreparedStatement[]) {
+      return database.batch(statements as never) as never;
+    },
+  } as unknown as D1Database;
+}

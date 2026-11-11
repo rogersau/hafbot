@@ -1,9 +1,4 @@
-import type {
-  ManualAssignmentTimedRoleConfig,
-  NewMemberTimedRoleConfig,
-  TimedRoleAutomationRule,
-  TimedRoleAssignment,
-} from "../../../../src/types";
+import type { TimedRoleAutomationRule, TimedRoleAssignment } from "../../../../src/types";
 import { and, asc, eq, isNotNull, lte, or } from "drizzle-orm";
 import { timedRoleConfigRules, timedRoles } from "../db/app-schema";
 import type { TimedRoleStore } from "../../../../src/runtime/contracts";
@@ -153,47 +148,27 @@ export function createSqliteTimedRoleStore(database: D1Database): TimedRoleStore
       configType: TimedRoleConfigType,
       rules: TimedRoleAutomationRule[],
     ): Promise<void> {
-      await db
-        .delete(timedRoleConfigRules)
-        .where(
-          and(
-            eq(timedRoleConfigRules.guildId, guildId),
-            eq(timedRoleConfigRules.configType, configType),
+      const statements = [
+        db
+          .delete(timedRoleConfigRules)
+          .where(
+            and(
+              eq(timedRoleConfigRules.guildId, guildId),
+              eq(timedRoleConfigRules.configType, configType),
+            ),
           ),
-        )
-        .run();
+        ...(rules.length > 0
+          ? [
+              db
+                .insert(timedRoleConfigRules)
+                .values(rules.map((rule) => ruleToRow(guildId, configType, rule))),
+            ]
+          : []),
+      ];
 
-      if (rules.length === 0) {
-        return;
-      }
-
-      await db
-        .insert(timedRoleConfigRules)
-        .values(rules.map((rule) => ruleToRow(guildId, configType, rule)))
-        .run();
-    },
-
-    async readNewMemberTimedRoleConfig(guildId: string): Promise<NewMemberTimedRoleConfig> {
-      return { guildId, roles: await store.readTimedRoleConfigRules!(guildId, "new-member") };
-    },
-
-    async upsertNewMemberTimedRoleConfig(body: NewMemberTimedRoleConfig): Promise<void> {
-      await store.upsertTimedRoleConfigRules!(body.guildId, "new-member", body.roles);
-    },
-
-    async readManualAssignmentTimedRoleConfig(
-      guildId: string,
-    ): Promise<ManualAssignmentTimedRoleConfig> {
-      return {
-        guildId,
-        roles: await store.readTimedRoleConfigRules!(guildId, "manual-assignment"),
-      };
-    },
-
-    async upsertManualAssignmentTimedRoleConfig(
-      body: ManualAssignmentTimedRoleConfig,
-    ): Promise<void> {
-      await store.upsertTimedRoleConfigRules!(body.guildId, "manual-assignment", body.roles);
+      // The test D1 batch runs inside one transaction. A failed insert must
+      // leave the previously persisted rule set in place.
+      await db.batch(statements as never);
     },
   };
 

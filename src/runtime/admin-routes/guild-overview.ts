@@ -929,12 +929,12 @@ export function createGuildOverviewAdminRoutes(
           options.stores.blocklist.readConfig(),
           options.stores.reactionLimits.readReactionLimitConfig(guildId),
           options.stores.timedRoles.listTimedRolesByGuild(guildId),
-          options.stores.timedRoles.readNewMemberTimedRoleConfig
-            ? options.stores.timedRoles.readNewMemberTimedRoleConfig(guildId)
-            : Promise.resolve(null),
-          options.stores.timedRoles.readManualAssignmentTimedRoleConfig
-            ? options.stores.timedRoles.readManualAssignmentTimedRoleConfig(guildId)
-            : Promise.resolve(null),
+          options.stores.timedRoles
+            .readTimedRoleConfigRules(guildId, "new-member")
+            .then((roles) => ({ guildId, roles })),
+          options.stores.timedRoles
+            .readTimedRoleConfigRules(guildId, "manual-assignment")
+            .then((roles) => ({ guildId, roles })),
           options.stores.tickets.listTicketPanelConfigs
             ? options.stores.tickets.listTicketPanelConfigs(guildId)
             : options.stores.tickets

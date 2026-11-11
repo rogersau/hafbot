@@ -1,10 +1,5 @@
-import type {
-  ManualAssignmentTimedRoleConfig,
-  NewMemberTimedRoleConfig,
-  TimedRoleAutomationRule,
-  TimedRoleAssignment,
-} from "../../types";
-import { and, asc, eq, isNotNull, lte, or } from "drizzle-orm";
+import type { TimedRoleAutomationRule, TimedRoleAssignment } from "../../types";
+import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm";
 import { timedRoleConfigRules, timedRoles } from "../../db/postgres/app-schema";
 import type { TimedRoleStore } from "../contracts";
 import type { TimedRoleConfigType } from "../contracts/timed-role-store";
@@ -146,47 +141,30 @@ export function createPostgresTimedRoleStore(database: PostgresDatabaseCapabilit
       configType: TimedRoleConfigType,
       rules: TimedRoleAutomationRule[],
     ): Promise<void> {
-      await db
-        .delete(timedRoleConfigRules)
-        .where(
-          and(
-            eq(timedRoleConfigRules.guildId, guildId),
-            eq(timedRoleConfigRules.configType, configType),
-          ),
-        )
-        .execute();
+      await db.transaction(async (transaction) => {
+        // Whole-set replacement must serialize per Guild and config type. A
+        // delete followed by an insert in separate transactions could leave
+        // rows from two competing replacements in the same configuration.
+        await transaction.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`timed-role-config:${guildId}:${configType}`}, 0))`,
+        );
+        await transaction
+          .delete(timedRoleConfigRules)
+          .where(
+            and(
+              eq(timedRoleConfigRules.guildId, guildId),
+              eq(timedRoleConfigRules.configType, configType),
+            ),
+          )
+          .execute();
 
-      if (rules.length === 0) {
-        return;
-      }
+        if (rules.length === 0) return;
 
-      await db
-        .insert(timedRoleConfigRules)
-        .values(rules.map((rule) => ruleToRow(guildId, configType, rule)))
-        .execute();
-    },
-
-    async readNewMemberTimedRoleConfig(guildId: string): Promise<NewMemberTimedRoleConfig> {
-      return { guildId, roles: await store.readTimedRoleConfigRules!(guildId, "new-member") };
-    },
-
-    async upsertNewMemberTimedRoleConfig(body: NewMemberTimedRoleConfig): Promise<void> {
-      await store.upsertTimedRoleConfigRules!(body.guildId, "new-member", body.roles);
-    },
-
-    async readManualAssignmentTimedRoleConfig(
-      guildId: string,
-    ): Promise<ManualAssignmentTimedRoleConfig> {
-      return {
-        guildId,
-        roles: await store.readTimedRoleConfigRules!(guildId, "manual-assignment"),
-      };
-    },
-
-    async upsertManualAssignmentTimedRoleConfig(
-      body: ManualAssignmentTimedRoleConfig,
-    ): Promise<void> {
-      await store.upsertTimedRoleConfigRules!(body.guildId, "manual-assignment", body.roles);
+        await transaction
+          .insert(timedRoleConfigRules)
+          .values(rules.map((rule) => ruleToRow(guildId, configType, rule)))
+          .execute();
+      });
     },
   };
 

@@ -711,8 +711,7 @@ function createStubStores(tier: "free" | "premium" = "free"): RuntimeStores {
     },
     timedRoles: {
       listTimedRolesByGuild: async () => [],
-      readNewMemberTimedRoleConfig: async () => ({ guildId, roles: [] }),
-      readManualAssignmentTimedRoleConfig: async () => ({ guildId, roles: [] }),
+      readTimedRoleConfigRules: async () => [],
     },
     tickets: {
       listTicketPanelConfigs: async () => [],
@@ -799,6 +798,41 @@ test("GET /admin/api/guild-overview returns a card summary for the requested gui
   assert.equal(body.tier, "premium");
   assert.ok(Array.isArray(body.cards));
   assert.ok(body.cards.length >= 10);
+});
+
+test("GET /admin/api/guild-overview reads current timed-role rules from the canonical store", async () => {
+  const stores = createStubStores("premium");
+  const configReads: string[] = [];
+  stores.timedRoles = {
+    ...stores.timedRoles,
+    async readTimedRoleConfigRules(_guildId, configType) {
+      configReads.push(configType);
+      return configType === "new-member"
+        ? [{ roleId: "role-1", durationInput: "1d" }]
+        : [{ roleId: "role-2", durationInput: "1h" }];
+    },
+  };
+  const routes = createAdminRoutes({
+    stores,
+    adminAccess: allowAllAdminAccess,
+    discordBotToken: "test",
+    features: enabledFeatures,
+  });
+  const request = new Request("https://example.com/admin/api/guild-overview?guildId=guild-1");
+  const response = await dispatchAdminRoute(routes, request, {
+    adminAccess: allowAllAdminAccess,
+    features: enabledFeatures,
+    stores,
+  });
+
+  assert.equal(response?.status, 200);
+  assert.deepEqual(configReads.sort(), ["manual-assignment", "new-member"]);
+  const body = (await response?.json()) as {
+    cards: Array<{ id: string; status: string; detail: string }>;
+  };
+  const card = body.cards.find((entry) => entry.id === "timed-roles");
+  assert.equal(card?.status, "configured");
+  assert.equal(card?.detail, "2 automation rules");
 });
 
 test("GET /admin/api/guild-overview requires guildId", async () => {

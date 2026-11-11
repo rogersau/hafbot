@@ -1,9 +1,4 @@
-import type {
-  ManualAssignmentTimedRoleConfig,
-  NewMemberTimedRoleConfig,
-  TimedRoleAutomationRule,
-  TimedRoleAssignment,
-} from "../../types";
+import type { TimedRoleAutomationRule, TimedRoleAssignment } from "../../types";
 
 export type TimedRoleConfigType = "new-member" | "manual-assignment";
 
@@ -29,17 +24,13 @@ export interface TimedRoleStore {
   }): Promise<void>;
   deleteTimedRole(body: { guildId: string; userId: string; roleId: string }): Promise<void>;
   listExpiredTimedRoles(nowMs: number): Promise<TimedRoleAssignment[]>;
-  readTimedRoleConfigRules?(
+  readTimedRoleConfigRules(
     guildId: string,
     configType: TimedRoleConfigType,
   ): Promise<TimedRoleAutomationRule[]>;
-  upsertTimedRoleConfigRules?(
+  upsertTimedRoleConfigRules(
     guildId: string,
     configType: TimedRoleConfigType,
     rules: TimedRoleAutomationRule[],
   ): Promise<void>;
-  readNewMemberTimedRoleConfig?(guildId: string): Promise<NewMemberTimedRoleConfig>;
-  upsertNewMemberTimedRoleConfig?(body: NewMemberTimedRoleConfig): Promise<void>;
-  readManualAssignmentTimedRoleConfig?(guildId: string): Promise<ManualAssignmentTimedRoleConfig>;
-  upsertManualAssignmentTimedRoleConfig?(body: ManualAssignmentTimedRoleConfig): Promise<void>;
 }

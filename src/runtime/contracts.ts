@@ -1,8 +1,6 @@
 import type {
   BlocklistConfig,
   ChannelFilterMode,
-  ManualAssignmentTimedRoleConfig,
-  NewMemberTimedRoleConfig,
   TicketInstance,
   TicketPanelConfig,
   TimedRoleAssignment,
@@ -118,10 +116,6 @@ export interface RuntimeStore {
   upsertTimedRole(body: TimedRoleAssignment): Promise<void>;
   deleteTimedRole(body: { guildId: string; userId: string; roleId: string }): Promise<void>;
   listExpiredTimedRoles(nowMs: number): Promise<TimedRoleAssignment[]>;
-  readNewMemberTimedRoleConfig(guildId: string): Promise<NewMemberTimedRoleConfig>;
-  upsertNewMemberTimedRoleConfig(body: NewMemberTimedRoleConfig): Promise<void>;
-  readManualAssignmentTimedRoleConfig(guildId: string): Promise<ManualAssignmentTimedRoleConfig>;
-  upsertManualAssignmentTimedRoleConfig(body: ManualAssignmentTimedRoleConfig): Promise<void>;
   readGatewaySnapshot(): Promise<GatewaySnapshot>;
   writeGatewaySnapshot(snapshot: GatewaySnapshot): Promise<void>;
 }

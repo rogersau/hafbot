@@ -82,16 +82,8 @@ test("createSqliteContext exposes grouped stores by bounded context", () => {
   assert.strictEqual(typeof context.stores.timedRoles.listTimedRolesByGuild, "function");
   assert.strictEqual(typeof context.stores.timedRoles.upsertTimedRole, "function");
   assert.strictEqual(typeof context.stores.timedRoles.deleteTimedRole, "function");
-  assert.strictEqual(typeof context.stores.timedRoles.readNewMemberTimedRoleConfig, "function");
-  assert.strictEqual(typeof context.stores.timedRoles.upsertNewMemberTimedRoleConfig, "function");
-  assert.strictEqual(
-    typeof context.stores.timedRoles.readManualAssignmentTimedRoleConfig,
-    "function",
-  );
-  assert.strictEqual(
-    typeof context.stores.timedRoles.upsertManualAssignmentTimedRoleConfig,
-    "function",
-  );
+  assert.strictEqual(typeof context.stores.timedRoles.readTimedRoleConfigRules, "function");
+  assert.strictEqual(typeof context.stores.timedRoles.upsertTimedRoleConfigRules, "function");
   assert.strictEqual(typeof context.stores.tickets.reserveNextTicketNumber, "function");
   assert.strictEqual(typeof context.stores.tickets.readTicketPanelConfig, "function");
   assert.strictEqual(typeof context.stores.tickets.upsertTicketPanelConfig, "function");

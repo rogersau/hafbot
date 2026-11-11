@@ -17,6 +17,7 @@ import {
 } from "../src/discord/suggestions";
 import { createSqliteSuggestionStore } from "./support/sqlite/runtime/sqlite-suggestion-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
+import { withStoreOverrides } from "./support/production-runtime-stores";
 
 async function harness(projection: SuggestionProjection = {}) {
   const store = createSqliteSuggestionStore(new SqliteD1Database().d1);
@@ -305,6 +306,81 @@ test("SuggestionService rejects incomplete activation and enforces durable per-a
     }),
     (error: unknown) => error instanceof SuggestionDomainError && error.code === "rate-limit",
   );
+});
+
+test("SuggestionService always invokes and enforces the required action limiter", async () => {
+  const database = new SqliteD1Database();
+  const store = createSqliteSuggestionStore(database.d1);
+  await store.upsertConfig({
+    ...defaultSuggestionsConfig("guild-1", 1),
+    enabled: true,
+    forumChannelId: "forum-1",
+    categories: ["Bot Features"],
+    submissionCooldownSeconds: 0,
+  });
+  let limiterCalls = 0;
+  const service = new SuggestionService(
+    withStoreOverrides(store, {
+      async consumeActionRateLimit() {
+        limiterCalls += 1;
+        return false;
+      },
+    }),
+    {},
+    () => 10 * 86_400_000,
+    () => "id-1",
+  );
+
+  await assert.rejects(
+    service.submit({
+      guildId: "guild-1",
+      authorId: "author-1",
+      title: "Improve onboarding",
+      category: "Bot Features",
+      answers: [
+        { promptId: "change", promptLabel: "", answer: "Add a clearer onboarding flow" },
+        { promptId: "benefit", promptLabel: "", answer: "New members find channels quickly" },
+        { promptId: "tradeoffs", promptLabel: "", answer: "More setup for staff" },
+      ],
+    }),
+    (error: unknown) => error instanceof SuggestionDomainError && error.code === "rate-limit",
+  );
+  assert.equal(limiterCalls, 1);
+  assert.deepEqual(await store.listActiveSuggestions("guild-1"), []);
+});
+
+test("SuggestionService fails closed instead of bypassing an incomplete action limiter", async () => {
+  const database = new SqliteD1Database();
+  const store = createSqliteSuggestionStore(database.d1);
+  await store.upsertConfig({
+    ...defaultSuggestionsConfig("guild-1", 1),
+    enabled: true,
+    forumChannelId: "forum-1",
+    categories: ["Bot Features"],
+    submissionCooldownSeconds: 0,
+  });
+  const service = new SuggestionService(
+    withStoreOverrides(store, { consumeActionRateLimit: undefined }),
+    {},
+    () => 10 * 86_400_000,
+    () => "id-1",
+  );
+
+  await assert.rejects(
+    service.submit({
+      guildId: "guild-1",
+      authorId: "author-1",
+      title: "Improve onboarding",
+      category: "Bot Features",
+      answers: [
+        { promptId: "change", promptLabel: "", answer: "Add a clearer onboarding flow" },
+        { promptId: "benefit", promptLabel: "", answer: "New members find channels quickly" },
+        { promptId: "tradeoffs", promptLabel: "", answer: "More setup for staff" },
+      ],
+    }),
+    TypeError,
+  );
+  assert.deepEqual(await store.listActiveSuggestions("guild-1"), []);
 });
 
 test("Suggestion projections preserve thread linkage and close Mod Queue controls terminally", async () => {
