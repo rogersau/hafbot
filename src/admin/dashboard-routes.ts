@@ -133,7 +133,7 @@ export const ADMIN_GUILD_DASHBOARD_PATHS = ADMIN_GUILD_DASHBOARD_SECTIONS.map(
   (section) => `/admin/${section}`,
 );
 const ADMIN_GUILD_DASHBOARD_SECTION_SET = new Set(ADMIN_GUILD_DASHBOARD_SECTIONS);
-const ADMIN_LEGACY_DASHBOARD_PATHS = new Set([
+const ADMIN_NON_GUILD_SEGMENTS = new Set([
   "gateway",
   "workspaces",
   ...ADMIN_GUILD_DASHBOARD_SECTION_SET,
@@ -160,7 +160,7 @@ export function isAdminDashboardPath(pathname: string): pathname is AdminDashboa
   }
 
   const [guildId, section] = segments;
-  if (!guildId || ADMIN_RESERVED_PATHS.has(guildId) || ADMIN_LEGACY_DASHBOARD_PATHS.has(guildId)) {
+  if (!guildId || ADMIN_RESERVED_PATHS.has(guildId) || ADMIN_NON_GUILD_SEGMENTS.has(guildId)) {
     return false;
   }
 

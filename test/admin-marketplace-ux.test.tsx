@@ -22,7 +22,7 @@ const config: MarketplaceConfig = {
   additionalChoicesEnabled: true,
   additionalChoices: [
     {
-      id: "legacy.Question",
+      id: "invalid.question",
       label: "Platform",
       options: [
         { id: "pc", label: "PC", emoji: null },
@@ -42,7 +42,7 @@ const post: MarketplacePost = {
   serverId: "server-1",
   serverLabel: "Server One",
   additionalChoices: [
-    { choiceId: "legacy.Question", choiceLabel: "Platform", optionId: "pc", optionLabel: "PC" },
+    { choiceId: "invalid.question", choiceLabel: "Platform", optionId: "pc", optionLabel: "PC" },
   ],
   have: "Sword",
   want: "Shield",
@@ -55,14 +55,14 @@ const post: MarketplacePost = {
   closedByUserId: null,
 };
 
-test("Additional Choices retain legacy IDs and report invalid or duplicate IDs", () => {
+test("Additional Choices report invalid and duplicate IDs", () => {
   assert.deepEqual(validateAdditionalChoices(config.additionalChoices ?? []), [
     "Platform: ID may contain only letters, numbers, hyphens, and underscores.",
   ]);
   assert.ok(
     validateAdditionalChoices([
       ...(config.additionalChoices ?? []),
-      { ...config.additionalChoices![0]!, id: "legacy.Question" },
+      { ...config.additionalChoices![0]!, id: "invalid.question" },
     ]).some((error) => /duplicate question ID/.test(error)),
   );
 });
