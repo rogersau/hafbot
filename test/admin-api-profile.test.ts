@@ -1,3 +1,4 @@
+import { composeTestServices } from "./support/compose-services";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -309,6 +310,7 @@ test("createAdminRoutes registers GET and PATCH /admin/api/profile/preferences w
   const store = createSqliteUserPreferencesStore(database as unknown as D1Database);
   const routes = createAdminRoutes({
     stores: { userPreferences: store } as never,
+    services: composeTestServices({ userPreferences: store }),
     adminAccess: allowAllAdminAccess,
     discordBotToken: "bot-token",
     readCustomerAdminSession: async () => SESSION_USER,

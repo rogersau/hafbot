@@ -1,3 +1,4 @@
+import { composeTestServices } from "./support/compose-services";
 import { testWebhookCredential } from "./support/webhook-credentials";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
@@ -779,8 +780,10 @@ const enabledFeatures = {
 };
 
 test("GET /admin/api/guild-overview returns a card summary for the requested guild", async () => {
+  const stores = createStubStores("premium");
   const routes = createAdminRoutes({
-    stores: createStubStores("premium"),
+    stores,
+    services: composeTestServices(stores),
     adminAccess: allowAllAdminAccess,
     discordBotToken: "test",
     features: enabledFeatures,
@@ -814,6 +817,7 @@ test("GET /admin/api/guild-overview reads current timed-role rules from the cano
   };
   const routes = createAdminRoutes({
     stores,
+    services: composeTestServices(stores),
     adminAccess: allowAllAdminAccess,
     discordBotToken: "test",
     features: enabledFeatures,
@@ -836,8 +840,10 @@ test("GET /admin/api/guild-overview reads current timed-role rules from the cano
 });
 
 test("GET /admin/api/guild-overview requires guildId", async () => {
+  const stores = createStubStores();
   const routes = createAdminRoutes({
-    stores: createStubStores(),
+    stores,
+    services: composeTestServices(stores),
     adminAccess: allowAllAdminAccess,
     discordBotToken: "test",
     features: enabledFeatures,

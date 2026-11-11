@@ -1,3 +1,4 @@
+import { composeTestServices } from "./support/compose-services";
 import { gatewayEnvelope } from "./support/gateway-envelope";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -140,6 +141,7 @@ test("reaction-role API publishes through Discord, enforces guild/workspace acce
   };
   const routes = createReactionRolesAdminRoutes({
     stores: f.stores,
+    services: composeTestServices(f.stores),
     discordBotToken: "unused-standard-token",
     discordBotUserId: "unused-standard-bot",
     resolveGuildBotIdentity: async (guildId) => {

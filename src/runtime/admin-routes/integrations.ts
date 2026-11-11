@@ -16,7 +16,7 @@ import {
   bodyGuildScopedAccess,
   requireGuildQueryId,
 } from "../admin-route-guards";
-import { createServiceFactory, type ServiceFactory } from "../service-factory";
+import type { ServiceFactory } from "../service-factory";
 import type { WebhookCredentialService } from "../../security/webhook-credentials/store";
 import type { WebhookIngressGuardNamespace } from "../contracts/webhook-ingress-guard";
 import type { CustomerSession } from "../auth/customer-session";
@@ -103,7 +103,10 @@ export interface IntegrationsAdminRoutesOptions {
   adminAccess: AdminAccess;
   discordBotToken: string;
   invalidateWebhookProxyConfig?: (publicId: string) => void;
-  services?: Partial<ServiceFactory>;
+  services: Pick<
+    ServiceFactory,
+    "platformLinkService" | "playerCountService" | "operationalIncidentService"
+  >;
   webhookCredentialService?: WebhookCredentialService;
   webhookIngressGuard?: WebhookIngressGuardNamespace;
   readCustomerAdminSession?: (request: Request) => Promise<CustomerSession | null>;
@@ -278,7 +281,7 @@ async function reportPlayerLinkPanelPublishPermissionDenied(
         options.stores.guildAuditLog,
         options.discordBotToken,
       ),
-      options.services?.operationalIncidentService?.observeFailure({
+      options.services.operationalIncidentService.observeFailure({
         guildId: body.guildId,
         key: {
           feature: "platform-link",
@@ -301,7 +304,7 @@ async function observePlayerLinkPanelPublishHealthy(
   body: PlayerLinkPublishBody,
 ): Promise<void> {
   try {
-    await options.services?.operationalIncidentService?.observeHealthy({
+    await options.services.operationalIncidentService.observeHealthy({
       guildId: body.guildId,
       key: {
         feature: "platform-link",
@@ -319,12 +322,7 @@ async function syncPlayerLinkRoles(
   options: IntegrationsAdminRoutesOptions,
   body: PlayerLinkSyncRolesBody,
 ): Promise<Response> {
-  const platformLinkService =
-    options.services?.platformLinkService ??
-    createServiceFactory({
-      stores: options.stores,
-      discordBotToken: options.discordBotToken,
-    }).platformLinkService;
+  const platformLinkService = options.services.platformLinkService;
   const result = await platformLinkService.syncLinkedRoles(body.guildId, body.platform);
   return Response.json({ ok: true, ...result });
 }
@@ -817,9 +815,7 @@ export function createIntegrationsAdminRoutes(
       errors: adminErrorEnvelopeSchema,
       handler: async ({ query }) => {
         const guildId = requireGuildQueryId(query);
-        const servers = options.services?.playerCountService
-          ? await options.services.playerCountService.listServers(guildId)
-          : await options.stores.playerCount.listPlayerCountServers(guildId);
+        const servers = await options.services.playerCountService.listServers(guildId);
         const targets = (await options.wardogs?.list(guildId)) ?? [];
         return Response.json({
           guildId,
@@ -944,7 +940,7 @@ export function createIntegrationsAdminRoutes(
             updatedAtMs: now,
           });
           if (replacing)
-            await options.services?.playerCountService?.clearFailureAlerts(body.guildId, body.id);
+            await options.services.playerCountService.clearFailureAlerts(body.guildId, body.id);
           return Response.json({ ok: true });
         }
 
@@ -998,13 +994,7 @@ export function createIntegrationsAdminRoutes(
       success: deletePlayerCountServer.success.schema,
       errors: adminErrorEnvelopeSchema,
       handler: async ({ body, request }) => {
-        const playerCountService =
-          options.services?.playerCountService ??
-          createServiceFactory({
-            stores: options.stores,
-            discordBotToken: options.discordBotToken,
-            guildResources: resolveGuildResources(options),
-          }).playerCountService;
+        const playerCountService = options.services.playerCountService;
         const actorUserId =
           (await options.readCustomerAdminSession?.(request))?.user.discordUserId ?? "admin-ui";
         const deleted = await playerCountService.deleteServer(body.guildId, body.id, actorUserId);
@@ -1025,10 +1015,7 @@ export function createIntegrationsAdminRoutes(
       success: testPlayerCount.success.schema,
       errors: adminErrorEnvelopeSchema,
       handler: async ({ body }) => {
-        const service = options.services?.playerCountService;
-        if (!service) {
-          return Response.json({ error: "Player Count service unavailable" }, { status: 503 });
-        }
+        const service = options.services.playerCountService;
         const result = await service.testServerReachability(body.guildId, body.serverId);
         if (!result.ok && result.error === "Server not found") {
           return Response.json({ ok: false, error: result.error }, { status: 404 });

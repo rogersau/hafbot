@@ -434,8 +434,6 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
       adminOverviewService,
       blocklistService,
       timedRoleService,
-      managedMessageService: services.managedMessageService,
-      messageTemplateService: services.messageTemplateService,
     },
     workspaceApi,
   });

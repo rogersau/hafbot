@@ -1,3 +1,4 @@
+import { composeTestServices } from "./support/compose-services";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -26,6 +27,7 @@ function createAnalyticsRoutes(options: {
     } as never,
     adminAccess: {} as never,
     discordBotToken: "token",
+    services: composeTestServices(),
     productAnalytics: options.events
       ? { report: async (event) => void options.events!.push(event) }
       : undefined,

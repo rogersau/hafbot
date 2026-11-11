@@ -8,24 +8,34 @@ import test from "node:test";
 import { createLegacyAdminSessionCookie as createAdminSessionCookie } from "./support/legacy-admin-session";
 
 import worker from "./support/application";
-import { createAdminRoutes as createBaseAdminRoutes } from "../src/routes/admin-routes";
+import {
+  createAdminApiHandler as createBaseAdminApiHandler,
+  type AdminApiHandlerOptions,
+} from "../src/runtime/admin-api";
+import { createAdminSpaRoutes } from "../src/runtime/admin-spa-routes";
+import { createAdminApiHandler as createTestAdminApiHandler } from "./helpers/admin-api";
 import type { AdminAccessRequirement } from "../src/runtime/admin-access";
 import type { AdminSpaRouteOptions } from "../src/runtime/admin-spa-routes";
 import { QuantityLimitError } from "../src/runtime/entitlement-checks";
 import { createPermissiveGuildResourceValidator } from "./helpers/guild-resource-validator";
 import { allowAllAdminAccess } from "./helpers/admin-api";
 
-type AdminRouteOptions = Parameters<typeof createBaseAdminRoutes>[0];
-type TestAdminRouteOptions = AdminSpaRouteOptions & Partial<AdminRouteOptions>;
+type TestAdminRouteOptions = AdminSpaRouteOptions &
+  Partial<Omit<AdminApiHandlerOptions, "services">>;
 
 function createAdminRoutes(options: TestAdminRouteOptions) {
-  return createBaseAdminRoutes({
-    stores: {} as never,
-    discordBotToken: "test-token",
-    adminAccess: allowAllAdminAccess,
-    guildResources: createPermissiveGuildResourceValidator(),
+  const api = createTestAdminApiHandler({
     ...options,
+    stores: options.stores ?? ({} as never),
+    discordBotToken: options.discordBotToken ?? "test-token",
+    adminAccess: options.adminAccess ?? allowAllAdminAccess,
+    guildResources: options.guildResources ?? createPermissiveGuildResourceValidator(),
   });
+  const spa = createAdminSpaRoutes(options);
+  return (request: Request) => {
+    const url = new URL(request.url);
+    return url.pathname.startsWith("/admin/api/") ? api(request, url) : spa(request);
+  };
 }
 
 test("worker redirects unauthenticated nested dashboard routes to Discord login", async () => {
@@ -81,7 +91,7 @@ test("worker returns 404 for an unknown admin API", async () => {
   assert.equal(response.status, 404);
 });
 
-test("combined Admin routes require registry dependencies at construction", () => {
+test("Admin API requires registry dependencies at construction", () => {
   const spaOptions: AdminSpaRouteOptions = {
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
@@ -91,7 +101,7 @@ test("combined Admin routes require registry dependencies at construction", () =
 
   assert.throws(
     () =>
-      createBaseAdminRoutes({
+      createBaseAdminApiHandler({
         ...spaOptions,
         discordBotToken: "test-token",
         adminAccess: allowAllAdminAccess,
@@ -100,17 +110,17 @@ test("combined Admin routes require registry dependencies at construction", () =
   );
   assert.throws(
     () =>
-      createBaseAdminRoutes({
+      createBaseAdminApiHandler({
         ...spaOptions,
         stores: {} as never,
         discordBotToken: "",
         adminAccess: allowAllAdminAccess,
-      }),
+      } as never),
     /Discord bot token is required/,
   );
   assert.throws(
     () =>
-      createBaseAdminRoutes({
+      createBaseAdminApiHandler({
         ...spaOptions,
         stores: {} as never,
         discordBotToken: "test-token",
@@ -211,7 +221,7 @@ test("worker does not expose the retired global app config route", async () => {
 
 test("POST /admin/api/blocklist validates JSON before calling the blocklist workflow", async () => {
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -221,7 +231,6 @@ test("POST /admin/api/blocklist validates JSON before calling the blocklist work
       } as never,
       timedRoleService: {} as never,
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -241,7 +250,7 @@ test("POST /admin/api/blocklist validates JSON before calling the blocklist work
 test("GET /admin/api/overview passes refresh requests to the overview service", async () => {
   const refreshValues: unknown[] = [];
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {
         getOverview: async (refresh?: boolean) => {
@@ -252,7 +261,6 @@ test("GET /admin/api/overview passes refresh requests to the overview service", 
       blocklistService: {} as never,
       timedRoleService: {} as never,
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -268,7 +276,7 @@ test("GET /admin/api/overview passes refresh requests to the overview service", 
 test("GET /admin/api/overview delegates read access through the admin access seam", async () => {
   const authorizations: Array<{ url: string; options: unknown }> = [];
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {
         getOverview: async () => ({ gateway: { status: "ready" }, guilds: [] }),
@@ -282,7 +290,6 @@ test("GET /admin/api/overview delegates read access through the admin access sea
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -302,7 +309,7 @@ test("GET /admin/api/overview delegates read access through the admin access sea
 
 test("GET /admin/api/overview preserves denied responses from the admin access seam", async () => {
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {
         getOverview: async () => {
@@ -320,7 +327,6 @@ test("GET /admin/api/overview preserves denied responses from the admin access s
         });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -335,7 +341,7 @@ test("GET /admin/api/overview preserves denied responses from the admin access s
 
 test("GET /admin/api/workspaces returns the current user's workspaces", async () => {
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {} as never,
@@ -348,7 +354,6 @@ test("GET /admin/api/workspaces returns the current user's workspaces", async ()
         ],
       }),
     } as never,
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -367,7 +372,7 @@ test("GET /admin/api/workspaces returns the current user's workspaces", async ()
 
 test("POST /admin/api/workspace-guilds requires an owner or admin", async () => {
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {} as never,
@@ -376,7 +381,6 @@ test("POST /admin/api/workspace-guilds requires an owner or admin", async () => 
     workspaceApi: {
       linkGuild: async () => adminErrorResponse("Forbidden", 403),
     } as never,
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -533,7 +537,7 @@ test("POST /admin/api/workspace-guilds/delete delegates to the workspace API", a
 
 test("GET /admin/api/blocklist requires linked guild access", async () => {
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -553,7 +557,6 @@ test("GET /admin/api/blocklist requires linked guild access", async () => {
         });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -569,7 +572,7 @@ test("GET /admin/api/blocklist requires linked guild access", async () => {
 
 test("viewer cannot mutate blocklist", async () => {
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -589,7 +592,6 @@ test("viewer cannot mutate blocklist", async () => {
           : Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -613,7 +615,7 @@ test("viewer cannot mutate blocklist", async () => {
 
 test("GET /admin/api/blocklist returns the guild channel filter", async () => {
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -632,7 +634,6 @@ test("GET /admin/api/blocklist returns the guild channel filter", async () => {
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -662,7 +663,7 @@ test("POST /admin/api/blocklist-channel-filter validates and saves the filter", 
   }> = [];
   const authorizations: unknown[] = [];
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -682,7 +683,6 @@ test("POST /admin/api/blocklist-channel-filter validates and saves the filter", 
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -715,7 +715,7 @@ test("POST /admin/api/blocklist delegates write access through the admin access 
   const authorizations: AdminAccessRequirement[] = [];
   const calls: Array<{ guildId: string; emoji: string[] }> = [];
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -731,7 +731,6 @@ test("POST /admin/api/blocklist delegates write access through the admin access 
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -753,7 +752,7 @@ test("POST /admin/api/blocklist delegates write access through the admin access 
 
 test("POST /admin/api/blocklist preserves denied write responses from the admin access seam", async () => {
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -771,7 +770,6 @@ test("POST /admin/api/blocklist preserves denied write responses from the admin 
         });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -791,7 +789,7 @@ test("POST /admin/api/blocklist preserves denied write responses from the admin 
 
 test("POST /admin/api/blocklist-channel-filter rejects invalid channelMode", async () => {
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -806,7 +804,6 @@ test("POST /admin/api/blocklist-channel-filter rejects invalid channelMode", asy
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -826,7 +823,7 @@ test("POST /admin/api/blocklist-channel-filter rejects invalid channelMode", asy
 test("POST /admin/api/timed-roles/new-member-config saves a full multi-rule list", async () => {
   const savedConfigs: unknown[] = [];
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {} as never,
@@ -848,7 +845,6 @@ test("POST /admin/api/timed-roles/new-member-config saves a full multi-rule list
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -891,7 +887,7 @@ test("POST /admin/api/timed-roles/new-member-config saves a full multi-rule list
 
 test("POST /admin/api/timed-roles/manual-assignment-config rejects duplicate roles", async () => {
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {} as never,
@@ -906,7 +902,6 @@ test("POST /admin/api/timed-roles/manual-assignment-config rejects duplicate rol
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -936,7 +931,7 @@ test("POST /admin/api/timed-roles/manual-assignment-config rejects duplicate rol
 test("POST /admin/api/blocklist adds each emoji from one add input", async () => {
   const addedEmojis: string[] = [];
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -956,7 +951,6 @@ test("POST /admin/api/blocklist adds each emoji from one add input", async () =>
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -983,7 +977,7 @@ test("POST /admin/api/blocklist adds each emoji from one add input", async () =>
 test("POST /admin/api/blocklist accepts a bounded batch emoji payload", async () => {
   const calls: Array<{ guildId: string; emojis: string[] }> = [];
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -1005,7 +999,6 @@ test("POST /admin/api/blocklist accepts a bounded batch emoji payload", async ()
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -1041,7 +1034,7 @@ test("POST /admin/api/blocklist accepts a bounded batch emoji payload", async ()
 test("POST /admin/api/blocklist rejects a batch over the emoji bound before mutation", async () => {
   let called = false;
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -1057,7 +1050,6 @@ test("POST /admin/api/blocklist rejects a batch over the emoji bound before muta
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -1082,7 +1074,7 @@ test("POST /admin/api/blocklist rejects a batch over the emoji bound before muta
 test("POST /admin/api/blocklist returns the free-tier batch limit without reading after failure", async () => {
   let readAfterFailure = false;
   const route = createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {
@@ -1108,7 +1100,6 @@ test("POST /admin/api/blocklist returns the free-tier batch limit without readin
         return Promise.resolve({ ok: true as const });
       },
     },
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),
@@ -1164,14 +1155,13 @@ test("POST /admin/logout does not emit the retired global session cookie", async
 
 function createWorkspaceTestRoute(workspaceApi?: unknown) {
   return createAdminRoutes({
-    services: {
+    adminRouteServices: {
       gatewayService: {} as never,
       adminOverviewService: {} as never,
       blocklistService: {} as never,
       timedRoleService: {} as never,
     },
     ...(workspaceApi === undefined ? {} : { workspaceApi: workspaceApi as never }),
-    handleAdminApiRequest: async () => null,
     redirect: (location) => new Response(null, { status: 302, headers: { location } }),
     getAdminLoginLocation: () => "/admin/login",
     renderAdminShell: () => new Response("ok"),

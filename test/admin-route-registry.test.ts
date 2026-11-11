@@ -1,3 +1,4 @@
+import { composeTestServices } from "./support/compose-services";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -62,8 +63,10 @@ function createDispatchOptions(
 }
 
 test("createAdminRoutes joins each feature module's route array into a flat list", () => {
+  const stores = createStubStores();
   const routes = createAdminRoutes({
-    stores: createStubStores(),
+    stores,
+    services: composeTestServices(stores),
     adminAccess: allowAllAdminAccess,
     discordBotToken: "test",
   });
@@ -265,7 +268,7 @@ test("production admin handler construction requires stores, a token, and an aut
         stores: createStubStores(),
         discordBotToken: "",
         adminAccess: allowAllAdminAccess,
-      }),
+      } as never),
     /Discord bot token is required/,
   );
   assert.throws(

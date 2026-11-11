@@ -22,7 +22,6 @@ import type { TimedRoleService } from "../../services/timed-role-service";
 import type { AiTranscriptSummarizerEnv } from "../../services/tickets/ai-transcript-summarizer-env";
 import type { WebhookCredentialService } from "../../security/webhook-credentials/store";
 import type { WebhookIngressGuardNamespace } from "../contracts/webhook-ingress-guard";
-import { ManagedMediaService } from "../../managed-media";
 import type { AdminWorkspaceGuildsResponse, AdminWorkspaceListResponse } from "../admin-types";
 import { createPermissionsAdminRoutes } from "./permissions";
 import { createGuildFeaturesAdminRoutes } from "./guild-features";
@@ -63,12 +62,6 @@ export interface AdminRouteServices {
   adminOverviewService: AdminOverviewService;
   blocklistService: BlocklistService;
   timedRoleService: TimedRoleService;
-  managedMessageService?: ServiceFactory["managedMessageService"];
-  messageTemplateService?: ServiceFactory["messageTemplateService"];
-  clanService?: ServiceFactory["clanService"];
-  clanFeatureSetupService?: ServiceFactory["clanFeatureSetupService"];
-  suggestionService?: ServiceFactory["suggestionService"];
-  operationalIncidentService?: ServiceFactory["operationalIncidentService"];
 }
 
 export interface WorkspaceAdminApi {
@@ -104,7 +97,7 @@ export interface AdminRoutesOptions {
   discordCache?: Cache<string>;
   turnstileSiteKey?: string;
   turnstileSecretKey?: string;
-  services?: Partial<ServiceFactory>;
+  services: ServiceFactory;
   guildResources?: GuildResourceValidator;
   adminRouteServices?: AdminRouteServices;
   workspaceApi?: WorkspaceAdminApi;
@@ -142,21 +135,15 @@ export function createAdminRoutes(options: AdminRoutesOptions): Route[] {
     guildResources:
       options.guildResources ?? createDiscordGuildResourceValidator(options.discordBotToken),
   };
-  const managedMessageService =
-    options.adminRouteServices?.managedMessageService ?? options.services?.managedMessageService;
-  const managedMediaService =
-    options.services?.managedMediaService ?? new ManagedMediaService(undefined);
-  const messageTemplateService =
-    options.adminRouteServices?.messageTemplateService ?? options.services?.messageTemplateService;
-  const clanService = options.adminRouteServices?.clanService ?? options.services?.clanService;
-  const clanFeatureSetupService =
-    options.adminRouteServices?.clanFeatureSetupService ??
-    options.services?.clanFeatureSetupService;
-  const suggestionService =
-    options.adminRouteServices?.suggestionService ?? options.services?.suggestionService;
-  const operationalIncidentService =
-    options.adminRouteServices?.operationalIncidentService ??
-    options.services?.operationalIncidentService;
+  const {
+    managedMessageService,
+    managedMediaService,
+    messageTemplateService,
+    clanService,
+    clanFeatureSetupService,
+    suggestionService,
+    operationalIncidentService,
+  } = options.services;
   const userProfileRoutes = options.readCustomerAdminSession
     ? createUserProfileAdminRoutes({
         store: options.stores.userPreferences,
@@ -196,7 +183,7 @@ export function createAdminRoutes(options: AdminRoutesOptions): Route[] {
       discordBotUserId: options.discordBotUserId,
       discordSupportInvite: options.discordSupportInvite,
       guildResources: routeOptions.guildResources,
-      memberVerificationService: options.services?.memberVerificationService,
+      memberVerificationService: options.services.memberVerificationService,
       readCustomerAdminSession: options.readCustomerAdminSession,
     }),
     ...createGuildOverviewAdminRoutes(options),
@@ -207,7 +194,7 @@ export function createAdminRoutes(options: AdminRoutesOptions): Route[] {
       stores: options.stores,
       credentials: options.serverLevelCredentialService,
       processingAvailable: options.serverLevelProcessingAvailable ?? false,
-      processor: options.services?.serverLevelProcessor,
+      processor: options.services.serverLevelProcessor,
       publicBaseUrl: options.publicBaseUrl,
       discordBotToken: options.discordBotToken,
       discordBotUserId: options.discordBotUserId,
@@ -219,7 +206,7 @@ export function createAdminRoutes(options: AdminRoutesOptions): Route[] {
           stores: options.stores,
           service: operationalIncidentService,
           managedMessageService,
-          playerCountService: options.services?.playerCountService,
+          playerCountService: options.services.playerCountService,
           readCustomerAdminSession: options.readCustomerAdminSession,
         })
       : []),

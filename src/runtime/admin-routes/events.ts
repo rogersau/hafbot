@@ -7,7 +7,7 @@ import {
   guildScopedAccess,
   requireGuildQueryId,
 } from "../admin-route-guards";
-import { createServiceFactory, type ServiceFactory } from "../service-factory";
+import type { ServiceFactory } from "../service-factory";
 import { EventConfigError } from "../../services/events-service";
 import { EventRecurrenceError } from "../../services/event-recurrence-service";
 import { summarizeEventTeamOperations } from "../../services/event-team-metrics";
@@ -16,7 +16,6 @@ import {
   EventTeamBulkError,
   EventTeamBulkService,
   EventTeamBulkStalePreviewError,
-  type EventTeamBulkStore,
 } from "../../services/event-team-bulk-service";
 import type {
   EventRecord,
@@ -51,13 +50,13 @@ export interface EventsAdminRoutesOptions {
   adminAccess: AdminAccess;
   discordBotToken: string;
   readCustomerAdminSession?: (request: Request) => Promise<CustomerSession | null>;
-  services?: Partial<ServiceFactory>;
+  services: Pick<ServiceFactory, "eventsService">;
 }
 
 export function createEventsAdminRoutes(
   options: EventsAdminRoutesOptions,
 ): Array<Route<any, any, Response>> {
-  const service = resolveEventsService(options);
+  const service = options.services.eventsService;
   return [
     defineRoute({
       ...getEvents,
@@ -566,16 +565,6 @@ export function createEventsAdminRoutes(
   ];
 }
 
-function resolveEventsService(options: EventsAdminRoutesOptions) {
-  return (
-    options.services?.eventsService ??
-    createServiceFactory({
-      stores: options.stores,
-      discordBotToken: options.discordBotToken,
-    }).eventsService
-  );
-}
-
 function eventErrorResponse(error: unknown): Response {
   if (error instanceof EventTeamBulkStalePreviewError) {
     return Response.json({ error: error.message }, { status: 409 });
@@ -590,11 +579,7 @@ function eventErrorResponse(error: unknown): Response {
 }
 
 function resolveEventTeamBulkService(options: EventsAdminRoutesOptions): EventTeamBulkService {
-  const store = options.stores.events as typeof options.stores.events & Partial<EventTeamBulkStore>;
-  if (!store.commitEventTeamBulkFormation) {
-    throw new EventConfigError("Event Team bulk formation is unavailable.");
-  }
-  return new EventTeamBulkService(store as EventTeamBulkStore);
+  return new EventTeamBulkService(options.stores.events);
 }
 
 function toCreateEventInput(body: any): CreateEventInput {

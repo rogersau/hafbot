@@ -2,7 +2,7 @@ import type { Cache } from "../discord-json-cache";
 import { defineRoute, type Route } from "../admin-route-registry";
 import { type AdminAccess } from "../admin-access";
 import { type RuntimeStores } from "../app-types";
-import { type ServiceFactory, createServiceFactory } from "../service-factory";
+import type { ServiceFactory } from "../service-factory";
 import {
   createDiscordGuildResourceValidator,
   type GuildResourceValidator,
@@ -258,38 +258,10 @@ function defaultLfgConfig(guildId: string) {
   };
 }
 
-function resolveLfgService(
-  services: Partial<ServiceFactory> | undefined,
-  stores: RuntimeStores,
-  discordBotToken: string,
-  guildResources: GuildResourceValidator,
-) {
-  return (
-    services?.lfgService ??
-    createServiceFactory({
-      stores,
-      discordBotToken,
-      guildResources,
-    }).lfgService
-  );
-}
-
-function resolveMarketplaceService(
-  services: Partial<ServiceFactory> | undefined,
-  stores: RuntimeStores,
-  discordBotToken: string,
-  guildResources: GuildResourceValidator,
-) {
-  return (
-    services?.marketplaceService ??
-    createServiceFactory({ stores, discordBotToken, guildResources }).marketplaceService
-  );
-}
-
 export interface SocialAdminRoutesOptions {
   stores: RuntimeStores;
   adminAccess: AdminAccess;
-  services?: Partial<ServiceFactory>;
+  services: Pick<ServiceFactory, "lfgService" | "marketplaceService">;
   discordBotToken: string;
   guildResources?: GuildResourceValidator;
   discordCache?: Cache<string>;
@@ -524,12 +496,7 @@ export function createSocialAdminRoutes(
           flowUpdatedAtMs: now,
           updatedAtMs: now,
         };
-        const saved = await resolveMarketplaceService(
-          services,
-          stores,
-          discordBotToken,
-          guildResources,
-        ).updateConfig(config);
+        const saved = await services.marketplaceService.updateConfig(config);
         return Response.json(saved);
       },
     }),
@@ -540,14 +507,7 @@ export function createSocialAdminRoutes(
       body: z.object({ guildId: requiredGuildId }),
       access: bodyGuildScopedAccess("write"),
       handler: async ({ body }) =>
-        Response.json(
-          await resolveMarketplaceService(
-            services,
-            stores,
-            discordBotToken,
-            guildResources,
-          ).disable(body.guildId),
-        ),
+        Response.json(await services.marketplaceService.disable(body.guildId)),
     }),
     defineRoute({
       method: "POST",
@@ -574,12 +534,7 @@ export function createSocialAdminRoutes(
       handler: async ({ body }) => {
         const config = await stores.marketplace.readMarketplaceConfig(body.guildId);
         if (!config) return Response.json({ error: "Not found" }, { status: 404 });
-        await resolveMarketplaceService(
-          services,
-          stores,
-          discordBotToken,
-          guildResources,
-        ).setupNotice(body.guildId, body.channelId);
+        await services.marketplaceService.setupNotice(body.guildId, body.channelId);
         return Response.json({ ok: true });
       },
     }),
@@ -606,7 +561,7 @@ export function createSocialAdminRoutes(
       body: lfgConfigSchema,
       access: bodyGuildScopedAccess("write"),
       handler: async ({ body }) => {
-        const lfgService = resolveLfgService(services, stores, discordBotToken, guildResources);
+        const lfgService = services.lfgService;
         await lfgService.updateConfig({
           guildId: body.guildId,
           noticeChannelId: normalizeOptionalString(body.noticeChannelId),
@@ -636,12 +591,7 @@ export function createSocialAdminRoutes(
       feature: "lfg",
       body: z.object({ guildId: requiredGuildId }),
       access: bodyGuildScopedAccess("write"),
-      handler: async ({ body }) =>
-        Response.json(
-          await resolveLfgService(services, stores, discordBotToken, guildResources).disable(
-            body.guildId,
-          ),
-        ),
+      handler: async ({ body }) => Response.json(await services.lfgService.disable(body.guildId)),
     }),
     defineRoute({
       method: "POST",
@@ -650,7 +600,7 @@ export function createSocialAdminRoutes(
       body: lfgClosePostSchema,
       access: bodyGuildScopedAccess("write"),
       handler: async ({ body }) => {
-        const lfgService = resolveLfgService(services, stores, discordBotToken, guildResources);
+        const lfgService = services.lfgService;
         return Response.json(
           await lfgService.closePost({
             guildId: body.guildId,
@@ -669,10 +619,7 @@ export function createSocialAdminRoutes(
       handler: async ({ body }) => {
         const config = await stores.lfg.readLfgConfig(body.guildId);
         if (!config) return Response.json({ error: "Not found" }, { status: 404 });
-        await resolveLfgService(services, stores, discordBotToken, guildResources).setupNotice(
-          body.guildId,
-          body.channelId,
-        );
+        await services.lfgService.setupNotice(body.guildId, body.channelId);
         return Response.json({ ok: true });
       },
     }),

@@ -51,7 +51,7 @@ export interface AdminApiHandlerOptions {
   discordCache?: Cache<string>;
   turnstileSiteKey?: string;
   turnstileSecretKey?: string;
-  services?: Partial<ServiceFactory>;
+  services: ServiceFactory;
   guildResources?: GuildResourceValidator;
   adminRouteServices?: AdminRouteServices;
   workspaceApi?: WorkspaceAdminApi;
