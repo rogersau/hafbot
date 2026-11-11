@@ -58,7 +58,7 @@ The broad validation below predates these integrations and must be rerun after r
 
 The global cap is five active implementers across both coordinators and all machines. Normal
 reservation is architecture two, task coordinator three; the temporary three/two loan has ended.
-Earlier failed implementers are terminal. One new R02 attempt is active; C23 replacement is released. Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
+Earlier failed implementers are terminal. New R02 and C23 attempts are active (global two). Cancelled overlaps C12/C17/C14/P01/C04 remain stopped;
 worktrees, drafts, commits and evidence are preserved. No remote audit implementer is active.
 All new implementation tasks use isolated checkouts with OpenCode Go
 `opencode-go/deepseek-v4.1-flash`, `variant=max`, serial focused tests and disposable PostgreSQL
@@ -68,7 +68,7 @@ limited to one CPU, 256 MB, `shared_buffers=32MB`, `max_connections=20`.
 | -------------------- | ------------------------------ | ----------------------------------------------------------- |
 | Architecture 1       | R02 preserved-draft completion | Running on `d1ff7ad`, restored-access attempt               |
 | Architecture 2       | Required Ticket persistence    | Queued; earlier attempts terminal, no implementation result |
-| Task coordinator 1   | C23 offering lifecycle         | Released for replacement on `d1ff7ad`; awaiting receipt     |
+| Task coordinator 1   | C23 offering lifecycle         | Running restored-access attempt on `d1ff7ad`                |
 | Task coordinator 2–3 | None                           | Empty; no work created solely to occupy slots               |
 
 Terminal failed Ticket replacement: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3Adf8136b7-7c3b-435f-937e-aa875892e28d`, base `2a07da4beadeaac6376c74395c5d80f705f0ca0c`. It owns the Ticket contract, dedicated Ticket services/Admin Ticket callsites/tests only; no stores/schema/queue or shared C23 fixtures. Those failed attempts use no active slots; current assignments are listed above. R01 shared composition remains queued until its dependencies release.
@@ -107,8 +107,11 @@ resumption. New attempts use the same bounded scopes; earlier checkouts remain p
 
 Current R02: `node:delegated-task:command%3Amcp%3Ab9329776-8b78-4bb4-a0cf-a41448d7db46%3Adelegate-task%3A87580670-82d9-4f4c-b4e2-006283264438`,
 base `d1ff7ad3ea01de310e4e52be720ef5b146ff3f9e`, OpenCode Go DeepSeek V4.1 Flash/max.
-Actual execution, not catalog availability, must confirm restored access. C23 replacement is
-released on that same explicit base, which differs from verified `fa1fe4e` only in inventory docs.
+Actual execution, not catalog availability, must confirm restored access. C23 replacement is running on that same explicit base, which differs from verified `fa1fe4e`
+only in inventory docs. Its task ID is
+`node:delegated-task:command%3Amcp%3A1c26d519-eb78-4bba-bd0e-f85880259750%3Adelegate-task%3Aa5aacc97-628f-4561-946b-fab4111b24d5`.
+Actual runtime access is not inferred from launch/catalog state. Ticket cleanup remains queued
+until current execution confirms access; no additional task is active.
 
 The user explicitly authorized GLM 5.3 Flash if DeepSeek fails. Discovery confirms provider
 `opencode`, model `opencode-go/glm-5.3-flash`, `variant=max`. Keep DeepSeek first; a failed
@@ -205,7 +208,7 @@ required. It is not a claim that the original finding is closed by the existence
 | C20              | Integrated `b8edd9a`; explicit media classification and no old metadata decoder                                          |
 | C21              | Checkpoint: one stored entitlement plan field                                                                            |
 | C22              | Checkpoint: current Billing prices and self-hosted policy                                                                |
-| C23              | Approved replacement released on `d1ff7ad`; earlier subscription-failed checkout clean/preserved                         |
+| C23              | Running same-scope restored-access replacement on `d1ff7ad`; earlier clean failed checkout preserved                     |
 | C24              | Canonical public error fields/client parsing; complete endpoint/transport acceptance still pending                       |
 | P01–P03, P05–P07 | Native identity, roles, Tickets, content, social and community stores at checkpoint                                      |
 | P04              | Integrated `9f02d5b` + `62b315e` (sources `a3f3f09` + `e9cd8ba`); 7 real-PG Event atomicity/recurrence checks pass       |
