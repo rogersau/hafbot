@@ -44,7 +44,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       let id = 0;
       const queue = createPostgresJobQueue(database, {
         randomId: () => `generated-${++id}`,
@@ -121,10 +121,12 @@ test(
         ),
         "terminal",
       );
-      assert.equal((await queue.inspect("retry-job"))?.terminalReasonCode, "provider_unavailable");
+      assert.equal((await queue.inspect("retry-job"))?.reasonCode, "provider_unavailable");
       assert.equal(await queue.retryOne("retry-job", now), true);
       assert.equal((await queue.inspect("retry-job"))?.attempts, 0);
+      assert.equal((await queue.inspect("retry-job"))?.reasonCode, null);
       assert.equal(await queue.discardOne("retry-job", "operator_discarded", now), true);
+      assert.equal((await queue.inspect("retry-job"))?.reasonCode, "operator_discarded");
 
       await queue.enqueue({
         id: "expired-job",
@@ -174,7 +176,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       let id = 0;
       const jobs = createPostgresJobQueue(database, {
         randomId: () => `binding-${++id}`,
@@ -244,7 +246,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       let token = 0;
       const leases = createPostgresLeaseStore(database, {
         randomId: () => `lease-${++token}`,
@@ -314,7 +316,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       const queue = createPostgresJobQueue(database);
       const job = await queue.enqueue({
         queueName: "steam-ban-lookups",
@@ -356,7 +358,7 @@ function createTestDatabase(url: string): PostgresDatabaseCapability {
   });
 }
 
-async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
+async function initializeFreshTestSchema(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
   await initializePostgresSchema(database);
 }

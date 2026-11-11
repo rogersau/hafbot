@@ -18,7 +18,7 @@ const postgresUrl = process.env.TEST_POSTGRES_URL;
 const postgresOnly = { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" };
 
 test(
-  "PostgreSQL native job worker persists retry delay and exact exhaustion reason across restart",
+  "PostgreSQL native jobs retain retry reason and delay across restart and exhaustion",
   postgresOnly,
   async () => {
     assert.ok(postgresUrl);
@@ -83,23 +83,23 @@ test(
         {
           state: complete?.state,
           attempts: complete?.attempts,
-          terminal: complete?.terminalReasonCode,
+          reasonCode: complete?.reasonCode,
         },
-        { state: "completed", attempts: 1, terminal: null },
+        { state: "completed", attempts: 1, reasonCode: null },
       );
       assert.deepEqual(
         {
           state: delayed?.state,
           attempts: delayed?.attempts,
           maxAttempts: delayed?.maxAttempts,
-          terminal: delayed?.terminalReasonCode,
+          reasonCode: delayed?.reasonCode,
           delayMs: delayed!.availableAt.getTime() - startedAt.getTime(),
         },
         {
           state: "queued",
           attempts: 1,
           maxAttempts: 2,
-          terminal: null,
+          reasonCode: "provider_rate_limited",
           delayMs: 37_000,
         },
       );
@@ -139,13 +139,13 @@ test(
           state: exhausted?.state,
           attempts: exhausted?.attempts,
           maxAttempts: exhausted?.maxAttempts,
-          terminal: exhausted?.terminalReasonCode,
+          reasonCode: exhausted?.reasonCode,
         },
         {
           state: "terminal",
           attempts: 2,
           maxAttempts: 2,
-          terminal: "provider_rate_limited",
+          reasonCode: "provider_rate_limited",
         },
       );
       assert.deepEqual(attemptsByJob.get(retryJob.id), [1, 2]);
@@ -208,11 +208,11 @@ test(
       }
 
       assert.deepEqual(
-        (await queue.inspect("missing-outcome"))?.terminalReasonCode,
+        (await queue.inspect("missing-outcome"))?.reasonCode,
         "missing_delivery_outcome",
       );
       assert.deepEqual(
-        (await queue.inspect("invalid-outcome"))?.terminalReasonCode,
+        (await queue.inspect("invalid-outcome"))?.reasonCode,
         "missing_delivery_outcome",
       );
       assert.equal((await queue.inspect("missing-outcome"))?.attempts, 1);
@@ -291,9 +291,9 @@ test(
         {
           state: settled?.state,
           attempts: settled?.attempts,
-          terminal: settled?.terminalReasonCode,
+          reasonCode: settled?.reasonCode,
         },
-        { state: "completed", attempts: 2, terminal: null },
+        { state: "completed", attempts: 2, reasonCode: null },
       );
     } finally {
       await database.close();

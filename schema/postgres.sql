@@ -2574,7 +2574,7 @@ CREATE TABLE public.jobs (
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     completed_at timestamp with time zone,
-    terminal_reason_code text,
+    reason_code text,
     CONSTRAINT jobs_attempts_check CHECK ((attempts >= 0)),
     CONSTRAINT jobs_lease_shape CHECK ((((state = 'running'::text) AND (lease_owner IS NOT NULL) AND (lease_token IS NOT NULL) AND (lease_expires_at IS NOT NULL)) OR ((state <> 'running'::text) AND (lease_owner IS NULL) AND (lease_token IS NULL) AND (lease_expires_at IS NULL)))),
     CONSTRAINT jobs_max_attempts_check CHECK ((max_attempts > 0)),
