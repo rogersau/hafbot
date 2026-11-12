@@ -12,7 +12,7 @@
     "@sentry/node": "11.11.0",
     "better-auth": "1.7.7",
     "drizzle-orm": "0.45.4",
-    "effect": "3.22.0",
+    "effect": "4.1.2",
     "pg": "8.23.1",
     "ws": "8.22.0",
     "zod": "4.6.7"
