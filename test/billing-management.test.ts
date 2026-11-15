@@ -12,6 +12,14 @@ import {
 import type { BillingSubscriptionProjection } from "../src/runtime/billing/types";
 
 const catalog = createBillingCatalog({
+  historicalPricesJson: JSON.stringify([
+    {
+      priceId: "price_historical",
+      productId: "prod_historical_plus",
+      plan: "premium_plus",
+      frequency: "yearly",
+    },
+  ]),
   premiumMonthlyPriceId: "pm",
   premiumMonthlyProductId: "p",
   premiumYearlyPriceId: "py",
@@ -189,3 +197,28 @@ class FakeStore implements BillingManagementStore {
     return this.whiteLabel;
   }
 }
+
+test("historical subscribers can explicitly change to current prices but historical targets are blocked", async () => {
+  const provider = new FakeProvider();
+  const store = new FakeStore("premium_plus", "price_historical");
+  const service = createBillingManagementService({
+    provider,
+    store,
+    catalog,
+    publicBaseUrl: "https://haf",
+    async syncOwner() {
+      return store.projection;
+    },
+  });
+  await assert.rejects(
+    service.changePrice("owner", "price_historical", "intent_history"),
+    /unsupported_price/,
+  );
+  assert.equal(provider.updated.length, 0);
+  assert.equal(provider.scheduled.length, 0);
+  await service.changePrice("owner", "ppy", "intent_current");
+  assert.equal(provider.updated[0]?.priceId, "ppy");
+  await service.changePrice("owner", "pm", "intent_downgrade");
+  assert.equal(provider.scheduled[0]?.currentPriceId, "price_historical");
+  assert.equal(provider.scheduled[0]?.nextPriceId, "pm");
+});
