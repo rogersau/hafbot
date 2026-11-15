@@ -1,3 +1,4 @@
+import { currentBillingPrices } from "./catalog";
 import type { BillingCatalogEntry } from "./types";
 
 export interface LandingPrice {
@@ -47,7 +48,7 @@ export function createLandingPriceCatalog(options: {
   const staleForMs = options.staleForMs ?? 24 * 60 * 60 * 1_000;
   const cache = options.cache ?? sharedCache;
   const onError = options.onError ?? console.error;
-  const catalogKey = [...options.catalog.values()]
+  const catalogKey = currentBillingPrices(options.catalog)
     .sort((left, right) => left.priceId.localeCompare(right.priceId))
     .map((entry) => `${entry.priceId}:${entry.productId}:${entry.plan}:${entry.frequency}`)
     .join("|");
@@ -76,7 +77,7 @@ async function readCompleteCatalog(
   catalog: ReadonlyMap<string, BillingCatalogEntry>,
   stripe: StripeDisplayPriceReader,
 ): Promise<readonly LandingPrice[]> {
-  const entries = [...catalog.values()];
+  const entries = currentBillingPrices(catalog);
   const values = await Promise.all(
     entries.map(async (entry): Promise<LandingPrice> => {
       const price = await stripe.readPrice(entry.priceId);

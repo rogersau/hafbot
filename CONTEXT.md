@@ -651,6 +651,13 @@ The user who owns and controls a HAF Subscription.
 A purchase of a HAF service plan, separate from seller-scoped Commerce purchases.
 _Avoid:_ unqualified "Subscription" for a Commerce Subscription.
 
+**Legacy Subscription Price:**
+An explicitly reviewed historical Stripe Price/Product identity recognized for an existing
+Subscription. This includes historical Founder rates when configured by the operator. It is
+separate from the four current purchase prices and is never offered for Checkout or as a plan
+change target. Recognition preserves the existing Stripe price; it does not reprice a Subscription,
+infer discounts or restore a retired offer after cancellation.
+
 **Stripe Customer Binding:**
 The association between a Plan Owner and their Stripe billing customer identity.
 

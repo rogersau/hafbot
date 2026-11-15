@@ -1,3 +1,4 @@
+import { currentBillingPrices } from "./catalog";
 import type { BillingCatalogEntry, BillingSubscriptionProjection } from "./types";
 
 export interface BillingCheckoutProvider {
@@ -48,11 +49,11 @@ export function createBillingCheckoutService(options: {
 }): BillingCheckoutService {
   const now = options.now ?? Date.now;
   return {
-    listCatalog: async () => [...options.catalog.values()],
+    listCatalog: async () => currentBillingPrices(options.catalog),
     readSummary: (ownerId) => options.store.readProjection(ownerId),
     async startCheckout(input) {
       const catalogEntry = options.catalog.get(input.priceId);
-      if (!catalogEntry) {
+      if (!catalogEntry || catalogEntry.historical) {
         throw new BillingCheckoutError("unsupported_price", 400);
       }
       if (!/^[A-Za-z0-9_-]{8,100}$/.test(input.intentId)) {

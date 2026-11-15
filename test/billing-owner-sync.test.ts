@@ -19,7 +19,7 @@ import type {
   StripeSubscriptionState,
 } from "../src/runtime/billing/types";
 
-const catalog = createBillingCatalog({
+const catalogConfig = {
   premiumMonthlyPriceId: "price_pm",
   premiumMonthlyProductId: "prod_p",
   premiumYearlyPriceId: "price_py",
@@ -28,7 +28,8 @@ const catalog = createBillingCatalog({
   premiumPlusMonthlyProductId: "prod_pp",
   premiumPlusYearlyPriceId: "price_ppy",
   premiumPlusYearlyProductId: "prod_pp",
-});
+};
+const catalog = createBillingCatalog(catalogConfig);
 
 test("full-owner sync projects every Stripe lifecycle state through the catalog", async () => {
   const cases: Array<
@@ -73,6 +74,41 @@ test("private retired prices are unknown to public subscription reconciliation",
     assert.equal(projected.status, "quarantined");
     assert.equal(projected.quarantineReason, "unknown_catalog");
     assert.equal(projected.plan, "free");
+  }
+});
+
+test("owner sync recognizes reviewed yearly aliases without repricing and quarantines unknown products", async () => {
+  const historicalCatalog = createBillingCatalog({
+    ...catalogConfig,
+    historicalPricesJson: JSON.stringify([
+      {
+        priceId: "price_historical_plus_yearly",
+        productId: "prod_historical_plus",
+        plan: "premium_plus",
+        frequency: "yearly",
+      },
+    ]),
+  });
+  for (const [priceId, productId, recognized] of [
+    ["price_ppy", "prod_pp", true],
+    ["price_historical_plus_yearly", "prod_historical_plus", true],
+    ["price_historical_plus_yearly", "prod_pp", false],
+    ["price_unknown", "prod_historical_plus", false],
+  ] as const) {
+    const store = new MemoryBillingSyncStore();
+    const sync = createBillingOwnerSync({
+      stripe: new FakeStripe(ownerState([{ ...subscription("active"), priceId, productId }])),
+      store,
+      catalog: historicalCatalog,
+    });
+    const result = await sync({ ownerId: "owner", customerId: "cus_1", source: "operator" });
+    assert.equal(result.priceId, priceId);
+    assert.equal(result.productId, productId);
+    assert.equal(result.plan, recognized ? "premium_plus" : "free");
+    assert.equal(result.frequency, recognized ? "yearly" : null);
+    assert.equal(result.quarantineReason, recognized ? null : "unknown_catalog");
+    assert.equal(result.status, recognized ? "active" : "quarantined");
+    assert.equal((await sync({ ownerId: "owner", source: "scheduled" })).priceId, priceId);
   }
 });
 

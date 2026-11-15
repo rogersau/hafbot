@@ -136,6 +136,7 @@ function readBillingConfig(env: Env) {
     portalConfigurationId: env.STRIPE_PORTAL_CONFIGURATION_ID!,
     publicBaseUrl: env.BETTER_AUTH_URL!.replace(/\/$/, ""),
     catalog: createBillingCatalog({
+      historicalPricesJson: env.STRIPE_HISTORICAL_PRICES_JSON,
       premiumMonthlyPriceId: env.STRIPE_PREMIUM_MONTHLY_PRICE_ID!,
       premiumMonthlyProductId: env.STRIPE_PREMIUM_PRODUCT_ID!,
       premiumYearlyPriceId: env.STRIPE_PREMIUM_YEARLY_PRICE_ID!,
