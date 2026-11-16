@@ -38,8 +38,9 @@ CLIs and stale source-assembly manifests were also removed.
 
 - Commerce Offerings use one lifecycle row with explicit pre-repair state, without a side-table
   projection. Platform Link config and enabled state save atomically.
-- Billing recognizes the four configured plan/interval prices. Historical cohorts, Founder fields,
-  the private paid-role archive and duplicate stored plan fields are removed.
+- Billing offers four configured plan/interval prices. Optional reviewed historical Price/Product
+  aliases recognize existing Subscriptions only; they never become purchase or plan-change targets.
+  Historical cohort fields, the private paid-role archive and duplicate stored plan fields are removed.
 - Player Links use one platform-wide representation, with no Steam-specific persistence, fallback
   reads or duplicate Admin API routes.
 - Reaction Role panels use one ordered table. Evidence Vault access uses a role list and private
@@ -77,3 +78,28 @@ remaining advisories are recorded in
 
 Live Discord, OAuth, provider operations and an independently operated deployment/restore
 rehearsal are outside this source audit.
+
+## Historical Billing identities
+
+Operators with existing Subscriptions can set the optional nonsecret environment variable
+`STRIPE_HISTORICAL_PRICES_JSON` to a reviewed JSON array. For example, using fictional identities:
+
+```sh
+STRIPE_HISTORICAL_PRICES_JSON='[{"priceId":"price_historical_plus_yearly","productId":"prod_historical_plus","plan":"premium_plus","frequency":"yearly"}]'
+```
+
+Each entry requires exactly `priceId`, `productId`, `plan` (`premium` or `premium_plus`) and
+`frequency` (`monthly` or `yearly`). Omit the variable or use `[]` when no aliases are required.
+A historical Price can share a current Product or use a historical Product for the same plan.
+Price IDs must be unique across current and historical entries; a Product cannot map to different
+plans. Malformed JSON, invalid fields and conflicting identities reject Billing runtime construction.
+Configure the same reviewed value on all processes that run Billing. Never derive it from webhook
+metadata or an unknown subscription observation.
+
+The four existing current Price variables continue to control all public catalog, landing,
+Checkout and plan-change selections. Historical recognition checks the exact Price/Product pair
+and uses its reviewed plan/frequency mapping. Unconfigured identities remain `unknown_catalog`.
+Recognition makes no Stripe writes and does not change renewal amounts. An owner may explicitly
+choose a current offer through the existing management flow; cancelled owners can return only at
+current offers. Stripe Portal offers remain governed by the operator's existing Portal configuration;
+this setting does not modify Stripe configuration or advertise historical offers there.

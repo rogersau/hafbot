@@ -1,21 +1,34 @@
 # Contributing to HAF Bot
 
-Search [public issues](https://github.com/rogersau/hafbot/issues) before opening a focused bug or
-feature proposal. Use [private vulnerability reporting](https://github.com/rogersau/hafbot/security/advisories/new)
-for security reports; see [SECURITY.md](SECURITY.md). Use fictional Guild/member data and redact
-credentials, webhook URLs, production logs and private evidence from every report or screenshot.
+Keep changes focused. Use a clear PR title, briefly explain the problem and the fix, and say how you checked it.
+A few sentences and a validation line are usually enough.
 
-Read [CONTEXT.md](CONTEXT.md) for vocabulary. Install the pinned pnpm dependency tree, run
-`pnpm lint`, `pnpm format:check`, `pnpm build`, `pnpm typecheck`, `pnpm test` and `pnpm docs:build`.
-Runtime/database changes also need `pnpm test:postgres` on a disposable local `_test` database.
-Use your own development Discord identity; automated public CI uses no real Discord account.
+## Development
 
-Keep PRs focused and explain observed behaviour, the change and meaningful validation. Preserve
-Discord authorization, tenant boundaries, job/operation identities and secret redaction. Update
-the current installation schema directly; this baseline contains no migration or historical
-compatibility path. Public CI validates fork PRs on fresh GitHub-hosted runners with read-only
-permissions. It has no deployment, cloud provisioning, package publishing or private-network access.
+Read [CONTEXT.md](CONTEXT.md) for project terminology. Install dependencies with
+`pnpm install --frozen-lockfile` and run checks relevant to your change:
 
-Unless stated otherwise, contributions are provided under the [MIT license](LICENSE). Preserve
-third-party notices. The HAF name and branding must not imply that an independent fork is operated
-or endorsed by the official hosted service.
+- `pnpm lint` and `pnpm format:check`
+- `pnpm build`, `pnpm typecheck` and `pnpm test`
+- `pnpm docs:build` for documentation changes
+- `pnpm test:postgres` for runtime/database changes, using a disposable local `_test` database
+
+CI runs the full checks. Use fictional data and your own development Discord identity.
+Preserve Discord authorization, tenant boundaries and secret redaction. Update the current
+installation schema directly; this baseline has no historical migration path.
+
+## Merges and releases
+
+Merge PRs into `main` by squashing, after CI passes and conversations are resolved. The branch
+must be up to date. These rules apply to admins too; another person's approval is not required.
+
+Each successful `main` build publishes a release with notes, source, the tested Linux amd64 Docker
+image and checksums. Versions default to patch; put `[release:minor]` or `[release:major]` in the PR
+title when needed. Existing untagged commits also count toward the first automated version.
+
+If a workflow fails, fix the cause and rerun it in Actions. Publishing can resume a draft and skips
+an already published release. Existing version tags are never moved.
+
+Report vulnerabilities privately through [SECURITY.md](SECURITY.md). Keep credentials, production
+logs and private member data out of issues and PRs. Contributions use the [MIT license](LICENSE);
+preserve third-party notices and do not imply that an independent fork is the official service.

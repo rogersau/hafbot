@@ -21,6 +21,8 @@ export type BillingSubscriptionStatus =
   | "quarantined";
 
 export interface BillingCatalogEntry {
+  /** Recognition only: excluded from all purchase and display selections. */
+  historical?: true;
   priceId: string;
   productId: string;
   plan: Exclude<GuildPlan, "free">;

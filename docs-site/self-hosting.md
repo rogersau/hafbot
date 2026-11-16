@@ -9,9 +9,9 @@ You can run HAF Bot on a Linux Docker host using your own Discord application, P
 and private S3-compatible or Azure Blob object storage. Cloudflare Tunnel can publish the HTTPS
 application without opening an inbound application port on your host.
 
-This initial public release provides reviewed source and a build-from-source Docker path.
-No public container image is published with this release. You do not need access to the hosted
-service's private registry or infrastructure.
+Build from reviewed source or use a tested Linux amd64 container archive from an automated
+[GitHub release](https://github.com/rogersau/hafbot/releases). The initial `v1.0.0` release contains
+source only. You do not need access to the hosted service's private registry or infrastructure.
 
 Automated tests cover the source build, PostgreSQL contracts, fresh schema initialization and local container
 readiness. A fresh independent live Discord/OAuth installation rehearsal has not been completed.
@@ -137,15 +137,22 @@ docker compose -f compose.yaml -f compose.source.yaml up -d --wait
 This builds the production Dockerfile, including the dashboard, landing pages, and Node runtime.
 Record the source commit and resulting image ID. Use these Compose commands for source builds.
 
-### Use a tested registry image
+### Use a tested release image
 
-The initial release supplies no public registry image. If you operate your own registry, build
-the reviewed source, run its validation, push the result and set `HAF_IMAGE` to that immutable
-digest. Keep registry credentials private. The hosted service's images are separately controlled.
+Download the container archive, `image-id.txt` and `SHA256SUMS` from the same automated release.
+Verify the downloaded files with `sha256sum --ignore-missing -c SHA256SUMS`, then load the archive:
+
+```sh
+# Replace VERSION with the chosen release, for example v1.0.3.
+docker load --input hafbot-image-VERSION-linux-amd64.tar.gz
+```
+
+Set `HAF_IMAGE=hafbot:VERSION` in `.env`, using the chosen version. The archive contains the exact
+production image that passed CI's container smoke test. Releases currently supply Linux amd64
+images; use a source build for another architecture. Record the image ID from `image-id.txt`.
 
 ```sh
 docker compose config --quiet
-docker compose pull
 docker compose up -d --wait
 ```
 

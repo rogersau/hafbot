@@ -13,6 +13,9 @@ import {
 import type { BillingSubscriptionProjection } from "../src/runtime/billing/types";
 
 const catalog = createBillingCatalog({
+  historicalPricesJson: JSON.stringify([
+    { priceId: "price_historical", productId: "prod_p", plan: "premium", frequency: "yearly" },
+  ]),
   premiumMonthlyPriceId: "price_pm",
   premiumMonthlyProductId: "prod_p",
   premiumYearlyPriceId: "price_py",
@@ -27,7 +30,7 @@ test("Checkout binds a Customer first and supports every current standard Price"
   const provider = new FakeProvider();
   const store = new MemoryStore();
   const service = createService(provider, store);
-  for (const { priceId } of catalog.values()) {
+  for (const { priceId } of await service.listCatalog()) {
     const result = await service.startCheckout({
       ownerId: "owner",
       email: "owner@example.test",
@@ -203,3 +206,24 @@ function projection(
     ...overrides,
   };
 }
+
+test("historical prices cannot start Checkout or appear in the public catalog", async () => {
+  const provider = new FakeProvider();
+  const service = createService(provider, new MemoryStore());
+  assert.equal((await service.listCatalog()).length, 4);
+  assert.equal(
+    (await service.listCatalog()).some((entry) => entry.priceId === "price_historical"),
+    false,
+  );
+  await assert.rejects(
+    service.startCheckout({
+      ownerId: "owner",
+      email: null,
+      priceId: "price_historical",
+      intentId: "intent_historical",
+    }),
+    /unsupported_price/,
+  );
+  assert.equal(provider.customerCalls.length, 0);
+  assert.equal(provider.checkoutCalls.length, 0);
+});
