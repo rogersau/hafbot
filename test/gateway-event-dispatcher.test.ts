@@ -153,8 +153,8 @@ const EXPECTED_HANDLER_CALLS: Readonly<Record<string, readonly string[]>> = {
 
 test("production Gateway registry preserves the expected call order for every event type", () => {
   const capabilities = registryCapabilities(ALL_FEATURES_ENABLED);
-  for (const [eventType, legacyCalls] of Object.entries(EXPECTED_HANDLER_CALLS)) {
-    assert.deepEqual(eligibleProductionHandlers(eventType, capabilities), legacyCalls, eventType);
+  for (const [eventType, expectedCalls] of Object.entries(EXPECTED_HANDLER_CALLS)) {
+    assert.deepEqual(eligibleProductionHandlers(eventType, capabilities), expectedCalls, eventType);
   }
 });
 
@@ -177,10 +177,10 @@ test("production Gateway feature gates remove only their characterized handlers"
     [keyof FeatureFlags, readonly string[]]
   >) {
     const capabilities = registryCapabilities({ ...ALL_FEATURES_ENABLED, [feature]: false });
-    for (const [eventType, legacyCalls] of Object.entries(EXPECTED_HANDLER_CALLS)) {
+    for (const [eventType, expectedCalls] of Object.entries(EXPECTED_HANDLER_CALLS)) {
       assert.deepEqual(
         eligibleProductionHandlers(eventType, capabilities),
-        legacyCalls.filter((key) => !removedKeys.includes(key)),
+        expectedCalls.filter((key) => !removedKeys.includes(key)),
         `${feature}:${eventType}`,
       );
     }
@@ -227,15 +227,15 @@ test("every production handler declares its least-capability scope", () => {
     ),
     "image-rules": scope(
       ["env", "botEnv", "features", "operations", "discord", "resolveBotDisplayName"],
-      ["audit"],
+      ["audit", "imageRules"],
     ),
     "bot-defense": scope(
       ["env", "botEnv", "features", "operations", "resolveBotDisplayName"],
-      ["audit"],
+      ["audit", "botDefense", "entitlement"],
     ),
     "reaction-limits": scope(
-      ["env", "botEnv", "operations", "discord", "productAnalytics"],
-      ["reactionLimit", "timedRole", "blocklist", "entitlement"],
+      ["operations", "discord", "productAnalytics"],
+      ["reactionLimit", "reactionMutations", "timedRole", "blocklist", "entitlement"],
     ),
     tickets: scope(["env", "features", "discord", "operations"], ["guildRbac", "ticket"]),
     "platform-link-deactivate": scope(["env", "botEnv", "operations"], ["platformLink"]),
@@ -248,7 +248,7 @@ test("every production handler declares its least-capability scope", () => {
       ["env", "botEnv", "features", "operations", "discord"],
       ["blocklist", "timedRole"],
     ),
-    "commerce-paid-role-membership": scope(["env", "botEnv", "operations"]),
+    "commerce-paid-role-membership": scope(["commerceLifecycle", "operations"]),
     "member-verification": scope(["env", "features", "operations", "memberVerificationService"]),
     "managed-message-delete": scope(["env", "botEnv"], ["audit", "managedMessage"]),
     "message-audit": scope(["env", "botEnv", "operations"], ["audit"]),
@@ -257,7 +257,7 @@ test("every production handler declares its least-capability scope", () => {
     "structure-audit": scope(["env", "botEnv", "operations"], ["audit"]),
     "guild-lifecycle": scope(
       ["env", "operations", "discord", "standardDiscord", "productAnalytics"],
-      ["knownGuild"],
+      ["knownGuild", "guildServiceSuspensions", "serverLevel", "observations"],
     ),
     "clan-reconciliation": scope(["env", "features", "operations", "clanService"], []),
     "lfg-voice-cleanup": scope(["env", "features", "discord", "operations"], ["lfg"]),
@@ -285,9 +285,12 @@ function eligibleProductionHandlers(
 
 function registryCapabilities(features: FeatureFlags): GatewayEventCapabilities {
   return {
-    env: { HAF_DB: {} },
+    env: {},
     features,
-    stores: null,
+    stores: {},
+    commerceLifecycle: {},
+    clanService: {},
+    memberVerificationService: {},
   } as unknown as GatewayEventCapabilities;
 }
 

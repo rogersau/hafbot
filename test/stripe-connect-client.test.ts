@@ -163,16 +163,30 @@ test("onboarding and management links are platform-scoped and validate URLs", as
 
 test("connected-account request helper requires an account and always sets Stripe-Account", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];
-  const stripe = client([{ id: "pi_1" }], requests);
+  const stripe = client([{ id: "pi_1" }, { id: "pi_2" }], requests);
   await stripe.requestForConnectedAccount("acct_seller", "/v1/payment_intents/pi_1");
   assert.equal(
     (requests[0]?.init?.headers as Record<string, string>)?.["stripe-account"],
     "acct_seller",
   );
-  await assert.rejects(
-    () => stripe.requestConnectedAccount({ accountId: "", path: "/v1/payment_intents/pi_1" }),
-    /Account ID is required/,
-  );
+  for (const invalidAccountId of ["", "seller_456"]) {
+    await assert.rejects(
+      () => stripe.requestForConnectedAccount(invalidAccountId, "/v1/payment_intents/pi_1"),
+      /Account ID is required/,
+    );
+  }
+  assert.equal(requests.length, 1, "invalid account scope must fail before network access");
+
+  await stripe.requestForConnectedAccount("acct_seller", "/v1/payment_intents", {
+    method: "POST",
+    body: new URLSearchParams({ amount: "100" }),
+    idempotencyKey: "pi:create:1",
+  });
+  const headers = requests[1]?.init?.headers as Record<string, string>;
+  assert.equal(headers["stripe-account"], "acct_seller");
+  assert.equal(headers["idempotency-key"], "pi:create:1");
+  assert.equal(requests[1]?.init?.method, "POST");
+  assert.equal(String(requests[1]?.init?.body), "amount=100");
 });
 
 test("account state parsing is safe and excludes identity and bank fields", () => {

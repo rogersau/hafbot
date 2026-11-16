@@ -13,7 +13,6 @@ const billingStatusSchema = z.enum([
   "cancelled",
   "quarantined",
 ]);
-const pricingCohortSchema = z.enum(["founder", "standard"]);
 const emptyQuerySchema = z.object({});
 
 const subscriptionSchema = z.object({
@@ -36,8 +35,6 @@ const subscriptionSchema = z.object({
   graceStartedAtMs: z.number().int().nullable().optional(),
   graceEndsAtMs: z.number().int().nullable().optional(),
   graceExpiredAtMs: z.number().int().nullable().optional(),
-  pricingCohort: pricingCohortSchema.nullable().optional(),
-  founderAwardedAtMs: z.number().int().nullable().optional(),
 });
 
 const catalogEntrySchema = z.object({
@@ -45,8 +42,6 @@ const catalogEntrySchema = z.object({
   productId: z.string(),
   plan: paidPlanSchema,
   frequency: billingFrequencySchema,
-  cohort: pricingCohortSchema,
-  legacy: z.literal(true).optional(),
 });
 
 const displayPriceSchema = z.object({
@@ -56,13 +51,6 @@ const displayPriceSchema = z.object({
   currency: z.string(),
   decimalAmount: z.string(),
   formattedAmount: z.string(),
-});
-
-const founderAdmissionSchema = z.object({
-  historicalCount: z.number().int().nonnegative(),
-  publicCount: z.number().int().nonnegative(),
-  limit: z.number().int().positive(),
-  open: z.boolean(),
 });
 
 const ledgerOperationSchema = z.object({
@@ -140,7 +128,6 @@ export const getBilling = defineAdminOperation({
       subscription: subscriptionSchema.nullable(),
       catalog: z.array(catalogEntrySchema),
       prices: z.array(displayPriceSchema),
-      founderAdmission: founderAdmissionSchema.nullable(),
     }),
     description: "The current subscription and purchasable Billing catalogue",
   },

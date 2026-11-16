@@ -1,0 +1,603 @@
+import type { PostgresDatabaseCapability } from "./postgres-capability";
+import { executePostgresCommands } from "./postgres-statements";
+import type {
+  CommerceOfferingStore,
+  CommerceOfferingDashboard,
+  CommerceOfferingPublishContext,
+  CommerceOfferingRetirementProgress,
+  CommerceOfferingRetirementStatus,
+} from "../../commerce/offering-service";
+import type {
+  CommerceOffering,
+  CommerceOfferingLifecycle,
+  CommercePrice,
+} from "../../commerce/types";
+
+type Row = Record<string, unknown>;
+
+/** D1 implementation for seller offering configuration and dashboard reads. */
+export class PostgresCommerceOfferingStore implements CommerceOfferingStore {
+  constructor(
+    private readonly database: PostgresDatabaseCapability,
+    private readonly premium: { isPremium(guildId: string): Promise<boolean> } = {
+      async isPremium() {
+        return false;
+      },
+    },
+  ) {}
+
+  async createOffering(offering: CommerceOffering): Promise<void> {
+    await this.database.queryResult(
+      `INSERT INTO commerce_offerings
+          (id, connected_account_id, guild_id, discord_role_id, name, description,
+           purchase_type, state, terms_version, included_benefits_json, support_contact,
+           role_manageable, repair_deadline_at_ms, repair_previous_state, retire_at_ms,
+           published_at_ms, archived_at_ms, created_at_ms, updated_at_ms)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+         ON CONFLICT(id) DO UPDATE SET
+           discord_role_id=excluded.discord_role_id, name=excluded.name,
+           description=excluded.description, purchase_type=excluded.purchase_type,
+           state=excluded.state, terms_version=excluded.terms_version,
+           included_benefits_json=excluded.included_benefits_json,
+           support_contact=excluded.support_contact,
+           role_manageable=excluded.role_manageable,
+           repair_deadline_at_ms=excluded.repair_deadline_at_ms,
+           repair_previous_state=excluded.repair_previous_state,
+           retire_at_ms=excluded.retire_at_ms,
+           published_at_ms=excluded.published_at_ms,
+           archived_at_ms=excluded.archived_at_ms,
+           updated_at_ms=excluded.updated_at_ms`,
+      [
+        offering.id,
+        offering.connectedAccountId,
+        offering.guildId,
+        offering.discordRoleId,
+        offering.name,
+        offering.description,
+        offering.purchaseType,
+        offering.state,
+        offering.termsVersion,
+        JSON.stringify(offering.includedBenefits),
+        offering.supportContact,
+        offering.roleManageable ? 1 : 0,
+        offering.repairDeadlineAtMs,
+        offering.repairPreviousState,
+        offering.retireAtMs,
+        offering.publishedAtMs,
+        offering.archivedAtMs,
+        offering.createdAtMs,
+        offering.updatedAtMs,
+      ],
+    );
+  }
+
+  async readOffering(offeringId: string): Promise<CommerceOffering | null> {
+    const row = await this.database
+      .query<Row>("SELECT * FROM commerce_offerings WHERE id = $1 LIMIT 1", [offeringId])
+      .then((rows) => rows[0] ?? null);
+    return row ? offeringFromRow(row) : null;
+  }
+
+  async listOfferings(connectedAccountId: string): Promise<CommerceOffering[]> {
+    const result = await this.database.queryResult<Row>(
+      "SELECT * FROM commerce_offerings WHERE connected_account_id = $1 ORDER BY created_at_ms",
+      [connectedAccountId],
+    );
+    return result.rows.map(offeringFromRow);
+  }
+
+  async createPrice(price: CommercePrice): Promise<boolean> {
+    const result = await this.database.queryResult(
+      `INSERT INTO commerce_prices
+          (id, connected_account_id, offering_id, stripe_product_id, stripe_price_id,
+           currency, unit_amount_minor, price_type, recurring_interval, status,
+           provider_created_at_ms, retired_at_ms, created_at_ms)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ON CONFLICT DO NOTHING`,
+      [
+        price.id,
+        price.connectedAccountId,
+        price.offeringId,
+        price.stripeProductId,
+        price.stripePriceId,
+        price.currency,
+        price.unitAmountMinor,
+        price.priceType,
+        price.recurringInterval,
+        price.status,
+        price.providerCreatedAtMs,
+        price.retiredAtMs,
+        price.createdAtMs,
+      ],
+    );
+    return result.rowCount > 0;
+  }
+
+  async retirePrice(priceId: string, retiredAtMs: number): Promise<void> {
+    await this.database.queryResult(
+      "UPDATE commerce_prices SET status = 'retired', retired_at_ms = $1 WHERE id = $2 AND status = 'active'",
+      [retiredAtMs, priceId],
+    );
+  }
+
+  async listPrices(offeringId: string): Promise<CommercePrice[]> {
+    const result = await this.database.queryResult<Row>(
+      "SELECT * FROM commerce_prices WHERE offering_id = $1 ORDER BY created_at_ms",
+      [offeringId],
+    );
+    return result.rows.map(priceFromRow);
+  }
+
+  async readPublishContext(
+    connectedAccountId: string,
+    guildId: string,
+    offeringId: string,
+  ): Promise<CommerceOfferingPublishContext> {
+    const row = await this.database
+      .query<Row>(
+        `SELECT a.status AS account_status, a.charges_enabled, a.payouts_enabled,
+                a.details_submitted, p.lifecycle_state, p.approval_state,
+                o.role_manageable, o.terms_version,
+                EXISTS(SELECT 1 FROM commerce_seller_acceptances sa
+                  WHERE sa.connected_account_id = a.id AND sa.terms_version = o.terms_version) AS terms_accepted
+           FROM commerce_connected_accounts a
+           JOIN commerce_seller_profiles p ON p.connected_account_id = a.id
+           JOIN commerce_offerings o
+             ON o.id = $1 AND o.connected_account_id = a.id AND o.guild_id = a.guild_id
+          WHERE a.id = $2 AND a.guild_id = $3 LIMIT 1`,
+        [offeringId, connectedAccountId, guildId],
+      )
+      .then((rows) => rows[0] ?? null);
+    if (!row)
+      return {
+        premiumActive: false,
+        sellerEligible: false,
+        termsAccepted: false,
+        roleManageable: false,
+      };
+    return {
+      premiumActive: await this.premium.isPremium(guildId),
+      sellerEligible:
+        row.account_status === "active" &&
+        Boolean(row.charges_enabled) &&
+        Boolean(row.payouts_enabled) &&
+        Boolean(row.details_submitted) &&
+        row.lifecycle_state === "active" &&
+        row.approval_state === "approved",
+      termsAccepted: Boolean(row.terms_accepted),
+      roleManageable: Boolean(row.role_manageable),
+    };
+  }
+
+  async countPublishedSubscriptions(guildId: string): Promise<number> {
+    const row = await this.database
+      .query<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM commerce_offerings o
+         WHERE o.guild_id = $1 AND o.purchase_type = 'subscription'
+           AND (o.state = 'published'
+             OR (o.state = 'repair_required' AND o.repair_previous_state = 'published'))`,
+        [guildId],
+      )
+      .then((rows) => rows[0] ?? null);
+    return Number(row?.count ?? 0);
+  }
+
+  async hasPublishedRoleMapping(
+    guildId: string,
+    discordRoleId: string,
+    excludingOfferingId: string,
+  ): Promise<boolean> {
+    const row = await this.database
+      .query<{ found: number }>(
+        `SELECT 1 AS found FROM commerce_offerings o
+         WHERE o.guild_id = $1 AND o.discord_role_id = $2 AND o.id <> $3
+           AND (
+             o.state = 'published'
+             OR (o.state = 'repair_required' AND o.repair_previous_state = 'published')
+           )
+         LIMIT 1`,
+        [guildId, discordRoleId, excludingOfferingId],
+      )
+      .then((rows) => rows[0] ?? null);
+    return Boolean(row?.found);
+  }
+
+  async beginRoleReplacement(input: {
+    offering: CommerceOffering;
+    replacementRoleId: string;
+    nowMs: number;
+  }): Promise<"updated" | "replacement_pending"> {
+    const row = await this.database
+      .query<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM commerce_role_assignments ra
+         JOIN commerce_entitlements e ON e.id=ra.entitlement_id
+         WHERE e.offering_id=$1 AND ra.status IN ('pending','assigned','withheld','removing','failed')`,
+        [input.offering.id],
+      )
+      .then((rows) => rows[0] ?? null);
+    if (Number(row?.count ?? 0) === 0) {
+      await this.createOffering({
+        ...input.offering,
+        discordRoleId: input.replacementRoleId,
+        roleManageable: true,
+        repairDeadlineAtMs: null,
+        repairPreviousState:
+          input.offering.state === "repair_required" ? input.offering.repairPreviousState : null,
+        updatedAtMs: input.nowMs,
+      });
+      return "updated";
+    }
+    const repairId = `role-repair:${input.offering.id}:${input.offering.discordRoleId}`;
+    const deadlineAtMs = input.offering.repairDeadlineAtMs ?? input.nowMs + 72 * 60 * 60 * 1_000;
+    await executePostgresCommands(this.database, [
+      {
+        statement: `INSERT INTO commerce_paid_role_repairs(
+             id,offering_id,guild_id,old_role_id,replacement_role_id,started_at_ms,deadline_at_ms,
+             status,repaired_count,last_error_code,created_at_ms,updated_at_ms
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',0,NULL,$8,$9)
+           ON CONFLICT(id) DO UPDATE SET replacement_role_id=excluded.replacement_role_id,
+             status='pending',last_error_code=NULL,updated_at_ms=excluded.updated_at_ms`,
+        values: [
+          repairId,
+          input.offering.id,
+          input.offering.guildId,
+          input.offering.discordRoleId,
+          input.replacementRoleId,
+          input.nowMs,
+          deadlineAtMs,
+          input.nowMs,
+          input.nowMs,
+        ],
+      },
+      {
+        statement: `UPDATE commerce_offerings
+           SET state='repair_required',
+               repair_previous_state=CASE WHEN state='repair_required'
+                 THEN repair_previous_state ELSE state END,
+               role_manageable=1, repair_deadline_at_ms=$1, updated_at_ms=$2
+           WHERE id=$3`,
+        values: [deadlineAtMs, input.nowMs, input.offering.id],
+      },
+    ]);
+    return "replacement_pending";
+  }
+
+  async beginRetirement(input: {
+    offering: CommerceOffering;
+    actorUserId: string;
+    reasonCode: string;
+    actionId: string;
+    retireAtMs: number;
+    nowMs: number;
+  }): Promise<void> {
+    const operationPrefix = `commerce:offering-retirement:${input.offering.id}`;
+    await executePostgresCommands(this.database, [
+      {
+        statement: `UPDATE commerce_offerings
+             SET state='retiring', retire_at_ms=COALESCE(retire_at_ms, $1), updated_at_ms=$2
+           WHERE id=$3 AND state IN ('published','unpublished','suspended','retiring')`,
+        values: [input.retireAtMs, input.nowMs, input.offering.id],
+      },
+      {
+        statement: `INSERT INTO commerce_offering_retirements(
+             id, connected_account_id, guild_id, offering_id, requested_by_user_id, reason_code,
+             status, active_subscription_count, scheduled_cancellation_count,
+             failed_cancellation_count, latest_period_end_ms, last_error_code,
+             created_at_ms, updated_at_ms, completed_at_ms
+           )
+           SELECT $1, $2, $3, $4, $5, $6, 'scheduling_cancellations',
+             COALESCE(SUM(CASE WHEN status NOT IN ('canceled','ended') THEN 1 ELSE 0 END), 0),
+             COALESCE(SUM(CASE WHEN status NOT IN ('canceled','ended') AND cancel_at_period_end=1 THEN 1 ELSE 0 END), 0),
+             0, MAX(CASE WHEN status NOT IN ('canceled','ended') THEN current_period_end_ms END), NULL, $7, $8, NULL
+             FROM commerce_subscriptions
+            WHERE offering_id=$9
+           ON CONFLICT(offering_id) DO NOTHING`,
+        values: [
+          input.actionId,
+          input.offering.connectedAccountId,
+          input.offering.guildId,
+          input.offering.id,
+          input.actorUserId,
+          input.reasonCode,
+          input.nowMs,
+          input.nowMs,
+          input.offering.id,
+        ],
+      },
+      {
+        statement: `INSERT INTO commerce_financial_provider_actions(
+             id, operation_key, parent_action_id, workflow_type, workflow_id,
+             connected_account_id, guild_id, offering_id, subscription_id,
+             stripe_subscription_id, action_type, reason_code, status, attempt_count,
+             available_at_ms, lease_token, claimed_at_ms, lease_expires_at_ms,
+             provider_completed_at_ms, reconciliation_requested_at_ms, completed_at_ms,
+             last_error_code, created_at_ms, updated_at_ms
+           )
+           SELECT $1 || ':' || s.id, $2 || ':' || s.id, r.id, 'offering_retirement', r.offering_id,
+                   s.connected_account_id, $3, s.offering_id, s.id, s.stripe_subscription_id,
+                   'subscription.cancel_at_period_end', r.reason_code,
+                   CASE WHEN s.cancel_at_period_end=1 THEN 'completed' ELSE 'pending' END,
+                   0, $4, NULL, NULL, NULL,
+                   CASE WHEN s.cancel_at_period_end=1 THEN CAST($5 AS BIGINT) END,
+                   CASE WHEN s.cancel_at_period_end=1 THEN CAST($6 AS BIGINT) END,
+                   CASE WHEN s.cancel_at_period_end=1 THEN CAST($7 AS BIGINT) END,
+                   NULL, $8, $9
+             FROM commerce_subscriptions s
+             JOIN commerce_offering_retirements r ON r.offering_id=s.offering_id
+            WHERE s.offering_id=$10
+              AND s.status NOT IN ('canceled','ended')
+              AND r.id=$11
+           ON CONFLICT(operation_key) DO NOTHING`,
+        values: [
+          operationPrefix,
+          operationPrefix,
+          input.offering.guildId,
+          input.nowMs,
+          input.nowMs,
+          input.nowMs,
+          input.nowMs,
+          input.nowMs,
+          input.nowMs,
+          input.offering.id,
+          input.actionId,
+        ],
+      },
+    ]);
+  }
+
+  async archiveOffering(offeringId: string, nowMs: number): Promise<boolean> {
+    const result = await this.database.queryResult(
+      `UPDATE commerce_offerings
+          SET state='archived', archived_at_ms=COALESCE(archived_at_ms, $1), updated_at_ms=$2
+        WHERE id=$3
+          AND (
+            (
+              state='retiring'
+              AND EXISTS (
+                SELECT 1 FROM commerce_offering_retirements r
+                 WHERE r.offering_id=$4 AND r.status='complete'
+              )
+            )
+            OR (
+              state='draft'
+              AND NOT EXISTS (
+                SELECT 1 FROM commerce_offering_retirements r
+                 WHERE r.offering_id=$5
+              )
+            )
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM commerce_subscriptions s
+             WHERE s.offering_id=$6 AND s.status NOT IN ('canceled','ended')
+          )`,
+      [nowMs, nowMs, offeringId, offeringId, offeringId, offeringId],
+    );
+    return result.rowCount === 1;
+  }
+
+  async readDashboard(connectedAccountId: string): Promise<CommerceOfferingDashboard> {
+    const account = await this.database
+      .query<Row>(
+        "SELECT status, charges_enabled, payouts_enabled, details_submitted FROM commerce_connected_accounts WHERE id = $1",
+        [connectedAccountId],
+      )
+      .then((rows) => rows[0] ?? null);
+    const offerings = await this.database.queryResult<Row>(
+      `SELECT * FROM commerce_offerings
+        WHERE connected_account_id = $1 ORDER BY created_at_ms`,
+      [connectedAccountId],
+    );
+    const output = [] as CommerceOfferingDashboard["offerings"];
+    for (const row of offerings.rows) {
+      const id = String(row.id);
+      const subs = await this.database
+        .query<Row>(
+          `SELECT
+             SUM(CASE WHEN status IN ('active','trialing') AND cancel_at_period_end = 0 THEN 1 ELSE 0 END) active,
+             SUM(CASE WHEN status NOT IN ('canceled','ended') AND cancel_at_period_end = 1 THEN 1 ELSE 0 END) canceling,
+             SUM(CASE WHEN status IN ('incomplete','past_due','paused','unpaid') THEN 1 ELSE 0 END) past_due
+           FROM commerce_subscriptions WHERE offering_id = $1`,
+          [id],
+        )
+        .then((rows) => rows[0] ?? null);
+      const money = async (table: string, amount: string, status?: string, viaPayment = false) => {
+        const where = status ? ` AND t.status = '${status}'` : "";
+        const join = viaPayment ? " JOIN commerce_payments p ON p.id = t.payment_id" : "";
+        const offeringWhere = viaPayment ? "p.offering_id" : "t.offering_id";
+        const rows = await this.database.queryResult<Row>(
+          `SELECT t.currency, COALESCE(SUM(t.${amount}), 0) AS amount FROM ${table} t${join} WHERE ${offeringWhere} = $1${where} GROUP BY t.currency`,
+          [id],
+        );
+        return rows.rows.reduce(
+          (acc, item) => ({ ...acc, [String(item.currency)]: Number(item.amount ?? 0) }),
+          { AUD: 0, USD: 0 },
+        ) as Record<"AUD" | "USD", number>;
+      };
+      const grossByCurrency = await money(
+        "commerce_payments",
+        "amount_received_minor",
+        "succeeded",
+      );
+      const refundsByCurrency = await money("commerce_refunds", "amount_minor", "succeeded", true);
+      const disputesByCurrency = await money("commerce_disputes", "amount_minor", undefined, true);
+      const failures = await this.database
+        .query<Row>(
+          `SELECT
+             (SELECT COUNT(*) FROM commerce_role_assignments ra
+               JOIN commerce_entitlements e ON e.id = ra.entitlement_id
+              WHERE e.offering_id = $1 AND ra.status = 'failed') AS role_failures,
+             (SELECT COUNT(*) FROM commerce_incidents i
+              WHERE i.entity_id = $2 AND i.status = 'open') AS incidents`,
+          [id, id],
+        )
+        .then((rows) => rows[0] ?? null);
+      const retirement = await this.database
+        .query<Row>(
+          `SELECT r.status, r.completed_at_ms, r.latest_period_end_ms,
+             (SELECT COUNT(*) FROM commerce_subscriptions s
+               WHERE s.offering_id=r.offering_id AND s.status NOT IN ('canceled','ended')) AS active_subscription_count,
+             (SELECT COUNT(*) FROM commerce_subscriptions s
+               WHERE s.offering_id=r.offering_id AND s.status NOT IN ('canceled','ended')
+                 AND s.cancel_at_period_end=1) AS scheduled_cancellation_count,
+             (SELECT COUNT(*) FROM commerce_financial_provider_actions a
+               WHERE a.workflow_type='offering_retirement' AND a.workflow_id=r.offering_id
+                  AND a.status IN ('failed','quarantined')) AS failed_cancellation_count,
+             COALESCE(
+               (SELECT MAX(s.current_period_end_ms) FROM commerce_subscriptions s
+                 WHERE s.offering_id=r.offering_id AND s.status NOT IN ('canceled','ended')),
+               r.latest_period_end_ms
+             ) AS current_latest_period_end_ms
+           FROM commerce_offering_retirements r
+          WHERE r.offering_id=$1
+          LIMIT 1`,
+          [id],
+        )
+        .then((rows) => rows[0] ?? null);
+      output.push({
+        offering: offeringFromRow(row),
+        subscribers: {
+          active: Number(subs?.active ?? 0),
+          canceling: Number(subs?.canceling ?? 0),
+          pastDue: Number(subs?.past_due ?? 0),
+          grace: 0,
+          disputed: 0,
+        },
+        grossByCurrency,
+        refundsByCurrency,
+        disputesByCurrency,
+        activePrices: (await this.listPrices(id)).filter((price) => price.status === "active"),
+        estimatedProceedsByCurrency: {
+          AUD: Math.max(
+            0,
+            grossByCurrency.AUD - refundsByCurrency.AUD - Math.round(grossByCurrency.AUD * 0.05),
+          ),
+          USD: Math.max(
+            0,
+            grossByCurrency.USD - refundsByCurrency.USD - Math.round(grossByCurrency.USD * 0.05),
+          ),
+        },
+        upcomingCancellations: Number(subs?.canceling ?? 0),
+        roleFailures: Number(failures?.role_failures ?? 0),
+        reconciliationIncidents: Number(failures?.incidents ?? 0),
+        retirement: retirement ? retirementFromRow(retirement) : null,
+      });
+    }
+    return {
+      seller: account
+        ? {
+            connectedAccountId,
+            status: String(account.status),
+            chargesEnabled: Boolean(account.charges_enabled),
+            payoutsEnabled: Boolean(account.payouts_enabled),
+            detailsSubmitted: Boolean(account.details_submitted),
+          }
+        : null,
+      offerings: output,
+      estimatedProceedsAreNonAuthoritative: true,
+    };
+  }
+}
+
+function offeringFromRow(row: Row): CommerceOffering {
+  return {
+    id: String(row.id),
+    connectedAccountId: String(row.connected_account_id),
+    guildId: String(row.guild_id),
+    discordRoleId: String(row.discord_role_id),
+    name: String(row.name),
+    description: row.description == null ? null : String(row.description),
+    purchaseType: row.purchase_type === "one_time" ? "one_time" : "subscription",
+    state: lifecycleValue(row.state),
+    termsVersion: row.terms_version == null ? null : String(row.terms_version),
+    includedBenefits: parseBenefits(row.included_benefits_json),
+    supportContact: row.support_contact == null ? null : String(row.support_contact),
+    roleManageable: Boolean(row.role_manageable),
+    repairDeadlineAtMs:
+      row.repair_deadline_at_ms == null ? null : Number(row.repair_deadline_at_ms),
+    repairPreviousState:
+      row.repair_previous_state == null ? null : lifecycleValue(row.repair_previous_state),
+    retireAtMs: row.retire_at_ms == null ? null : Number(row.retire_at_ms),
+    publishedAtMs: row.published_at_ms == null ? null : Number(row.published_at_ms),
+    archivedAtMs: row.archived_at_ms == null ? null : Number(row.archived_at_ms),
+    createdAtMs: Number(row.created_at_ms),
+    updatedAtMs: Number(row.updated_at_ms),
+  };
+}
+
+function priceFromRow(row: Row): CommercePrice {
+  return {
+    id: String(row.id),
+    connectedAccountId: String(row.connected_account_id),
+    offeringId: String(row.offering_id),
+    stripeProductId: String(row.stripe_product_id),
+    stripePriceId: String(row.stripe_price_id),
+    currency: row.currency === "USD" ? "USD" : "AUD",
+    unitAmountMinor: Number(row.unit_amount_minor),
+    priceType: row.price_type === "one_time" ? "one_time" : "recurring",
+    recurringInterval:
+      row.recurring_interval === "year"
+        ? "year"
+        : row.recurring_interval === "month"
+          ? "month"
+          : null,
+    status: row.status === "retired" ? "retired" : "active",
+    providerCreatedAtMs:
+      row.provider_created_at_ms == null ? null : Number(row.provider_created_at_ms),
+    retiredAtMs: row.retired_at_ms == null ? null : Number(row.retired_at_ms),
+    createdAtMs: Number(row.created_at_ms),
+  };
+}
+
+function lifecycleValue(value: unknown): CommerceOfferingLifecycle {
+  const allowed: CommerceOfferingLifecycle[] = [
+    "draft",
+    "published",
+    "unpublished",
+    "repair_required",
+    "retiring",
+    "archived",
+    "suspended",
+  ];
+  if (typeof value !== "string" || !allowed.includes(value as CommerceOfferingLifecycle))
+    throw new Error("Invalid commerce offering lifecycle state");
+  return value as CommerceOfferingLifecycle;
+}
+
+function retirementFromRow(row: Row): CommerceOfferingRetirementProgress {
+  return {
+    status: retirementStatus(row.status),
+    activeSubscriptionCount: Number(row.active_subscription_count ?? 0),
+    scheduledCancellationCount: Number(row.scheduled_cancellation_count ?? 0),
+    failedCancellationCount: Number(row.failed_cancellation_count ?? 0),
+    latestPeriodEndMs:
+      row.current_latest_period_end_ms == null ? null : Number(row.current_latest_period_end_ms),
+    completedAtMs: row.completed_at_ms == null ? null : Number(row.completed_at_ms),
+  };
+}
+
+function retirementStatus(value: unknown): CommerceOfferingRetirementStatus {
+  const allowed: CommerceOfferingRetirementStatus[] = [
+    "requested",
+    "stopping_sales",
+    "scheduling_cancellations",
+    "waiting_for_period_end",
+    "complete",
+    "failed",
+  ];
+  if (typeof value !== "string" || !allowed.includes(value as CommerceOfferingRetirementStatus)) {
+    throw new Error("Invalid commerce offering retirement status");
+  }
+  return value as CommerceOfferingRetirementStatus;
+}
+
+function parseBenefits(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}

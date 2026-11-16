@@ -1,25 +1,33 @@
+import type { ObservationStore } from "../../server-levels/observations/store";
+import type { GatewayCommerceLifecycle } from "../gateway-commerce-lifecycle";
+import type { GatewayReactionStore } from "../contracts/gateway-reaction-store";
+import type {
+  GuildAuditLogStore,
+  GuildServiceSuspensionStore,
+  BlocklistStore,
+  BotDefenseStore,
+  ImageRulesStore,
+  GuildEntitlementStore,
+  GuildRbacStore,
+  KnownGuildStore,
+  ProductAnalyticsPreferenceStore,
+  LfgStore,
+  ClanStore,
+  ManagedMessageStore,
+  MemberVerificationStore,
+  MentionProtectionStore,
+  PlatformLinkStore,
+  ReactionLimitStore,
+  TicketStore,
+  TimedRoleStore,
+  WhiteLabelBotStore,
+  SuggestionStore,
+  ServerLevelStore,
+} from "../contracts";
+import type { WebhookCredentialStore } from "../../security/webhook-credentials/store";
 import type { Env } from "../../env";
 import type { GatewayEventOperationRunner } from "../gateway-event-idempotency";
 import type { parseFeatureFlags } from "../features";
-import type { createCloudflareBlocklistStore } from "../cloudflare-blocklist-store";
-import type { createCloudflareGuildAuditLogStore } from "../cloudflare-guild-audit-log-store";
-import type { createCloudflareGuildEntitlementStore } from "../cloudflare-guild-entitlement-store";
-import type { createCloudflareGuildRbacStore } from "../cloudflare-guild-rbac-store";
-import type { createCloudflareKnownGuildStore } from "../cloudflare-known-guild-store";
-import type { createCloudflareProductAnalyticsPreferenceStore } from "../cloudflare-product-analytics-preference-store";
-import type { createCloudflareLfgStore } from "../cloudflare-lfg-store";
-import type { createCloudflareClanStore } from "../cloudflare-clan-store";
-import type { createCloudflareManagedMessageStore } from "../cloudflare-managed-message-store";
-import type { createCloudflareMemberVerificationStore } from "../cloudflare-member-verification-store";
-import type { createCloudflareMentionProtectionStore } from "../cloudflare-mention-protection-store";
-import type { createCloudflarePlatformLinkStore } from "../cloudflare-platform-link-store";
-import type { createCloudflareReactionLimitStore } from "../cloudflare-reaction-limit-store";
-import type { createCloudflareTicketStore } from "../cloudflare-ticket-store";
-import type { createCloudflareTimedRoleStore } from "../cloudflare-timed-role-store";
-import type { createCloudflareWhiteLabelBotStore } from "../cloudflare-white-label-bot-store";
-import type { createCloudflareSuggestionStore } from "../cloudflare-suggestion-store";
-import type { createCloudflareServerLevelStore } from "../cloudflare-server-level-store";
-import type { createCloudflareWebhookCredentialStore } from "../../security/webhook-credentials/cloudflare-store";
 import type { GatewayDiscordCapabilities } from "./discord-capabilities";
 import type { MentionProtectionMessageDependencies } from "../../services/mention-protection/message-handler";
 import type { ClanService } from "../../services/clan-service";
@@ -51,14 +59,15 @@ export interface GatewayEventCapabilities {
   readonly botEnv: Env;
   readonly features: ReturnType<typeof parseFeatureFlags>;
   readonly operations: GatewayEventOperationRunner;
+  readonly commerceLifecycle: GatewayCommerceLifecycle | null;
   readonly discord: GatewayDiscordCapabilities;
   readonly standardDiscord: GatewayDiscordCapabilities;
-  readonly mentionProtection: MentionProtectionMessageDependencies | null;
-  readonly stores: GatewayEventStores | null;
+  readonly mentionProtection: MentionProtectionMessageDependencies;
+  readonly stores: GatewayEventStores;
   readonly clanService: Pick<
     ClanService,
     "handleGuildMemberDeparture" | "handleManagedResourceDeleted"
-  > | null;
+  >;
   readonly memberVerificationService: Pick<MemberVerificationService, "handleMemberAdd"> | null;
   readonly productAnalytics: ProductAnalyticsReporter;
   resolveBotDisplayName(guildId: string): Promise<string>;
@@ -70,24 +79,29 @@ export interface GatewayEventStores {
   reputationServiceForGuild?: (
     guildId: string,
   ) => Promise<import("../../reputation/service").ReputationService>;
-  reactionRole?: import("../contracts/reaction-role-store").ReactionRoleStore;
-  audit: ReturnType<typeof createCloudflareGuildAuditLogStore>;
-  blocklist: ReturnType<typeof createCloudflareBlocklistStore>;
-  entitlement: ReturnType<typeof createCloudflareGuildEntitlementStore>;
-  guildRbac: ReturnType<typeof createCloudflareGuildRbacStore>;
-  knownGuild: ReturnType<typeof createCloudflareKnownGuildStore>;
-  productAnalyticsPreferences: ReturnType<typeof createCloudflareProductAnalyticsPreferenceStore>;
-  lfg: ReturnType<typeof createCloudflareLfgStore>;
-  clan: ReturnType<typeof createCloudflareClanStore>;
-  managedMessage: ReturnType<typeof createCloudflareManagedMessageStore>;
-  memberVerification: ReturnType<typeof createCloudflareMemberVerificationStore>;
-  mentionProtection: ReturnType<typeof createCloudflareMentionProtectionStore>;
-  platformLink: ReturnType<typeof createCloudflarePlatformLinkStore>;
-  reactionLimit: ReturnType<typeof createCloudflareReactionLimitStore>;
-  ticket: ReturnType<typeof createCloudflareTicketStore>;
-  timedRole: ReturnType<typeof createCloudflareTimedRoleStore>;
-  whiteLabel: ReturnType<typeof createCloudflareWhiteLabelBotStore>;
-  suggestion: ReturnType<typeof createCloudflareSuggestionStore>;
-  serverLevel: ReturnType<typeof createCloudflareServerLevelStore>;
-  webhookCredential: ReturnType<typeof createCloudflareWebhookCredentialStore>;
+  reactionRole: import("../contracts/reaction-role-store").ReactionRoleStore;
+  audit: GuildAuditLogStore;
+  guildServiceSuspensions: GuildServiceSuspensionStore;
+  blocklist: BlocklistStore;
+  botDefense: BotDefenseStore;
+  imageRules: ImageRulesStore;
+  entitlement: GuildEntitlementStore;
+  guildRbac: GuildRbacStore;
+  knownGuild: KnownGuildStore;
+  productAnalyticsPreferences: ProductAnalyticsPreferenceStore;
+  lfg: LfgStore;
+  clan: ClanStore;
+  managedMessage: ManagedMessageStore;
+  memberVerification: MemberVerificationStore;
+  mentionProtection: MentionProtectionStore;
+  platformLink: PlatformLinkStore;
+  reactionLimit: ReactionLimitStore;
+  reactionMutations: GatewayReactionStore;
+  ticket: TicketStore;
+  timedRole: TimedRoleStore;
+  whiteLabel: WhiteLabelBotStore;
+  suggestion: SuggestionStore;
+  serverLevel: ServerLevelStore;
+  observations: Pick<ObservationStore, "eraseGuild">;
+  webhookCredential: WebhookCredentialStore;
 }

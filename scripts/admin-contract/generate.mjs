@@ -138,10 +138,6 @@ const clientDomains = {
       ["save", "playerLinkContracts.save", "body"],
       ["publish", "playerLinkContracts.publish", "body"],
       ["syncRoles", "playerLinkContracts.syncRoles", "body"],
-      ["steamGet", "playerLinkContracts.steamGet", "query"],
-      ["steamSave", "playerLinkContracts.steamSave", "body"],
-      ["steamPublish", "playerLinkContracts.steamPublish", "body"],
-      ["steamSyncRoles", "playerLinkContracts.steamSyncRoles", "body"],
     ],
   },
   "billing.ts": {

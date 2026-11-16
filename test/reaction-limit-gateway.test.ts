@@ -1,3 +1,4 @@
+import { gatewayEnvelope } from "./support/gateway-envelope";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -5,7 +6,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { processGatewayEventQueueMessages } from "../src/runtime/gateway-event-queue-consumer";
+import { processGatewayEventQueueMessages } from "./support/gateway-event-consumer";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 for (const isBot of [false, true]) {
@@ -30,7 +31,7 @@ for (const isBot of [false, true]) {
     try {
       await processGatewayEventQueueMessages(
         [
-          {
+          gatewayEnvelope({
             type: "MESSAGE_REACTION_ADD",
             data: {
               channel_id: "channel-1",
@@ -40,7 +41,7 @@ for (const isBot of [false, true]) {
               user_id: "user-1",
               ...(isBot ? { member: { user: { id: "user-1", bot: true } } } : {}),
             },
-          },
+          }),
         ],
         createEnv(database as unknown as D1Database),
       );
@@ -76,7 +77,7 @@ for (const isBot of [false, true]) {
       assert.deepEqual(JSON.parse(dmCall.body), {
         content: "Reaction limit breached.",
         allowed_mentions: { parse: [] },
-        nonce: "g:lwjewGZiGXWEZHWkyDTlVw",
+        nonce: "g:RJc7y-4JYri-itCdt4Wy1g",
         enforce_nonce: true,
       });
     }
@@ -146,7 +147,7 @@ test("reaction-limit replay resumes after the breach boundary without incrementi
     }
     return Response.json({ ok: true });
   });
-  const event = {
+  const event = gatewayEnvelope({
     type: "MESSAGE_REACTION_ADD",
     data: {
       channel_id: "channel-1",
@@ -155,7 +156,7 @@ test("reaction-limit replay resumes after the breach boundary without incrementi
       emoji: { id: null, name: "✅", animated: false },
       user_id: "user-1",
     },
-  };
+  });
 
   try {
     await assert.rejects(
@@ -207,10 +208,8 @@ function createReactionLimitDatabase(): SqliteD1Database {
     )
     .run();
   database
-    .prepare(
-      "INSERT INTO guild_entitlements(guild_id, tier, plan, updated_at_ms) VALUES(?, ?, ?, ?)",
-    )
-    .bind("guild-1", "premium", "premium", 0)
+    .prepare("INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES(?, ?, ?)")
+    .bind("guild-1", "premium", 0)
     .run();
   database
     .prepare(

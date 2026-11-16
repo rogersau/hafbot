@@ -20,20 +20,4 @@ export const playerLinkClient = {
     body: z.input<NonNullable<typeof playerLinkContracts.syncRoles.body>>,
     signal?: AbortSignal,
   ) => callAdminContract(playerLinkContracts.syncRoles, { body, signal }),
-  steamGet: (
-    query: z.input<NonNullable<typeof playerLinkContracts.steamGet.query>>,
-    signal?: AbortSignal,
-  ) => callAdminContract(playerLinkContracts.steamGet, { query, signal }),
-  steamSave: (
-    body: z.input<NonNullable<typeof playerLinkContracts.steamSave.body>>,
-    signal?: AbortSignal,
-  ) => callAdminContract(playerLinkContracts.steamSave, { body, signal }),
-  steamPublish: (
-    body: z.input<NonNullable<typeof playerLinkContracts.steamPublish.body>>,
-    signal?: AbortSignal,
-  ) => callAdminContract(playerLinkContracts.steamPublish, { body, signal }),
-  steamSyncRoles: (
-    body: z.input<NonNullable<typeof playerLinkContracts.steamSyncRoles.body>>,
-    signal?: AbortSignal,
-  ) => callAdminContract(playerLinkContracts.steamSyncRoles, { body, signal }),
 };

@@ -769,7 +769,6 @@ export class SuggestionService {
     limit: number,
     windowMs: number,
   ): Promise<void> {
-    if (!this.store.consumeActionRateLimit) return;
     const nowMs = this.now();
     const windowStartMs = Math.floor(nowMs / windowMs) * windowMs;
     if (

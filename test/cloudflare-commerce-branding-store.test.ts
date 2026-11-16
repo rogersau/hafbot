@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CloudflareCommerceBrandingStore } from "../src/runtime/commerce/cloudflare-branding-store";
+import { SqliteCommerceBrandingStore } from "./support/sqlite/runtime/commerce/sqlite-branding-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 test("Commerce branding store round-trips audit fields and resets only the matching seller", async () => {
   const database = await createTestDatabase();
-  const store = new CloudflareCommerceBrandingStore(database.d1);
+  const store = new SqliteCommerceBrandingStore(database.d1);
   const saved = await store.save({
     guildId: "guild-1",
     connectedAccountId: "acct-1",

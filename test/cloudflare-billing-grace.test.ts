@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 import { createBillingAssignmentService } from "../src/runtime/billing/assignments";
-import { CloudflareBillingAssignmentStore } from "../src/runtime/billing/cloudflare-assignment-store";
-import { CloudflareBillingSyncStore } from "../src/runtime/billing/cloudflare-billing-sync-store";
-import { CloudflareBillingGraceStore } from "../src/runtime/billing/cloudflare-grace-store";
+import { SqliteBillingAssignmentStore } from "./support/sqlite/runtime/billing/sqlite-assignment-store";
+import { SqliteBillingSyncStore } from "./support/sqlite/runtime/billing/sqlite-billing-sync-store";
+import { SqliteBillingGraceStore } from "./support/sqlite/runtime/billing/sqlite-grace-store";
 import { createBillingGraceProcessor } from "../src/runtime/billing/grace";
 import { createBillingOwnerSync } from "../src/runtime/billing/owner-sync";
 import { StripeHttpClient } from "../src/runtime/billing/stripe-http-client";
@@ -18,8 +18,8 @@ test("zero-value first invoices use normal assignments and renewal Grace with or
     await t.test(savedMethod ? "saved payment method" : "no payment method", async (t) => {
       const database = await createTestDatabase();
       t.after(() => database.close());
-      const syncStore = new CloudflareBillingSyncStore(database.d1);
-      const assignments = new CloudflareBillingAssignmentStore(database.d1);
+      const syncStore = new SqliteBillingSyncStore(database.d1);
+      const assignments = new SqliteBillingAssignmentStore(database.d1);
       let nowMs = 1_000;
       let status: "active" | "past_due" | "unpaid" = "active";
       let renewal = false;
@@ -78,7 +78,6 @@ test("zero-value first invoices use normal assignments and renewal Grace with or
               productId: "prod",
               plan: "premium",
               frequency: "yearly",
-              cohort: "standard",
             },
           ],
         ]),
@@ -87,8 +86,8 @@ test("zero-value first invoices use normal assignments and renewal Grace with or
       });
       await syncStore.bindCustomer("owner", "cus", nowMs);
       const observed = await stripe.readOwnerState("cus");
-      assert.equal(observed.subscriptions[0]?.latestInvoicePaid, true);
-      assert.equal(observed.subscriptions[0]?.latestInvoiceAmountPaid, 0);
+      assert.equal(observed.subscriptions[0]?.status, "active");
+      assert.equal(observed.subscriptions[0]?.latestInvoiceId, "in_zero");
       const initial = await syncOwner({
         ownerId: "owner",
         source: "checkout",
@@ -131,7 +130,7 @@ test("zero-value first invoices use normal assignments and renewal Grace with or
       }
       nowMs = deadline;
       await createBillingGraceProcessor({
-        store: new CloudflareBillingGraceStore(database.d1),
+        store: new SqliteBillingGraceStore(database.d1),
         syncOwner,
         now: () => nowMs,
       })();
@@ -154,9 +153,9 @@ test("zero-value first invoices use normal assignments and renewal Grace with or
 test("a failed due-Grace read preserves paid access and the next run safely expires it", async (t) => {
   const database = await createTestDatabase();
   t.after(() => database.close());
-  const syncStore = new CloudflareBillingSyncStore(database.d1);
-  const graceStore = new CloudflareBillingGraceStore(database.d1);
-  const assignments = new CloudflareBillingAssignmentStore(database.d1);
+  const syncStore = new SqliteBillingSyncStore(database.d1);
+  const graceStore = new SqliteBillingGraceStore(database.d1);
+  const assignments = new SqliteBillingAssignmentStore(database.d1);
   await syncStore.bindCustomer("owner", "cus", 1);
   await commit(syncStore, pastDue(1_000), "op-1");
   assert.equal(
@@ -209,7 +208,7 @@ test("a failed due-Grace read preserves paid access and the next run safely expi
 
 test("first failed renewal fixes an exact seven-day deadline and retries do not move it", async () => {
   const database = new SqliteD1Database();
-  const store = new CloudflareBillingSyncStore(database as unknown as D1Database);
+  const store = new SqliteBillingSyncStore(database as unknown as D1Database);
   await store.bindCustomer("owner", "cus", 1);
   await commit(store, pastDue(1_000), "op-1");
   await commit(store, pastDue(5_000), "op-2");
@@ -220,8 +219,8 @@ test("first failed renewal fixes an exact seven-day deadline and retries do not 
 
 test("expiry requires verified current state, retains assignment, and active recovery restores it", async () => {
   const database = new SqliteD1Database();
-  const syncStore = new CloudflareBillingSyncStore(database as unknown as D1Database);
-  const graceStore = new CloudflareBillingGraceStore(database as unknown as D1Database);
+  const syncStore = new SqliteBillingSyncStore(database as unknown as D1Database);
+  const graceStore = new SqliteBillingGraceStore(database as unknown as D1Database);
   await syncStore.bindCustomer("owner", "cus", 1);
   await commit(syncStore, pastDue(1_000), "op-1");
   await database
@@ -231,7 +230,7 @@ test("expiry requires verified current state, retains assignment, and active rec
     .run();
   await database
     .prepare(
-      "INSERT INTO guild_entitlements(guild_id, tier, plan, updated_at_ms) VALUES ('guild', 'free', 'premium', 1)",
+      "INSERT INTO guild_entitlements(guild_id, plan, updated_at_ms) VALUES ('guild', 'premium', 1)",
     )
     .run();
   const deadline = 1_000 + 7 * 86_400_000;
@@ -265,19 +264,19 @@ test("expiry requires verified current state, retains assignment, and active rec
 
 test("reconciliation failure attempts persist across Grace store instances", async () => {
   const database = new SqliteD1Database();
-  await new CloudflareBillingGraceStore(database as unknown as D1Database).recordFailure(
+  await new SqliteBillingGraceStore(database as unknown as D1Database).recordFailure(
     "owner",
     "Stripe unavailable",
     1,
     3,
   );
-  await new CloudflareBillingGraceStore(database as unknown as D1Database).recordFailure(
+  await new SqliteBillingGraceStore(database as unknown as D1Database).recordFailure(
     "owner",
     "Stripe unavailable",
     2,
     3,
   );
-  await new CloudflareBillingGraceStore(database as unknown as D1Database).recordFailure(
+  await new SqliteBillingGraceStore(database as unknown as D1Database).recordFailure(
     "owner",
     "Stripe unavailable",
     3,
@@ -303,7 +302,7 @@ test("reconciliation failure attempts persist across Grace store instances", asy
 });
 
 async function commit(
-  store: CloudflareBillingSyncStore,
+  store: SqliteBillingSyncStore,
   projection: BillingSubscriptionProjection,
   id: string,
 ) {

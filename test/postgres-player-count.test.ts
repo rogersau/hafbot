@@ -1,13 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolve } from "node:path";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
-import { createCloudflarePlayerCountStore } from "../src/runtime/cloudflare-player-count-store";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
+import { createPostgresPlayerCountStore } from "../src/runtime/postgres/postgres-player-count-store";
 import type { PlayerCountServer } from "../src/types/player-count";
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 test(
@@ -21,13 +16,8 @@ test(
       NODE_ENV: "test",
     });
     try {
-      await applyPostgresMigrations(
-        database,
-        await readPostgresMigrations(resolve("migrations/postgres")),
-      );
-      const store = createCloudflarePlayerCountStore(
-        createPostgresD1CompatibilityDatabase(database),
-      );
+      await initializePostgresSchema(database);
+      const store = createPostgresPlayerCountStore(database);
       const server: PlayerCountServer = {
         id: crypto.randomUUID(),
         guildId: crypto.randomUUID(),

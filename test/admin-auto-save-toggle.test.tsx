@@ -55,10 +55,10 @@ for (const feature of ["Steam", "Evidence Vault", "Image Rules", "Tickets"] as c
       const value = "Changed draft";
       let expectedPath: string;
       if (feature === "Steam") {
-        const { AdminSteamLinkPage } =
-          await import("../src/admin/components/admin-steam-link-page");
+        const { AdminPlatformLinkPage } =
+          await import("../src/admin/components/admin-platform-link-page");
         page = (
-          <AdminSteamLinkPage
+          <AdminPlatformLinkPage
             {...scope}
             activePlatform="steam"
             initialData={{
@@ -174,12 +174,8 @@ for (const feature of ["Steam", "Evidence Vault", "Image Rules", "Tickets"] as c
                 defaultRedirectTarget: null,
                 guildDirectory: [],
                 guildLookupError: null,
-                workspaces: [],
-                workspacesLoading: false,
-                workspaceLookupError: null,
                 guildResourcesRefreshVersion: 0,
                 onSelectedGuildChange() {},
-                onSelectedWorkspaceChange() {},
                 refreshGuildDirectory: async () => {},
                 onRefresh: async () => {},
                 playstationLinkEnabled: true,

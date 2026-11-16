@@ -40,9 +40,7 @@ export function createPlatformLinkRoutes(options: PlatformLinkRouteOptions) {
       );
 
     try {
-      const isStartRoute =
-        url.pathname === `/auth/${platform}/start` ||
-        (platform === "steam" && url.pathname === "/auth/steam");
+      const isStartRoute = url.pathname === `/auth/${platform}/start`;
       if (request.method === "GET" && isStartRoute) {
         const state = String(url.searchParams.get("state") || "");
         if (!state) {

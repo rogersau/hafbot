@@ -741,14 +741,9 @@ export function buildWebhookPermissionChecks(
   if (configs.length === 0) return [];
   return configs.map((config) => {
     const destinationIds = new Set(config.destinations.map((destination) => destination.id));
-    const invalidDestinations = config.destinations.filter((destination) => {
-      try {
-        const url = new URL(destination.url);
-        return url.protocol !== "https:" && url.protocol !== "http:";
-      } catch {
-        return true;
-      }
-    });
+    const invalidDestinations = config.destinations.filter(
+      (destination) => !destination.credentialId?.trim(),
+    );
     const missingReferences = [
       ...config.defaultDestinationIds,
       ...config.routingRules.flatMap((rule) => rule.destinationIds),
@@ -780,7 +775,7 @@ export function buildWebhookPermissionChecks(
         ? `${[
             config.destinations.length === 0 && "no destinations",
             invalidDestinations.length > 0 &&
-              `${invalidDestinations.length} invalid destination URL(s)`,
+              `${invalidDestinations.length} missing destination credential(s)`,
             missingReferences.length > 0 &&
               `${missingReferences.length} missing destination reference(s)`,
             invalidPatterns.length > 0 && `${invalidPatterns.length} invalid regex pattern(s)`,

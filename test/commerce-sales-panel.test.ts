@@ -22,7 +22,7 @@ type OfferingRow = CommerceOfferingDashboard["offerings"][number];
 
 function offeringRow(
   id: string,
-  overrides: Partial<Pick<OfferingRow, "lifecycle" | "includedBenefits">> = {},
+  overrides: Partial<Pick<OfferingRow["offering"], "state" | "includedBenefits">> = {},
 ): OfferingRow {
   return {
     offering: {
@@ -33,12 +33,19 @@ function offeringRow(
       name: `Offering ${id}`,
       description: "Access to the private Discord area.",
       purchaseType: "subscription",
-      status: "active",
+      state: overrides.state ?? "published",
+      termsVersion: "seller-terms-2026-07",
+      includedBenefits: overrides.includedBenefits ?? ["Private role access"],
+      supportContact: "seller@example.test",
+      roleManageable: true,
+      repairDeadlineAtMs: null,
+      repairPreviousState: null,
+      retireAtMs: null,
+      publishedAtMs: 1,
       archivedAtMs: null,
       createdAtMs: 1,
       updatedAtMs: 1,
     },
-    lifecycle: overrides.lifecycle ?? "published",
     subscribers: { active: 0, canceling: 0, pastDue: 0, grace: 0, disputed: 0 },
     grossByCurrency: { AUD: 0, USD: 0 },
     refundsByCurrency: { AUD: 0, USD: 0 },
@@ -61,8 +68,6 @@ function offeringRow(
         createdAtMs: 1,
       },
     ],
-    includedBenefits: overrides.includedBenefits ?? ["Private role access"],
-    supportContact: "seller@example.test",
     upcomingCancellations: 0,
     roleFailures: 0,
     reconciliationIncidents: 0,
@@ -141,7 +146,7 @@ test("sales panel renderer budgets copy and offering fields to Discord's aggrega
   const offerings = Array.from({ length: 2 }, (_, index) => {
     const row = offeringRow(`offering-${index}`);
     row.offering.description = "Detailed offering copy ".repeat(80);
-    row.includedBenefits = ["Benefit ".repeat(80), "Another benefit ".repeat(80)];
+    row.offering.includedBenefits = ["Benefit ".repeat(80), "Another benefit ".repeat(80)];
     return row;
   });
   const message = renderInput(offerings, false, {
@@ -324,7 +329,7 @@ function createService(options: {
 
 test("sales panel service publishes, edits in place, filters unavailable offerings, and unpublishes idempotently", async () => {
   const setup = createService({
-    rows: [offeringRow("published"), offeringRow("draft", { lifecycle: "draft" })],
+    rows: [offeringRow("published"), offeringRow("draft", { state: "draft" })],
   });
   const first = await setup.service.publish({
     connectedAccountId: "account-1",

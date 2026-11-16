@@ -14,10 +14,7 @@ import type {
   CommerceSellerProfile,
   CommerceSubscriptionStatus,
 } from "./types";
-import type {
-  CommerceOfferingLifecycleRecord,
-  CommerceOfferingPublishContext,
-} from "./offering-service";
+import type { CommerceOfferingPublishContext } from "./offering-service";
 
 // Stripe Checkout requires expires_at to be at least 30 minutes in the future.
 // One extra minute avoids crossing that boundary during the API request.
@@ -25,7 +22,6 @@ const CHECKOUT_TTL_MS = 31 * 60 * 1_000;
 
 export interface CommerceStorefront {
   offering: CommerceOffering;
-  lifecycle: CommerceOfferingLifecycleRecord;
   price: CommercePrice;
   account: CommerceConnectedAccount;
   seller: CommerceSellerProfile;
@@ -500,7 +496,7 @@ export class CommerceBuyerCheckoutService {
     const storefront = await this.storefront(offeringId);
     if (
       storefront.offering.purchaseType !== "subscription" ||
-      storefront.lifecycle.state !== "published" ||
+      storefront.offering.state !== "published" ||
       storefront.price.status !== "active" ||
       storefront.price.priceType !== "recurring"
     ) {
@@ -513,7 +509,7 @@ export class CommerceBuyerCheckoutService {
     ) {
       throw new Error("commerce_seller_not_purchasable");
     }
-    if (!storefront.lifecycle.roleManageable || !storefront.publishContext.roleManageable) {
+    if (!storefront.offering.roleManageable || !storefront.publishContext.roleManageable) {
       throw new Error("commerce_role_unmanageable");
     }
     return storefront;
@@ -523,13 +519,13 @@ export class CommerceBuyerCheckoutService {
 function isBrowsableStorefront(storefront: CommerceStorefront): boolean {
   return (
     storefront.offering.purchaseType === "subscription" &&
-    storefront.lifecycle.state === "published" &&
+    storefront.offering.state === "published" &&
     storefront.price.status === "active" &&
     storefront.price.priceType === "recurring" &&
     storefront.publishContext.premiumActive &&
     storefront.publishContext.sellerEligible &&
     storefront.publishContext.termsAccepted &&
-    storefront.lifecycle.roleManageable &&
+    storefront.offering.roleManageable &&
     storefront.publishContext.roleManageable
   );
 }

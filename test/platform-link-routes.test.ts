@@ -22,7 +22,7 @@ import type {
 } from "../src/runtime/contracts/platform-link-store";
 import { afterStoreSeed, createProductionRuntimeStores } from "./support/production-runtime-stores";
 
-test("PlatformLinkRoutes serves canonical and compatibility Steam start URLs", async () => {
+test("PlatformLinkRoutes serves only the canonical Steam start URL", async () => {
   const pendingLinks: PendingPlatformLink[] = [
     {
       state: "state-1",
@@ -36,16 +36,16 @@ test("PlatformLinkRoutes serves canonical and compatibility Steam start URLs", a
   const config = createSteamPlatformConfig();
   const routes = createPlatformLinkRoutes({ platformLinkService: service, platformConfig: config });
 
-  for (const path of ["/auth/steam/start", "/auth/steam"]) {
-    const response = await routes(new Request(`https://runtime.example${path}?state=state-1`));
-
-    assert.equal(response?.status, 302);
-    const location = response?.headers.get("location") ?? "";
-    assert.ok(
-      location.includes("steamcommunity.com/openid/login"),
-      `Expected Steam auth URL, got: ${location}`,
-    );
-  }
+  const response = await routes(
+    new Request("https://runtime.example/auth/steam/start?state=state-1"),
+  );
+  assert.equal(response?.status, 302);
+  const location = response?.headers.get("location") ?? "";
+  assert.ok(
+    location.includes("steamcommunity.com/openid/login"),
+    `Expected Steam auth URL, got: ${location}`,
+  );
+  assert.equal(await routes(new Request("https://runtime.example/auth/steam?state=state-1")), null);
 });
 
 test("PlatformLinkRoutes redirects to Xbox auth URL on /auth/xbox/start", async () => {

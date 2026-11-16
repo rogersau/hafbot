@@ -11,10 +11,7 @@ import {
   handleAnonymousStaffThreadMessageDelete,
   handleAnonymousStaffThreadMessageUpdate,
 } from "../src/services/tickets/anonymous-staff-thread";
-import type {
-  AnonymousSupportDeliveryStore,
-  TicketStore,
-} from "../src/runtime/contracts/ticket-store";
+import type { TicketStore } from "../src/runtime/contracts/ticket-store";
 import { afterStoreSeed, createProductionRuntimeStores } from "./support/production-runtime-stores";
 import type { TicketInstance } from "../src/types";
 
@@ -606,7 +603,7 @@ async function blobText(data: Blob | ArrayBuffer | undefined): Promise<string> {
   return new TextDecoder().decode(data);
 }
 
-type AnonymousStaffStore = AnonymousSupportDeliveryStore;
+type AnonymousStaffStore = TicketStore;
 
 function createStore(options: {
   ticket?: TicketInstance | null;
@@ -650,7 +647,7 @@ function createStore(options: {
       await complete(body);
     };
   }
-  return store as AnonymousSupportDeliveryStore;
+  return store as TicketStore;
 }
 
 async function readMapping(store: TicketStore, staffMessageId = "staff-msg-1") {
@@ -687,10 +684,7 @@ function createTicketPanel() {
         supportRoleId: "role-1",
         channelNamePrefix: "appeal",
         questions: [],
-        autoReplyEnabled: false,
-        autoReplyMessage: null,
         responseRules: [],
-        anonymousEnabled: false,
         anonymousSupportEnabled: true,
         staffDiscussionThreadEnabled: true,
         ticketHistoryPromptVisibility: "off" as const,

@@ -5,12 +5,12 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareMentionProtectionStore } from "../src/runtime/cloudflare-mention-protection-store";
+import { createSqliteMentionProtectionStore } from "./support/sqlite/runtime/sqlite-mention-protection-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("Mention Protection action claims recover a stale lease but stop after three attempts", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMentionProtectionStore(database as unknown as D1Database);
+  const store = createSqliteMentionProtectionStore(database as unknown as D1Database);
 
   assert.equal(await store.claimAction("guild-1", "message-1", "delete", 100_000), "claimed");
   assert.equal(await store.claimAction("guild-1", "message-1", "delete", 100_001), "deferred");
@@ -37,7 +37,7 @@ test("Mention Protection action claims recover a stale lease but stop after thre
 
 test("Mention Burst excludes future observations during out-of-order delivery", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMentionProtectionStore(database as unknown as D1Database);
+  const store = createSqliteMentionProtectionStore(database as unknown as D1Database);
 
   await store.recordBurstMessage({
     guildId: "guild-1",

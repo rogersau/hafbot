@@ -1,3 +1,4 @@
+import { composeTestServices } from "./support/compose-services";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -6,7 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createUserProfileAdminRoutes } from "../src/runtime/admin-routes/profile";
-import { createCloudflareUserPreferencesStore } from "../src/runtime/cloudflare-user-preferences-store";
+import { createSqliteUserPreferencesStore } from "./support/sqlite/runtime/sqlite-user-preferences-store";
 import { DEFAULT_USER_PREFERENCES, type UserPreferences } from "../src/runtime/admin-types";
 import { allowAllAdminAccess } from "./helpers/admin-api";
 import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
@@ -38,7 +39,7 @@ function createTestHarness(
   options?: { seed?: UserPreferences },
 ) {
   const database = new SqliteD1Database();
-  const store = createCloudflareUserPreferencesStore(database as unknown as D1Database);
+  const store = createSqliteUserPreferencesStore(database as unknown as D1Database);
   if (options?.seed) {
     void store.upsertUserPreferences(SESSION_USER.user.id, options.seed);
   }
@@ -65,7 +66,7 @@ test("GET /admin/api/profile/preferences returns defaults for a first-time user"
 
 test("GET /admin/api/profile/preferences is keyed by the session user id, not the request body", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareUserPreferencesStore(database as unknown as D1Database);
+  const store = createSqliteUserPreferencesStore(database as unknown as D1Database);
   await store.upsertUserPreferences("other-user", { ...DEFAULT_USER_PREFERENCES, theme: "dark" });
   await store.upsertUserPreferences(SESSION_USER.user.id, {
     ...DEFAULT_USER_PREFERENCES,
@@ -112,7 +113,7 @@ test("PATCH /admin/api/profile/preferences writes the row under the session user
 
 test("GET /admin/api/profile/preferences returns stored preferences for a returning user", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareUserPreferencesStore(database as unknown as D1Database);
+  const store = createSqliteUserPreferencesStore(database as unknown as D1Database);
   await store.upsertUserPreferences("user-1", BASE_PREFERENCES);
   const routes = createUserProfileAdminRoutes({
     store,
@@ -306,9 +307,10 @@ test("PATCH /admin/api/profile/preferences hides and un-hides guilds via hiddenG
 test("createAdminRoutes registers GET and PATCH /admin/api/profile/preferences when a customer session reader is provided", async () => {
   const { createAdminRoutes } = await import("../src/runtime/admin-routes");
   const database = new SqliteD1Database();
-  const store = createCloudflareUserPreferencesStore(database as unknown as D1Database);
+  const store = createSqliteUserPreferencesStore(database as unknown as D1Database);
   const routes = createAdminRoutes({
     stores: { userPreferences: store } as never,
+    services: composeTestServices({ userPreferences: store }),
     adminAccess: allowAllAdminAccess,
     discordBotToken: "bot-token",
     readCustomerAdminSession: async () => SESSION_USER,

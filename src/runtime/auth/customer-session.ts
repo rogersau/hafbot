@@ -1,4 +1,4 @@
-import type { CustomerAuth } from "./auth";
+import type { CustomerAuth } from "./customer-auth";
 
 export interface CustomerSessionUser {
   id: string;

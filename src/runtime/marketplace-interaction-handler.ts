@@ -21,13 +21,11 @@ import {
   parseInteractionModalFieldValues,
 } from "./discord-interaction-parsers";
 import { hasInteractionAdminAccess } from "./interaction-admin-access";
-import { createServiceFactory, type ServiceFactory } from "./service-factory";
 
 export async function handleMarketplaceComponentInteraction(
   interaction: DiscordInteraction,
   stores: RuntimeStores,
-  discordBotToken: string,
-  services: Partial<ServiceFactory> = {},
+  service: MarketplaceService,
 ): Promise<Response> {
   const customId = getInteractionCustomId(interaction);
   const parsed = customId ? parseMarketplaceCustomId(customId) : null;
@@ -39,8 +37,6 @@ export async function handleMarketplaceComponentInteraction(
   if (!userId) {
     return Response.json(buildEphemeralMessage("Could not determine your Discord user."));
   }
-
-  const service = resolveMarketplaceService(stores, discordBotToken, services);
 
   if (["create", "type", "server", "choice"].includes(parsed.action)) {
     const availability = await service.getConfig(interaction.guild_id);
@@ -170,9 +166,7 @@ export async function handleMarketplaceComponentInteraction(
 
 export async function handleMarketplaceModalSubmitInteraction(
   interaction: DiscordInteraction,
-  stores: RuntimeStores,
-  discordBotToken: string,
-  services: Partial<ServiceFactory> = {},
+  service: MarketplaceService,
 ): Promise<Response> {
   const parsed = parseMarketplaceCustomId(getInteractionCustomId(interaction) ?? "");
   if (!parsed || parsed.action !== "modal" || typeof interaction.guild_id !== "string") {
@@ -186,7 +180,7 @@ export async function handleMarketplaceModalSubmitInteraction(
 
   const fields = parseInteractionModalFieldValues(interaction);
   try {
-    const post = await resolveMarketplaceService(stores, discordBotToken, services).createPost({
+    const post = await service.createPost({
       guildId: interaction.guild_id,
       channelId,
       ownerId: userId,
@@ -246,17 +240,6 @@ function hasMarketplaceConfigChanged(
 function buildMarketplaceConfigChangedResponse() {
   return buildEphemeralMessage(
     "Marketplace settings changed while you were creating this post. Please start again.",
-  );
-}
-
-function resolveMarketplaceService(
-  stores: RuntimeStores,
-  discordBotToken: string,
-  services: Partial<ServiceFactory>,
-) {
-  return (
-    services.marketplaceService ??
-    createServiceFactory({ stores, discordBotToken }).marketplaceService
   );
 }
 

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import type { Env } from "../src/env";
+import type { Env } from "./support/test-env";
 import { parseAiTranscriptSummarizerEnv } from "../src/services/tickets/ai-transcript-summarizer-env";
 
 function createEnv(overrides: Partial<Env> = {}): Env {

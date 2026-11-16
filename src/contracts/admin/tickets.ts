@@ -65,11 +65,6 @@ const ticketQuestionSchema = z.object({
   required: z.boolean(),
   validation: z.enum(["none", "steamId"]).optional(),
 });
-const ticketQuestionResponseSchema = ticketQuestionSchema.extend({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  placeholder: z.string().nullable(),
-});
 const ticketTypeShape = {
   enabled: z.boolean().optional(),
   id: z.string().min(1),
@@ -80,11 +75,8 @@ const ticketTypeShape = {
   allowedCreatorRoleIds: z.array(z.string().min(1)).optional(),
   channelNamePrefix: z.string().min(1),
   questions: z.array(ticketQuestionSchema).max(5),
-  autoReplyEnabled: z.boolean().optional(),
-  autoReplyMessage: z.string().nullable().optional(),
   defaultTicketLinkPlatform: z.enum(["steam", "xbox", "playstation"]).nullable().optional(),
   responseRules: z.array(ticketResponseRuleSchema).max(10).optional(),
-  anonymousEnabled: z.boolean().optional(),
   anonymousSupportEnabled: z.boolean().optional(),
   staffDiscussionThreadEnabled: z.boolean().optional(),
   ticketHistoryPromptVisibility: z.enum(["off", "staff-thread"]).optional(),
@@ -141,12 +133,9 @@ export const ticketPanelConfigSchema = ticketPanelShapeSchema.superRefine((panel
 });
 const ticketTypeResponseSchema = z.object({
   ...ticketTypeShape,
-  id: z.string().min(1),
-  label: z.string().min(1),
-  questions: z.array(ticketQuestionResponseSchema).max(5),
-  autoReplyEnabled: z.boolean(),
-  autoReplyMessage: z.string().nullable(),
+  label: z.string().min(1).max(DISCORD_MODAL_LABEL_MAX_LENGTH),
   participantManagementEnabled: z.boolean(),
+  responseRules: z.array(ticketResponseRuleSchema),
   limitExclusion: z.boolean(),
 });
 const ticketPanelResponseSchema = ticketPanelShapeSchema
@@ -191,7 +180,7 @@ const configurationRevisionSourceSchema = z.enum([
   "dashboard-save",
   "restore",
   "clone",
-  "system-migration",
+  "system-snapshot",
 ]);
 const configurationRevisionSummarySchema = z.object({
   id: z.string(),

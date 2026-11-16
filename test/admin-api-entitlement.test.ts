@@ -202,11 +202,6 @@ function createStores(options?: {
       readGuildAdminRoleId: async () => null,
       upsertGuildAdminRoleId: async () => {},
     },
-    steamLink: {
-      readSteamLinkConfig: async () => null,
-      upsertSteamLinkConfig: async () => {},
-      listSteamLinks: async () => [],
-    },
     webhookProxy: {
       listWebhookProxyConfigs: async () => [],
       readWebhookProxyConfig: async () => null,

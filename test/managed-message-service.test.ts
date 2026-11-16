@@ -33,7 +33,7 @@ function createService(
   const entitlementTier = options.entitlementTier ?? "free";
   if (entitlementTier !== "free") {
     fixture.database.execRaw(
-      `INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', '${entitlementTier}', '${entitlementTier}', 1)`,
+      `INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', '${entitlementTier}', 1)`,
     );
   }
   const rawStore = fixture.stores.managedMessages;

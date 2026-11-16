@@ -126,7 +126,7 @@ export class CftoolsDataApiClient {
   }
 
   private request(path: string, init: RequestInit): Promise<Response> {
-    // `cache: "no-store"` is supported by the configured Workers compatibility date, but the
+    // `cache: "no-store"` is supported by the Node fetch client, but the
     // repository's Workers type package predates that runtime addition.
     const noStoreInit = {
       ...init,

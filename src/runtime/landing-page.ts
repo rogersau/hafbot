@@ -3,7 +3,6 @@ import { LANDING_HTML } from "./landing-bundle";
 
 export async function renderLandingPage(catalog?: LandingPriceCatalog): Promise<string> {
   const prices = await readLandingPrices(catalog);
-  const founderAdmission = await catalog?.readFounderAdmission?.().catch(() => null);
   const offers = [
     { "@type": "Offer", name: "Free", price: "0.00", priceCurrency: "AUD" },
     ...prices.map((price) => ({
@@ -55,16 +54,7 @@ export async function renderLandingPage(catalog?: LandingPriceCatalog): Promise<
   const premiumPlusPrices = renderPlanPrices(prices, "premium_plus") || fallback;
   let pricingNote = "Log in to Billing to see the current paid prices.";
   if (prices.length > 0) {
-    if (founderAdmission?.open) {
-      pricingNote = `Founder launch pricing · ${founderAdmission.publicCount} of ${founderAdmission.limit} places claimed. Founder pricing stays with this subscription, including plan or billing-frequency changes. If the subscription ends, founder pricing cannot be reclaimed. Prices come straight from Stripe.`;
-    } else if (founderAdmission) {
-      pricingNote =
-        "Founder launch pricing is not currently available. Current prices come straight from Stripe.";
-    } else {
-      // Missing admission data is not evidence that all places have been claimed.
-      pricingNote =
-        "Prices come straight from Stripe. Founder pricing availability could not be confirmed; check Billing before checkout.";
-    }
+    pricingNote = "Standard subscription prices. Prices come straight from Stripe.";
   }
   return LANDING_HTML.replace("{{STRUCTURED_DATA}}", structuredData)
     .replace("{{PREMIUM_PRICES}}", premiumPrices)

@@ -3,16 +3,7 @@ import { buildAuditEmbed, formatStaffUserReference, suppressMentions } from "../
 import { formatTimedRoleExpiry } from "../timed-roles";
 import type { AuditEventId } from "../types";
 import { resolveAuditChannelIdFromConfig } from "./guild-audit-log-service";
-import type { GuildAuditLogStore } from "../runtime/contracts";
-
-export interface GuildNotificationChannelStore {
-  readGuildNotificationChannel(guildId: string, feature: string): Promise<string | null>;
-  upsertGuildNotificationChannel(body: {
-    guildId: string;
-    feature: string;
-    notificationChannelId: string | null;
-  }): Promise<void>;
-}
+import type { GuildAuditLogStore, GuildNotificationChannelStore } from "../runtime/contracts";
 
 export interface ActionActor {
   label: string;

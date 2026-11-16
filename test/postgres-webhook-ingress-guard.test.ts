@@ -1,15 +1,11 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
 import {
   createPostgresDatabaseCapabilityFromEnvironment,
   type PostgresDatabaseCapability,
 } from "../src/runtime/postgres/postgres-capability";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresWebhookIngressGuard } from "../src/runtime/postgres/postgres-webhook-ingress-guard";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
@@ -22,7 +18,7 @@ test(
     assertSafeTestDatabase(postgresUrl);
     const database = createTestDatabase(postgresUrl);
     try {
-      await resetAndMigrate(database);
+      await initializeFreshTestSchema(database);
       let leaseId = 0;
       const guard = createPostgresWebhookIngressGuard(database, {
         randomId: () => `guard-lease-${++leaseId}`,
@@ -140,12 +136,9 @@ function createTestDatabase(url: string): PostgresDatabaseCapability {
   });
 }
 
-async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
+async function initializeFreshTestSchema(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-  await applyPostgresMigrations(
-    database,
-    await readPostgresMigrations(resolve("migrations/postgres")),
-  );
+  await initializePostgresSchema(database);
 }
 
 function assertSafeTestDatabase(value: string): void {

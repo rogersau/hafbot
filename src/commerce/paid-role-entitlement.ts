@@ -5,7 +5,7 @@ import { type CommerceEligibilityState, commerceEligibility as desiredAction } f
  * Stripe/webhook and browser callers may submit a projection to this service,
  * but only a trusted reconciliation/administrative command is allowed to
  * mutate Discord.  The store is deliberately narrow so this module can be
- * used with D1, a test double, or another durable projection later.
+ * used with durable persistence or a test double.
  */
 
 export type PaidRoleSource = "webhook" | "browser" | "checkout" | "scheduled" | "support" | "admin";

@@ -20,10 +20,10 @@ export const ticketGatewayHandler = defineGatewayEventHandler(
     key: "tickets",
     eventTypes: ["MESSAGE_CREATE", "MESSAGE_UPDATE", "MESSAGE_DELETE"],
     order: 40,
-    isEnabled: ({ env, features }) => Boolean(features.tickets && env.HAF_DB),
+    isEnabled: ({ features }) => Boolean(features.tickets),
     async handle({ stores, discord, operations }, envelope) {
-      const store = stores!.ticket;
-      const adapters = createAnonymousStaffThreadAdapters(discord, stores!.guildRbac);
+      const store = stores.ticket;
+      const adapters = createAnonymousStaffThreadAdapters(discord, stores.guildRbac);
       if (envelope.type === "MESSAGE_CREATE") {
         await operations.run("message-create:ticket-anonymous-mirror", () =>
           handleAnonymousStaffThreadMessageCreate(

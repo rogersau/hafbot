@@ -1,4 +1,3 @@
-import type { GuildNotificationChannelStore } from "../../../services/activity-log";
 import type {
   DiscordGuildMemberAdd,
   DiscordGuildMemberUpdate,
@@ -7,8 +6,6 @@ import { createPlatformLinkService } from "../../../services/platform-link-servi
 import { TimedRoleService } from "../../../services/timed-role-service";
 import { resolveMemberDisplayName } from "../../discord-user";
 import { deriveGatewayOperationNonce } from "../../gateway-event-idempotency";
-import { CloudflarePaidRoleStore } from "../../commerce/cloudflare-paid-role-store";
-import { createCloudflarePaidRoleRuntime } from "../../commerce/cloudflare-paid-role-runtime";
 import type { GatewayEventCapabilities } from "../contracts";
 import { defineGatewayEventHandler, type ScopedGatewayEventCapabilities } from "../define-handler";
 import { ServerLevelProcessor } from "../../../server-levels/processor";
@@ -31,10 +28,10 @@ export const memberGatewayHandlers = [
     key: "platform-link-deactivate",
     eventTypes: ["GUILD_MEMBER_REMOVE"],
     order: 5,
-    isEnabled: ({ env }) => Boolean(env.HAF_DB),
+
     async handle({ botEnv, operations, stores }, envelope) {
       await operations.run("member-remove:deactivate-platform-links", () =>
-        deactivatePlatformLinks(envelope.data as DiscordGuildMemberUpdate | null, botEnv, stores!),
+        deactivatePlatformLinks(envelope.data as DiscordGuildMemberUpdate | null, botEnv, stores),
       );
     },
   }),
@@ -42,13 +39,13 @@ export const memberGatewayHandlers = [
     key: "platform-link-restore",
     eventTypes: ["GUILD_MEMBER_ADD"],
     order: 10,
-    isEnabled: ({ env }) => Boolean(env.HAF_DB),
+
     async handle({ botEnv, operations, stores, discord }, envelope) {
       await operations.run("member-add:restore-linked-roles", () =>
         restorePlatformLinkedRoles(
           envelope.data as DiscordGuildMemberAdd | null,
           botEnv,
-          stores!,
+          stores,
           discord,
         ),
       );
@@ -61,12 +58,12 @@ export const memberGatewayHandlers = [
       key: "server-level-membership",
       eventTypes: ["GUILD_MEMBER_ADD", "GUILD_MEMBER_REMOVE"],
       order: 4,
-      isEnabled: ({ env, features }) => Boolean(features.serverLevels !== false && env.HAF_DB),
+      isEnabled: ({ features }) => Boolean(features.serverLevels !== false),
       async handle({ features, operations, stores }, envelope) {
         const member = envelope.data as DiscordGuildMemberUpdate | null;
         const guildId = member?.guild_id;
         const userId = member?.user?.id;
-        if (!guildId || !userId || !stores) return;
+        if (!guildId || !userId) return;
         await operations.run("server-levels:membership", async () => {
           const now = envelope.receivedAtMs ?? Date.now();
           const current = envelope.type === "GUILD_MEMBER_ADD";
@@ -100,7 +97,7 @@ export const memberGatewayHandlers = [
       key: "timed-roles",
       eventTypes: ["GUILD_MEMBER_ADD", "GUILD_MEMBER_UPDATE"],
       order: 20,
-      isEnabled: ({ env, features }) => Boolean(features.timedRoles && env.HAF_DB),
+      isEnabled: ({ features }) => Boolean(features.timedRoles),
       async handle(capabilities, envelope) {
         if (envelope.type === "GUILD_MEMBER_ADD") {
           await handleNewMemberTimedRole(
@@ -120,12 +117,12 @@ export const memberGatewayHandlers = [
       },
     },
   ),
-  defineGatewayEventHandler(["env", "botEnv", "operations"], [], {
+  defineGatewayEventHandler(["commerceLifecycle", "operations"], [], {
     key: "commerce-paid-role-membership",
     eventTypes: ["GUILD_MEMBER_ADD", "GUILD_MEMBER_REMOVE", "GUILD_BAN_ADD", "GUILD_DELETE"],
     order: 25,
-    isEnabled: ({ env }) => Boolean(env.HAF_DB),
-    async handle({ botEnv, operations }, envelope) {
+    isEnabled: ({ commerceLifecycle }) => Boolean(commerceLifecycle),
+    async handle({ commerceLifecycle, operations }, envelope) {
       const data = envelope.data as {
         guild_id?: string;
         user?: { id?: string };
@@ -137,15 +134,13 @@ export const memberGatewayHandlers = [
           ? (envelope.data as { id?: string } | null)?.id
           : undefined);
       const userId = data?.user?.id;
-      if (!guildId || !botEnv.HAF_DB) return;
+      if (!guildId || !commerceLifecycle) return;
       await operations.run("commerce:paid-role-membership", async () => {
-        const store = new CloudflarePaidRoleStore(botEnv.HAF_DB!);
         if (envelope.type === "GUILD_DELETE") {
           if ((envelope.data as { unavailable?: boolean } | null)?.unavailable === true) return;
-          await store.enqueueGuildDeletion(guildId, envelope.eventKey, Date.now());
-          await createCloudflarePaidRoleRuntime(botEnv)?.processProviderActions();
+          await commerceLifecycle.guildRemoved(guildId, envelope.eventKey);
         } else if (userId) {
-          await store.enqueueMemberLifecycle(
+          await commerceLifecycle.memberChanged(
             guildId,
             userId,
             envelope.type === "GUILD_BAN_ADD"
@@ -154,7 +149,6 @@ export const memberGatewayHandlers = [
                 ? "left"
                 : "rejoined",
             envelope.eventKey,
-            Date.now(),
           );
         }
       });
@@ -164,7 +158,8 @@ export const memberGatewayHandlers = [
     key: "member-verification",
     eventTypes: ["GUILD_MEMBER_ADD"],
     order: 30,
-    isEnabled: ({ env, features }) => Boolean(features.memberVerification && env.HAF_DB),
+    isEnabled: ({ features, memberVerificationService }) =>
+      Boolean(features.memberVerification && memberVerificationService),
     async handle(capabilities, envelope) {
       await capabilities.operations.run("member-add:verification-role", () =>
         handleMemberVerification(envelope.data as DiscordGuildMemberAdd | null, capabilities),
@@ -176,9 +171,9 @@ export const memberGatewayHandlers = [
 async function deactivatePlatformLinks(
   member: DiscordGuildMemberUpdate | null,
   env: GatewayEventCapabilities["botEnv"],
-  stores: NonNullable<PlatformLinkGatewayCapabilities["stores"]>,
+  stores: PlatformLinkGatewayCapabilities["stores"],
 ): Promise<void> {
-  if (!member?.guild_id || !member.user?.id || !env.HAF_DB) return;
+  if (!member?.guild_id || !member.user?.id) return;
   const service = createPlatformLinkService({
     platformLinkStore: stores.platformLink,
     discordBotToken: env.DISCORD_BOT_TOKEN,
@@ -189,10 +184,10 @@ async function deactivatePlatformLinks(
 async function restorePlatformLinkedRoles(
   member: DiscordGuildMemberAdd | null,
   env: GatewayEventCapabilities["botEnv"],
-  stores: NonNullable<PlatformLinkGatewayCapabilities["stores"]>,
+  stores: PlatformLinkGatewayCapabilities["stores"],
   discord: PlatformLinkGatewayCapabilities["discord"],
 ): Promise<void> {
-  if (!member?.guild_id || !member.user?.id || !env.HAF_DB) return;
+  if (!member?.guild_id || !member.user?.id) return;
   const service = createPlatformLinkService(
     {
       platformLinkStore: stores.platformLink,
@@ -212,11 +207,11 @@ async function handleNewMemberTimedRole(
   const { botEnv: env, operations } = capabilities;
   const guildId = member?.guild_id;
   const userId = member?.user?.id;
-  if (!guildId || !userId || !env.HAF_DB) return;
+  if (!guildId || !userId) return;
   const service = createTimedRoleService(
     env,
     operations,
-    capabilities.stores!,
+    capabilities.stores,
     capabilities.discord,
     eventKey,
     "member-add",
@@ -239,11 +234,11 @@ async function handleManualAssignmentTimedRole(
   const { botEnv: env, operations } = capabilities;
   const guildId = member?.guild_id;
   const userId = member?.user?.id;
-  if (!guildId || !userId || !Array.isArray(member.roles) || !env.HAF_DB) return;
+  if (!guildId || !userId || !Array.isArray(member.roles)) return;
   const service = createTimedRoleService(
     env,
     operations,
-    capabilities.stores!,
+    capabilities.stores,
     capabilities.discord,
     eventKey,
     "member-update",
@@ -260,7 +255,7 @@ async function handleManualAssignmentTimedRole(
 function createTimedRoleService(
   env: GatewayEventCapabilities["botEnv"],
   operations: GatewayEventCapabilities["operations"],
-  stores: NonNullable<TimedRoleGatewayCapabilities["stores"]>,
+  stores: TimedRoleGatewayCapabilities["stores"],
   discord: GatewayEventCapabilities["discord"],
   eventKey: string,
   eventScope: "member-add" | "member-update",
@@ -273,7 +268,7 @@ function createTimedRoleService(
     discord.guildResources,
     (guildId, userId, roleId) => discord.addGuildMemberRole(guildId, userId, roleId),
     (guildId, userId, roleId) => discord.removeGuildMemberRole(guildId, userId, roleId),
-    notificationStore as Partial<GuildNotificationChannelStore>,
+    notificationStore,
     (channelId, body) => discord.createChannelMessage(channelId, body).then(() => undefined),
     (userId, body) => discord.createUserDmMessage(userId, body).then(() => undefined),
     (assignment) => resolveTimedRoleDmContext(assignment.guildId, assignment.roleId, discord),

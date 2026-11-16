@@ -125,17 +125,13 @@ export class CommerceSellerReviewNotificationService {
   ): Promise<CommerceSellerReviewRequest | null> {
     if (!request.decisionState || !request.decisionActorUserId || !request.decisionReason)
       return null;
-    try {
-      await this.options.lifecycle.reviewSeller({
-        guildId: request.guildId,
-        approvalState: request.decisionState,
-        actorUserId: request.decisionActorUserId,
-        reasonCode: request.decisionReason,
-      });
-    } catch (error) {
-      // Preserve the processing state: an expired lease lets the scheduled sweep safely retry.
-      throw error;
-    }
+    // A failed review preserves the processing lease for a safe scheduled retry.
+    await this.options.lifecycle.reviewSeller({
+      guildId: request.guildId,
+      approvalState: request.decisionState,
+      actorUserId: request.decisionActorUserId,
+      reasonCode: request.decisionReason,
+    });
     const decided = await this.options.store.completeSellerReviewDecision({
       connectedAccountId: request.connectedAccountId,
       state: request.decisionState,

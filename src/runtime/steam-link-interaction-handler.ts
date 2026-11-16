@@ -1,8 +1,8 @@
 import { rethrowDiscordRateLimit } from "./interaction-rate-limit";
 import { createChannelMessage } from "../discord";
 import { buildEphemeralMessage } from "../discord-interactions";
-import type { DiscordInteraction } from "../runtime/app-types";
-import type { PlatformLink } from "../runtime/contracts/platform-link-store";
+import type { DiscordInteraction } from "./app-types";
+import type { PlatformLink } from "./contracts/platform-link-store";
 import {
   PlatformLinkFinalizationError,
   type PlatformLinkService,
@@ -58,7 +58,7 @@ export async function handleSteamLinkButtonInteraction(
   await platformLinkService.clearExpiredPendingLinks(Date.now() - PENDING_LINK_TTL_MS);
   await platformLinkService.createPendingLink(state, guildId, userId, "steam");
 
-  const authUrl = `${publicUrl}/auth/steam?state=${encodeURIComponent(state)}`;
+  const authUrl = `${publicUrl}/auth/steam/start?state=${encodeURIComponent(state)}`;
 
   return Response.json({
     type: DISCORD_CHANNEL_MESSAGE_RESPONSE,

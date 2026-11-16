@@ -652,7 +652,7 @@ export function configurationRevisionLabel(
     return "Restored from an earlier revision";
   if (revision.operation === "clone" || revision.source === "clone")
     return "Cloned from another configuration";
-  if (revision.source === "system-migration") return "Updated by a system migration";
+  if (revision.source === "system-snapshot") return "Captured from current configuration";
   const operations: Record<Revision["operation"], string> = {
     baseline: "Baseline recorded",
     create: "Created from dashboard",

@@ -1,3 +1,4 @@
+import type { Cache } from "./discord-json-cache";
 export interface DiscordUserResolvable {
   nick?: string | null;
   global_name?: string | null;
@@ -107,7 +108,7 @@ export function resolveMessageDisplayName(
 }
 
 export async function resolveDisplayNameCached(
-  kv: KVNamespace,
+  kv: Cache<string>,
   user: DiscordUserResolvable,
   options?: ResolveDisplayNameOptions,
 ): Promise<string | null> {
@@ -116,7 +117,7 @@ export async function resolveDisplayNameCached(
   if (liveName !== null) {
     if (user.id != null) {
       try {
-        await kv.put(`discord_user:${user.id}`, liveName, { expirationTtl: 3600 });
+        await kv.put(`discord_user:${user.id}`, liveName, { ttlSeconds: 3600 });
       } catch {
         // KV write failure shouldn't prevent returning the live name
       }

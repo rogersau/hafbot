@@ -1,44 +1,23 @@
-import type { QueueBatch } from "./queue-types";
+import type { QueueJobMetadata } from "./queue-types";
 import { deleteChannel, DiscordApiError } from "../discord";
-import type { Env } from "../env";
+
 import type { TicketLifecycle, TicketRecoveryEnvelope } from "../services/tickets/ticket-lifecycle";
 import type { createTicketPanelService } from "../services/tickets/ticket-panel";
 import { isRecord } from "../unknown-parse";
-import { createCloudflareContext } from "./cloudflare-context";
-import {
-  DEFAULT_QUEUE_MAX_ATTEMPTS,
-  deliverQueueBatch,
-  queueDeliveryEmitter,
-} from "./queue-delivery";
-import { createServiceFactory } from "./service-factory";
+
+import { deliverQueueJob, queueDeliveryEmitter, type QueueDeliveryOutcome } from "./queue-delivery";
 
 export const TICKET_RECOVERY_QUEUE_NAME = "haf-bot-ticket-recovery";
 
-export async function handleTicketRecoveryQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-): Promise<void> {
-  const context = createCloudflareContext(env);
-  const services = createServiceFactory({
-    stores: context.stores,
-    discordBotToken: env.DISCORD_BOT_TOKEN,
-  });
-  await deliverTicketRecoveryQueueBatch(
-    batch,
-    services.ticketLifecycle,
-    services.ticketPanelService,
-    env.DISCORD_BOT_TOKEN,
-  );
-}
-
-export async function deliverTicketRecoveryQueueBatch(
-  batch: QueueBatch<unknown>,
+export async function deliverTicketRecovery(
+  payload: unknown,
+  metadata: QueueJobMetadata,
   lifecycle: TicketLifecycle,
   panelService: Pick<ReturnType<typeof createTicketPanelService>, "resumeRecovery">,
   discordBotToken: string,
-): Promise<void> {
-  await deliverQueueBatch(batch, {
-    maxAttempts: DEFAULT_QUEUE_MAX_ATTEMPTS,
+): Promise<QueueDeliveryOutcome> {
+  return deliverQueueJob(payload, {
+    metadata,
     parse(body) {
       const recovery = parseTicketRecoveryEnvelope(body);
       return recovery

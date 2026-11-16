@@ -172,10 +172,8 @@ test("POST /admin/api/player-count/delete scopes deletion, cleanup, and audit to
     name: "Foreign",
   });
   await fixture.database.d1
-    .prepare(
-      "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES (?, ?, ?, ?)",
-    )
-    .bind("guild-1", "premium", "premium", 1)
+    .prepare("INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES (?, ?, ?)")
+    .bind("guild-1", "premium", 1)
     .run();
   await fixture.stores.playerCount.upsertPlayerCountServer(ownServer);
   await fixture.stores.playerCount.upsertPlayerCountServer(foreignServer);
@@ -332,10 +330,8 @@ function createStoresFixture(options: {
   const ready = (async () => {
     const tier = options.tier ?? "premium";
     await fixture.database.d1
-      .prepare(
-        "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES (?, ?, ?, ?)",
-      )
-      .bind("guild-1", tier, tier, 1)
+      .prepare("INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES (?, ?, ?)")
+      .bind("guild-1", tier, 1)
       .run();
     if (options.server) await rawPlayerCount.upsertPlayerCountServer(options.server);
   })();

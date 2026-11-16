@@ -358,13 +358,13 @@ function renderStorefront(input: {
   const available =
     (!storefront.reservedAccess || storefront.reservedAccess.acceptingSales) &&
     storefront.offering.purchaseType === "subscription" &&
-    storefront.lifecycle.state === "published" &&
+    storefront.offering.state === "published" &&
     storefront.price.status === "active" &&
     storefront.price.priceType === "recurring" &&
     storefront.publishContext.premiumActive &&
     storefront.publishContext.sellerEligible &&
     storefront.publishContext.termsAccepted &&
-    storefront.lifecycle.roleManageable;
+    storefront.offering.roleManageable;
   const action = !input.state
     ? `<a class="commerce-button" href="${escapeHtml(input.signInUrl)}">Sign in with Discord</a>`
     : status.subscriptionStatus && !["canceled", "ended"].includes(status.subscriptionStatus)
@@ -378,7 +378,7 @@ function renderStorefront(input: {
     input.state && status.customerExists
       ? `<form class="commerce-form" action="/commerce/portal" method="post"><input type="hidden" name="state" value="${escapeHtml(input.state)}"><button class="commerce-button-secondary" type="submit">Manage billing in Stripe</button></form>`
       : "";
-  const benefits = storefront.lifecycle.includedBenefits
+  const benefits = storefront.offering.includedBenefits
     .map((benefit) => `<li>${escapeHtml(benefit)}</li>`)
     .join("");
   const fxText =
@@ -404,7 +404,7 @@ function renderStorefront(input: {
      <section class="commerce-card"><div class="commerce-fixed"><h3>Before you subscribe</h3><span class="commerce-fixed-label">Always shown</span></div><ul class="commerce-terms">
        <li>The subscription renews automatically every ${escapeHtml(storefront.price.recurringInterval ?? "billing period")} until cancelled.</li>
        <li>Cancellation normally takes effect at the end of the current paid period.</li>
-       <li>Refund requests are handled by the seller at ${escapeHtml(storefront.lifecycle.supportContact ?? storefront.seller.supportContact)}. Nothing here excludes rights that cannot be excluded under Australian Consumer Law or other applicable consumer law.</li>
+       <li>Refund requests are handled by the seller at ${escapeHtml(storefront.offering.supportContact ?? storefront.seller.supportContact)}. Nothing here excludes rights that cannot be excluded under Australian Consumer Law or other applicable consumer law.</li>
        <li>HAF Bot facilitates payment and Discord entitlement delivery. The guild owner is the seller; HAF Bot does not provide the listed guild benefits.</li>
        <li>Stripe processes card and Link payment details. HAF Bot does not receive or store full card details.</li>
      </ul>${fxText ? `<p class="commerce-notice">${escapeHtml(fxText)}</p>` : ""}</section>`,
@@ -432,7 +432,7 @@ function renderReturn(
      <p><a class="commerce-button" href="/commerce/offers/${encodeURIComponent(storefront.offering.id)}">Check latest status</a></p>
      <p><a class="commerce-button-secondary" href="https://discord.com/channels/${encodeURIComponent(storefront.offering.guildId)}">Return to Discord</a></p></section>
      <section class="commerce-card"><div class="commerce-fixed"><h2>Purchase terms</h2><span class="commerce-fixed-label">Always shown</span></div><ul class="commerce-terms">
-       <li>The seller is ${escapeHtml(branding.guildName)} / its guild owner. Refund and support requests go to ${escapeHtml(storefront.lifecycle.supportContact ?? storefront.seller.supportContact)}.</li>
+       <li>The seller is ${escapeHtml(branding.guildName)} / its guild owner. Refund and support requests go to ${escapeHtml(storefront.offering.supportContact ?? storefront.seller.supportContact)}.</li>
        <li>This offering is ${escapeHtml(formatMoney(storefront.price.unitAmountMinor, storefront.price.currency))} per ${escapeHtml(storefront.price.recurringInterval ?? "billing period")} and renews automatically until cancelled.</li>
        <li>Cancellation normally takes effect at the end of the current paid period. Nothing here excludes rights that cannot be excluded under applicable consumer law.</li>
        <li>HAF Bot facilitates payment and Discord entitlement delivery but does not provide the guild benefits.</li>
@@ -491,13 +491,13 @@ function renderCatalog(input: {
   const cards = input.offerings
     .map(({ storefront, presentation }) => {
       const description = storefront.offering.description ?? "Paid Discord role access";
-      const benefits = storefront.lifecycle.includedBenefits.slice(0, 3);
+      const benefits = storefront.offering.includedBenefits.slice(0, 3);
       return `<article class="commerce-card"><p class="commerce-eyebrow">${escapeHtml(presentation.roleName)}</p><h2>${escapeHtml(storefront.offering.name)}</h2><p class="commerce-description">${escapeHtml(description)}</p><ul class="commerce-benefits">${benefits.map((benefit) => `<li>${escapeHtml(benefit)}</li>`).join("")}</ul><p class="commerce-price">${formatMoney(storefront.price.unitAmountMinor, storefront.price.currency)} <span>per ${escapeHtml(storefront.price.recurringInterval ?? "period")}</span></p><a class="commerce-button" href="${escapeHtml(fixedUrl(input.baseUrl, `/commerce/offers/${storefront.offering.id}`))}">View and join</a></article>`;
     })
     .join("");
   const empty = `<section class="commerce-card commerce-locked"><h2>No offerings are available right now</h2><p class="commerce-muted">This guild has not published a purchase-eligible offering yet.</p></section>`;
   const sellerContact = input.offerings[0]
-    ? (input.offerings[0].storefront.lifecycle.supportContact ??
+    ? (input.offerings[0].storefront.offering.supportContact ??
       input.offerings[0].storefront.seller.supportContact)
     : "the guild's published support contact";
   return renderCommercePage({

@@ -10,6 +10,7 @@ import { extractCommandInvocation } from "../src/discord-interactions";
 import { ALL_SLASH_COMMAND_DEFINITIONS } from "../src/discord-commands";
 import { handleEventsComponentInteraction } from "../src/runtime/events-interaction-handler";
 import { handleApplicationCommand } from "../src/runtime/application-command-handler";
+import { applicationCommandServices } from "./support/handler-services";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 
 test("Event Team custom ids preserve opaque identifiers", () => {
@@ -210,7 +211,7 @@ test("/event manage shows proposal IDs and captain actions", async () => {
     "bot-token",
     ALL_FEATURES_ENABLED,
     {
-      services: {
+      services: applicationCommandServices({
         eventsService: {
           getEventTeamManagementView: async () => ({
             membership: { teamId: "team-1" },
@@ -226,7 +227,7 @@ test("/event manage shows proposal IDs and captain actions", async () => {
             ],
           }),
         } as any,
-      },
+      }),
     },
   );
 

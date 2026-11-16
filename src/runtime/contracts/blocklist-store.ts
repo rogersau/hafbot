@@ -1,7 +1,8 @@
+import type { GuildNotificationChannelStore } from "./guild-notification-channel-store";
 import type { BlocklistConfig, ChannelFilterMode } from "../../types";
 
-export interface BlocklistStore {
-  setGuildEnabled?(guildId: string, enabled: boolean): Promise<void>;
+export interface BlocklistStore extends GuildNotificationChannelStore {
+  setGuildEnabled(guildId: string, enabled: boolean): Promise<void>;
   readConfig(): Promise<BlocklistConfig>;
   readGuildConfig(guildId: string): Promise<BlocklistConfig>;
   applyGuildEmojiMutation(body: {
@@ -9,12 +10,12 @@ export interface BlocklistStore {
     emoji: string;
     action: "add" | "remove";
   }): Promise<BlocklistConfig>;
-  applyGuildEmojiMutations?(body: {
+  applyGuildEmojiMutations(body: {
     guildId: string;
     emojis: string[];
     action: "add";
   }): Promise<BlocklistConfig>;
-  upsertGuildChannelFilter?(body: {
+  upsertGuildChannelFilter(body: {
     guildId: string;
     channelMode: ChannelFilterMode;
     channelIds: string[];

@@ -20,7 +20,7 @@ import {
   GuildDirectoryEmptyCard,
 } from "../../src/admin/components/admin-overview-page";
 import { AdminPlayerCountPage } from "../../src/admin/components/admin-playercount-page";
-import { AdminSteamLinkPage } from "../../src/admin/components/admin-steam-link-page";
+import { AdminPlatformLinkPage } from "../../src/admin/components/admin-platform-link-page";
 import { AdminTicketsPageWithHistory } from "../../src/admin/components/admin-tickets-page-with-history";
 import { AdminTimedRolesPage } from "../../src/admin/components/admin-timed-roles-page";
 import { AdminTroubleshootingPage } from "../../src/admin/components/admin-troubleshooting-page";
@@ -47,7 +47,7 @@ const pages = {
   AdminOverviewPage,
   GuildDirectoryEmptyCard,
   AdminPlayerCountPage,
-  AdminSteamLinkPage,
+  AdminPlatformLinkPage,
   AdminTicketsPageWithHistory,
   AdminTimedRolesPage,
   AdminTroubleshootingPage,

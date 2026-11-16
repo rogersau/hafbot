@@ -92,7 +92,6 @@ export interface ApprovedOrigin {
   origin: string;
   // Operator attestation of fixed endpoint ownership and the entire upstream path.
   securePathEvidence: string;
-  runtime: "cloudflare" | "portable";
 }
 export interface NetworkPolicy {
   enabled: boolean;

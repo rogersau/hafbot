@@ -66,12 +66,8 @@ export function createBillingManagementService(options: {
       const projection = await current(ownerId);
       const source = options.catalog.get(projection.priceId!);
       const target = options.catalog.get(targetPriceId);
-      if (!source || !target || target.legacy) {
+      if (!source || !target || target.historical) {
         throw new ManagementError("unsupported_price", 400);
-      }
-      const cohort = projection.pricingCohort ?? (source.cohort === "standard" ? "standard" : null);
-      if (!cohort || source.cohort !== cohort || target.cohort !== cohort) {
-        throw new ManagementError("pricing_cohort_mismatch", 409);
       }
       if (source.plan === "premium_plus" && target.plan === "premium") {
         if (

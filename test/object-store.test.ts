@@ -3,6 +3,7 @@ import test from "node:test";
 import { execFile } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
+import { Readable } from "node:stream";
 import { promisify } from "node:util";
 
 import { createAzureBlobObjectStoreFromEnvironment } from "../src/node/azure-blob-object-store";
@@ -182,45 +183,57 @@ for (const clientId of [undefined, "11111111-2222-4333-8444-555555555555"]) {
   });
 }
 
-test("R2 migration reads Workers custom metadata through the S3 compatibility API", async () => {
+test("S3 head and get round-trip canonical portable metadata", async () => {
+  const metadata = { "Content Class": "ticket/履歴", visibility: "private" };
+  const encoded = encodePortableObjectMetadata(metadata);
+  const objectResponse = {
+    ContentLength: 7,
+    ContentType: "text/plain",
+    LastModified: new Date("2026-08-14T00:00:00Z"),
+    Metadata: encoded,
+    MissingMeta: 0,
+    ETag: '"fixture-etag"',
+  };
+  const responses = [
+    objectResponse,
+    {
+      ...objectResponse,
+      Body: Readable.from([Buffer.from("payload")]),
+    },
+  ];
   const client = {
     async send() {
-      return {
-        ContentLength: 1,
-        ContentType: "image/png",
-        LastModified: new Date("2026-08-14T00:00:00Z"),
-        Metadata: {
-          visibility: "public",
-          contentclass: "managed-message-media",
-          unicode: "=?UTF-8?B?cHJpdmF0w6k=?=",
-          phrase: "=?UTF-8?Q?ticket_=E5=B1=A5?= =?UTF-8?Q?=E6=AD=B4?=",
-        },
-      };
+      return responses.shift();
     },
   };
-  const store = createS3ObjectStore(client as never, "objects", {
-    metadataReadMode: "r2-workers",
-  });
+  const store = createS3ObjectStore(client as never, "objects");
 
-  assert.deepEqual((await store.head("guild/object.png"))?.metadata, {
-    visibility: "public",
-    contentClass: "managed-message-media",
-    unicode: "privaté",
-    phrase: "ticket 履歴",
-  });
+  const head = await store.head("guild/object.txt");
+  assert.deepEqual(head?.metadata, metadata);
+  const object = await store.get("guild/object.txt");
+  assert.deepEqual(object?.metadata, metadata);
+  assert.equal(await new Response(object!.body).text(), "payload");
 });
 
-test("R2 migration fails closed when the S3 API omits custom metadata", async () => {
+test("S3 rejects responses that omit custom metadata instead of returning incomplete security metadata", async () => {
+  const responses = [
+    { ContentLength: 7, Metadata: {}, MissingMeta: 1 },
+    {
+      ContentLength: 7,
+      Metadata: {},
+      MissingMeta: 1,
+      Body: Readable.from([Buffer.from("payload")]),
+    },
+  ];
   const client = {
     async send() {
-      return { ContentLength: 1, Metadata: {}, MissingMeta: 1 };
+      return responses.shift();
     },
   };
-  const store = createS3ObjectStore(client as never, "objects", {
-    metadataReadMode: "r2-workers",
-  });
+  const store = createS3ObjectStore(client as never, "objects");
 
-  await assert.rejects(store.head("guild/object.png"), /R2 omitted 1 custom metadata field/);
+  await assert.rejects(store.head("guild/object.txt"), /omitted 1 custom metadata field/);
+  await assert.rejects(store.get("guild/object.txt"), /omitted 1 custom metadata field/);
 });
 
 test("object-store contract supports streams, ranges, listing, and idempotent deletion", async () => {

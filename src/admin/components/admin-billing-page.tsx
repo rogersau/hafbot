@@ -14,7 +14,6 @@ type CatalogEntry = {
   priceId: string;
   plan: "premium" | "premium_plus";
   frequency: "monthly" | "yearly";
-  cohort: "founder" | "standard";
 };
 type DisplayPrice = {
   plan: "premium" | "premium_plus";
@@ -27,20 +26,15 @@ type BillingData = {
   subscription: Subscription | null;
   catalog: CatalogEntry[];
   prices: DisplayPrice[];
-  founderAdmission: {
-    publicCount: number;
-    limit: number;
-    open: boolean;
-  } | null;
 };
 type Subscription = {
+  priceId: string | null;
   plan: "free" | "premium" | "premium_plus";
   frequency: "monthly" | "yearly" | null;
   status: string;
   currentPeriodEndMs: number | null;
   cancelAtPeriodEnd: boolean;
   quarantineReason: string | null;
-  pricingCohort?: "founder" | "standard" | null;
 };
 type AssignmentData = {
   assignments: Array<{ guildId: string }>;
@@ -273,19 +267,11 @@ export function AdminBillingPage() {
                   {data.subscription && data.subscription.plan !== "free" ? (
                     <Badge>{data.subscription.status}</Badge>
                   ) : null}
-                  {data.subscription?.pricingCohort === "founder" ? <Badge>Founder</Badge> : null}
                 </div>
                 {!data.subscription || data.subscription.plan === "free" ? (
                   <p className="text-sm text-muted-foreground">
                     Core community tools are active. Upgrade when you need more capacity and
                     automation.
-                  </p>
-                ) : null}
-                {data.subscription?.pricingCohort === "founder" ? (
-                  <p className="text-sm text-muted-foreground">
-                    Founder pricing stays with this subscription, including plan or
-                    billing-frequency changes. If the subscription ends, founder pricing cannot be
-                    reclaimed.
                   </p>
                 ) : null}
               </div>
@@ -344,22 +330,6 @@ export function AdminBillingPage() {
                 </div>
                 <FrequencySelector value={frequency} onChange={setFrequency} />
               </div>
-              {data.founderAdmission ? (
-                <div className="rounded-lg border border-primary/35 bg-primary/5 p-4 text-sm">
-                  <p className="font-semibold">
-                    {data.founderAdmission.open
-                      ? `Founder launch pricing · ${data.founderAdmission.publicCount} of ${data.founderAdmission.limit} places claimed`
-                      : `Founder launch pricing fully claimed · ${data.founderAdmission.limit} of ${data.founderAdmission.limit}`}
-                  </p>
-                  {data.founderAdmission.open ? (
-                    <p className="mt-1 text-muted-foreground">
-                      Founder pricing stays with this subscription, including plan or
-                      billing-frequency changes. If the subscription ends, founder pricing cannot be
-                      reclaimed.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
               <div className="grid gap-4 lg:grid-cols-2">
                 {(["premium", "premium_plus"] as const).map((plan) => (
                   <PlanCard
@@ -414,10 +384,8 @@ export function AdminBillingPage() {
               <div className="space-y-5 border-t p-5">
                 {data.catalog.length === 0 ? (
                   <p role="status" className="text-sm text-muted-foreground">
-                    Plan changes are unavailable because this subscription’s pricing cohort has not
-                    been confirmed. Use Manage billing to review invoices, or contact support to
-                    check the subscription. Founder qualification requires a paid first live
-                    invoice; test subscriptions do not receive Founder status.
+                    Current plan prices are unavailable. Use Manage billing to review invoices, or
+                    contact support to check the subscription.
                   </p>
                 ) : null}
                 {data.catalog.length > 0 ? (
@@ -863,7 +831,7 @@ function PlanCard({
       ? monthlyPrice.unitAmount * 12 - price.unitAmount
       : 0;
   const recommended = plan === "premium";
-  const current = currentSubscription?.plan === plan && currentSubscription.frequency === frequency;
+  const current = Boolean(entry && currentSubscription?.priceId === entry.priceId);
 
   return (
     <Card

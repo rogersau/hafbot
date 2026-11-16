@@ -1,24 +1,26 @@
 import { isEmojiBlocked, normalizeEmoji } from "../../blocklist";
-import { deleteReaction } from "../../discord";
 import type { Env } from "../../env";
-import { createCloudflareBlocklistStore } from "../../runtime/cloudflare-blocklist-store";
 import type { BlocklistConfig, DiscordReaction } from "../../types";
 
-type BlocklistEnv = Pick<Env, "BOT_USER_ID" | "DISCORD_BOT_TOKEN"> & {
-  HAF_DB?: D1Database;
-};
+type BlocklistEnv = Pick<Env, "BOT_USER_ID" | "DISCORD_BOT_TOKEN">;
 
-interface ReactionFilterDependencies {
-  readBlocklist(): Promise<BlocklistConfig>;
+export interface ReactionFilterDependencies {
+  deleteReaction(
+    channelId: string,
+    messageId: string,
+    emoji: DiscordReaction["emoji"],
+    userId: string,
+    token: string,
+  ): Promise<void>;
   readBlocklistForGuild(guildId: string): Promise<BlocklistConfig>;
 }
 
 export async function moderateReactionAdd(
   reaction: DiscordReaction | null,
   env: BlocklistEnv,
-  dependencies: Partial<ReactionFilterDependencies> = {},
+  dependencies: ReactionFilterDependencies,
 ): Promise<"removed" | "ignored" | "failed"> {
-  if (!reaction) {
+  if (!reaction?.guild_id) {
     return "ignored";
   }
 
@@ -35,11 +37,7 @@ export async function moderateReactionAdd(
 
   let blocklist;
   try {
-    const readBlocklistFn =
-      reaction.guild_id && dependencies.readBlocklistForGuild
-        ? () => dependencies.readBlocklistForGuild!(reaction.guild_id!)
-        : (dependencies.readBlocklist ?? (() => readBlocklist(env)));
-    blocklist = await readBlocklistFn();
+    blocklist = await dependencies.readBlocklistForGuild(reaction.guild_id);
   } catch (error) {
     console.error("Failed to load blocklist config", error);
     return "failed";
@@ -54,7 +52,7 @@ export async function moderateReactionAdd(
   }
 
   try {
-    await deleteReaction(
+    await dependencies.deleteReaction(
       reaction.channel_id,
       reaction.message_id,
       reaction.emoji,
@@ -70,10 +68,4 @@ export async function moderateReactionAdd(
     console.error("Failed to remove reaction:", error);
     return "failed";
   }
-}
-
-async function readBlocklist(env: BlocklistEnv): Promise<BlocklistConfig> {
-  return env.HAF_DB
-    ? await createCloudflareBlocklistStore(env.HAF_DB, env.BOT_USER_ID).readConfig()
-    : { guilds: {}, botUserId: env.BOT_USER_ID };
 }

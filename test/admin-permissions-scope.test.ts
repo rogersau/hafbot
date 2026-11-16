@@ -136,11 +136,11 @@ for (const query of [
       assert.equal(response.status, 400);
       const body = (await response.json()) as {
         error: string;
-        issues: Array<{ path: string; code: string }>;
+        fieldIssues: Array<{ path: string; code: string }>;
       };
       assert.equal(body.error, "Invalid request query");
       assert.ok(
-        body.issues.some(
+        body.fieldIssues.some(
           (issue) => issue.path === "guildId" && issue.code === "duplicate_query_parameter",
         ),
       );

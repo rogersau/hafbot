@@ -37,8 +37,8 @@ export interface TicketClaimDeliveryIdentity {
 export interface TicketStore {
   reserveNextTicketNumber(guildId: string): Promise<number>;
   readTicketPanelConfig(guildId: string): Promise<TicketPanelConfig | null>;
-  readTicketPanelConfigById?(guildId: string, panelId: string): Promise<TicketPanelConfig | null>;
-  listTicketPanelConfigs?(guildId: string): Promise<TicketPanelConfig[]>;
+  readTicketPanelConfigById(guildId: string, panelId: string): Promise<TicketPanelConfig | null>;
+  listTicketPanelConfigs(guildId: string): Promise<TicketPanelConfig[]>;
   upsertTicketPanelConfig(panel: TicketPanelConfig): Promise<void>;
   countOpenTicketsByUser(guildId: string, userId: string): Promise<number>;
   createTicketInstance(instance: TicketInstance): Promise<void>;
@@ -100,15 +100,15 @@ export interface TicketStore {
     limit: number;
     beforeOpenedAtMs: number | null;
   }): Promise<ClosedTicketInstancesPage>;
-  listMemberTicketHistory?(body: {
+  listMemberTicketHistory(body: {
     guildId: string;
     openerUserId: string;
     excludeChannelId?: string | null;
     limit: number;
     beforeOpenedAtMs: number | null;
   }): Promise<ClosedTicketInstancesPage>;
-  countOpenTicketsForPanel?(guildId: string, panelId: string): Promise<number>;
-  deleteTicketPanelConfig?(guildId: string, panelId: string): Promise<void>;
+  countOpenTicketsForPanel(guildId: string, panelId: string): Promise<number>;
+  deleteTicketPanelConfig(guildId: string, panelId: string): Promise<void>;
   closeTicketInstance(body: {
     guildId: string;
     channelId: string;
@@ -136,11 +136,11 @@ export interface TicketStore {
     content: string;
     createdAtMs: number;
   }): Promise<void>;
-  claimStaffMessageDelivery?(body: StaffMessageDeliveryClaim): Promise<boolean>;
-  completeStaffMessageDelivery?(
+  claimStaffMessageDelivery(body: StaffMessageDeliveryClaim): Promise<boolean>;
+  completeStaffMessageDelivery(
     body: StaffMessageDeliveryIdentity & { botMessageId: string; claimedAtMs: number },
   ): Promise<void>;
-  releaseStaffMessageDelivery?(
+  releaseStaffMessageDelivery(
     body: StaffMessageDeliveryIdentity & { claimedAtMs: number },
   ): Promise<void>;
   readStaffMessageMapping(body: {
@@ -172,22 +172,11 @@ export interface TicketStore {
     staffMessageId: string;
   }): Promise<void>;
   cleanupStaffMessages(body: { guildId: string; ticketChannelId: string }): Promise<void>;
-  claimTicketTemplateReply?(reply: TicketTemplateReply): Promise<boolean>;
-  completeTicketTemplateReply?(body: {
-    interactionId: string;
-    botMessageId: string;
-  }): Promise<void>;
-  releaseTicketTemplateReply?(interactionId: string): Promise<void>;
-  listTicketTemplateReplies?(
+  claimTicketTemplateReply(reply: TicketTemplateReply): Promise<boolean>;
+  completeTicketTemplateReply(body: { interactionId: string; botMessageId: string }): Promise<void>;
+  releaseTicketTemplateReply(interactionId: string): Promise<void>;
+  listTicketTemplateReplies(
     guildId: string,
     ticketChannelId: string,
   ): Promise<TicketTemplateReply[]>;
 }
-
-export type AnonymousSupportDeliveryStore = TicketStore &
-  Required<
-    Pick<
-      TicketStore,
-      "claimStaffMessageDelivery" | "completeStaffMessageDelivery" | "releaseStaffMessageDelivery"
-    >
-  >;

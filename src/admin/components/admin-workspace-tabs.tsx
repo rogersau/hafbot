@@ -39,7 +39,7 @@ export function getAdminWorkspaceRouteId(pathname: string, selectedGuildId: stri
   if (guildPrefix && path === guildPrefix) return "overview";
   if (guildPrefix && path.startsWith(`${guildPrefix}/`)) {
     const section = path.slice(guildPrefix.length + 1);
-    return section === "steam-link" ? "player-link" : section;
+    return section;
   }
 
   return path.slice("/admin/".length) || "overview";

@@ -5,13 +5,13 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareMarketplaceStore } from "../src/runtime/cloudflare-marketplace-store";
+import { createSqliteMarketplaceStore } from "./support/sqlite/runtime/sqlite-marketplace-store";
 import type { MarketplaceBusinessLog, MarketplaceConfig, MarketplacePost } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("createCloudflareMarketplaceStore upserts and reads Marketplace config", async () => {
+test("createSqliteMarketplaceStore upserts and reads Marketplace config", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMarketplaceStore(database as unknown as D1Database);
+  const store = createSqliteMarketplaceStore(database as unknown as D1Database);
 
   const initialConfig: MarketplaceConfig = {
     guildId: "guild-1",
@@ -93,9 +93,9 @@ test("createCloudflareMarketplaceStore upserts and reads Marketplace config", as
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareMarketplaceStore creates, lists, updates, and closes Marketplace Posts", async () => {
+test("createSqliteMarketplaceStore creates, lists, updates, and closes Marketplace Posts", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMarketplaceStore(database as unknown as D1Database);
+  const store = createSqliteMarketplaceStore(database as unknown as D1Database);
   const olderPost = createPost({ id: "post-1", ownerId: "owner-1", createdAtMs: 100 });
   const newerPost = createPost({
     id: "post-2",
@@ -154,9 +154,9 @@ test("createCloudflareMarketplaceStore creates, lists, updates, and closes Marke
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareMarketplaceStore creates and lists Marketplace trade logs", async () => {
+test("createSqliteMarketplaceStore creates and lists Marketplace trade logs", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMarketplaceStore(database as unknown as D1Database);
+  const store = createSqliteMarketplaceStore(database as unknown as D1Database);
   const olderLog = createLog({
     id: "log-1",
     timestampMs: 100,
@@ -173,9 +173,9 @@ test("createCloudflareMarketplaceStore creates and lists Marketplace trade logs"
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareMarketplaceStore prunes old Marketplace trade logs per guild", async () => {
+test("createSqliteMarketplaceStore prunes old Marketplace trade logs per guild", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMarketplaceStore(database as unknown as D1Database);
+  const store = createSqliteMarketplaceStore(database as unknown as D1Database);
   const otherGuildLog = createLog({ guildId: "guild-2", id: "other-guild-log" });
 
   await store.createMarketplaceLog(otherGuildLog);

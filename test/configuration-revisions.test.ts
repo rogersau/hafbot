@@ -12,7 +12,7 @@ import {
   serializeTicketPanelConfiguration,
   type ConfigurationActorContext,
 } from "../src/configuration-revisions";
-import { createCloudflareConfigurationRevisionStore } from "../src/runtime/cloudflare-configuration-revision-store";
+import { createSqliteConfigurationRevisionStore } from "./support/sqlite/runtime/sqlite-configuration-revision-store";
 import {
   botDefenseRevisionAdapter,
   configurationRevisionAdapters,
@@ -22,7 +22,7 @@ import {
   signConfigurationRestoreToken,
   verifyConfigurationRestoreToken,
 } from "../src/configuration-revisions/restore-token";
-import { createCloudflareTicketStore } from "../src/runtime/cloudflare-ticket-store";
+import { createSqliteTicketStore } from "./support/sqlite/runtime/sqlite-ticket-store";
 import { createTicketPanelService } from "../src/services/tickets/ticket-panel";
 import type { TicketPanelConfig } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
@@ -75,10 +75,9 @@ test("Ticket Panel snapshots preserve participant management", () => {
       supportRoleId: "role-1",
       channelNamePrefix: "support",
       questions: [],
-      autoReplyEnabled: false,
-      autoReplyMessage: null,
       limitExclusion: false,
       participantManagementEnabled: true,
+      responseRules: [],
     },
   ];
 
@@ -88,8 +87,8 @@ test("Ticket Panel snapshots preserve participant management", () => {
 
 test("Premium Ticket Panel save captures baseline and update atomically", async () => {
   const database = new SqliteD1Database();
-  const tickets = createCloudflareTicketStore(database.d1);
-  const revisions = createCloudflareConfigurationRevisionStore(database.d1);
+  const tickets = createSqliteTicketStore(database.d1);
+  const revisions = createSqliteConfigurationRevisionStore(database.d1);
   await tickets.upsertTicketPanelConfig(panel("Before"));
   const service = createTicketPanelService({
     store: tickets,
@@ -133,8 +132,8 @@ test("Premium Ticket Panel save captures baseline and update atomically", async 
 
 test("Free Ticket Panel saves do not record revisions", async () => {
   const database = new SqliteD1Database();
-  const tickets = createCloudflareTicketStore(database.d1);
-  const revisions = createCloudflareConfigurationRevisionStore(database.d1);
+  const tickets = createSqliteTicketStore(database.d1);
+  const revisions = createSqliteConfigurationRevisionStore(database.d1);
   const service = createTicketPanelService({
     store: tickets,
     entitlements: {
@@ -167,7 +166,7 @@ test("Free Ticket Panel saves do not record revisions", async () => {
 
 test("Premium saves fail closed when revision storage is unavailable", async () => {
   const database = new SqliteD1Database();
-  const tickets = createCloudflareTicketStore(database.d1);
+  const tickets = createSqliteTicketStore(database.d1);
   const service = createTicketPanelService({
     store: tickets,
     entitlements: {
@@ -194,8 +193,8 @@ test("Premium saves fail closed when revision storage is unavailable", async () 
 
 test("stale revision heads roll back the Ticket Panel mutation", async () => {
   const database = new SqliteD1Database();
-  const tickets = createCloudflareTicketStore(database.d1);
-  const revisions = createCloudflareConfigurationRevisionStore(database.d1);
+  const tickets = createSqliteTicketStore(database.d1);
+  const revisions = createSqliteConfigurationRevisionStore(database.d1);
   const initial = await prepareTicketPanelRevisionMutation({
     currentPanel: null,
     nextPanel: panel("Initial"),
@@ -285,13 +284,13 @@ test("Webhook Proxy snapshots never contain credentials or webhook URLs", () => 
       name: "Alerts",
       enabled: true,
       banLookupEnabled: true,
-      banLookupNotificationUrl: "https://discord.com/api/webhooks/123/ban-secret",
+      banLookupCredentialId: "ban-secret",
       banLookupAppIds: [2, 1],
       destinations: [
         {
           id: "destination-1",
           label: "Staff",
-          url: "https://discord.com/api/webhooks/123/destination-secret",
+          credentialId: "destination-secret",
         },
       ],
       defaultDestinationIds: ["destination-1"],
@@ -311,7 +310,7 @@ test("Webhook Proxy snapshots never contain credentials or webhook URLs", () => 
 
 test("generic paid feature mutations commit current state and revision atomically", async () => {
   const database = new SqliteD1Database();
-  const revisions = createCloudflareConfigurationRevisionStore(database.d1);
+  const revisions = createSqliteConfigurationRevisionStore(database.d1);
   const next = {
     guildId: "guild-1",
     honeypotEnabled: true,

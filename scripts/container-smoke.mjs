@@ -1,16 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { readdir } from "node:fs/promises";
 
 const image = process.argv[2];
 const e2e = process.argv[3] === "--e2e";
 if (!image || process.argv.length > 4 || (process.argv[3] !== undefined && !e2e))
   throw new Error("Usage: node scripts/container-smoke.mjs <image> [--e2e]");
 const databaseName = e2e ? "haf_smoke_e2e_test" : "haf_smoke";
-
-const migrationNames = (await readdir(new URL("../migrations/postgres/", import.meta.url)))
-  .filter((name) => name.endsWith(".sql"))
-  .sort();
-if (migrationNames.length === 0) throw new Error("No PostgreSQL migrations found for smoke test.");
 
 const suffix = `${process.pid}`;
 const appContainer = `haf-container-smoke-app-${suffix}`;
@@ -31,6 +25,12 @@ try {
     network,
     "--network-alias",
     "postgres",
+    "--cpus",
+    "1",
+    "--memory",
+    "256m",
+    "--memory-swap",
+    "256m",
     "--tmpfs",
     "/var/lib/postgresql/data:rw,noexec,nosuid,size=512m",
     "--env",
@@ -40,6 +40,10 @@ try {
     "--env",
     "POSTGRES_PASSWORD=haf_smoke_only",
     postgresImage,
+    "-c",
+    "shared_buffers=32MB",
+    "-c",
+    "max_connections=20",
   ]);
   await waitForPostgres(20_000);
 
@@ -66,8 +70,6 @@ try {
     "NODE_ENV=test",
     "--env",
     "STAGING_MODE=true",
-    "--env",
-    "HAF_RUN_MIGRATIONS=true",
     "--env",
     "HAF_GATEWAY_ENABLED=false",
     "--env",
@@ -116,14 +118,8 @@ try {
   if (statusBody.runtime?.discordE2eGuildId !== (e2e ? "323456789012345678" : undefined)) {
     throw new Error("Container runtime did not install the requested E2E guild scope.");
   }
-  if (
-    statusBody.runtime?.migrationRuntime !== "postgres" ||
-    statusBody.runtime?.migrations !== migrationNames.length ||
-    JSON.stringify(statusBody.runtime?.migrationNames) !== JSON.stringify(migrationNames)
-  ) {
-    throw new Error(
-      `Container migration status was invalid: ${JSON.stringify(statusBody.runtime)}`,
-    );
+  if (statusBody.runtime?.persistence !== "postgres") {
+    throw new Error(`Container database status was invalid: ${JSON.stringify(statusBody.runtime)}`);
   }
   const application = await fetch(`${baseUrl}/not-a-real-route`);
   if (application.status !== 404) {
@@ -149,7 +145,7 @@ try {
       [
         'import { existsSync, readdirSync } from "node:fs";',
         'const packages = readdirSync("/app/node_modules/.pnpm");',
-        'const buildToolPrefixes = ["@esbuild+", "drizzle-kit@", "vite@", "vitest@", "wrangler@"];',
+        'const buildToolPrefixes = ["@esbuild+", "vite@", "typescript@", "oxlint@", "oxfmt@", "@playwright+"];',
         "console.log(JSON.stringify({",
         '  e2eEntrypoint: existsSync("/app/dist-e2e/main.mjs"),',
         "  packageManagers: [",
@@ -170,7 +166,7 @@ try {
   if (runtimeSurface.e2eEntrypoint !== e2e) {
     throw new Error("Container E2E entrypoint does not match the requested image variant.");
   }
-  console.info("Container smoke test passed with PostgreSQL migrations and full readiness.");
+  console.info("Container smoke test passed with a fresh PostgreSQL schema and full readiness.");
 } catch (error) {
   const logs = dockerOutput(["logs", "--tail", "100", appContainer]);
   if (logs) console.error(`Application container logs:\n${logs}`);

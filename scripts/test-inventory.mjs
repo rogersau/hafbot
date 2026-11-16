@@ -32,10 +32,7 @@ export function getTestInventory(cwd = process.cwd()) {
     integration: files.filter(
       (file) => classifyTest(file) === "node" && nodeSuite(file) === "integration",
     ),
-    worker: files.filter((file) => classifyTest(file) === "worker"),
     build: files.filter((file) => classifyTest(file) === "build"),
-    migration: files.filter((file) => classifyTest(file) === "migration"),
-    migrationEvidence: files.filter((file) => classifyTest(file) === "migration-evidence"),
     architecture: files.filter((file) => classifyTest(file) === "architecture"),
     unassigned,
     duplicateAssignments,
@@ -79,31 +76,8 @@ export function isPlaywrightTestSource(source) {
   );
 }
 
-export function listMigrationTestPaths({
-  cwd = process.cwd(),
-  compiled = true,
-  compiledRoot = "dist-tests",
-} = {}) {
-  return getTestInventory(cwd)
-    .migration.map((file) => {
-      if (compiled && /\.test\.(?:ts|tsx)$/.test(file)) {
-        return join(compiledRoot, file.replace(/\.(?:ts|tsx)$/, ".js"));
-      }
-      return file;
-    })
-    .sort();
-}
-
-export function listWorkerTestPaths(cwd = process.cwd()) {
-  return getTestInventory(cwd).worker.sort();
-}
-
 export function listBuildTestPaths(cwd = process.cwd()) {
   return getTestInventory(cwd).build.sort();
-}
-
-export function listMigrationEvidenceTestPaths(cwd = process.cwd()) {
-  return getTestInventory(cwd).migrationEvidence.sort();
 }
 
 export function listArchitectureTestPaths({
@@ -111,17 +85,11 @@ export function listArchitectureTestPaths({
   compiledRoot = "dist-tests",
 } = {}) {
   return getTestInventory(cwd)
-    .architecture.filter(
-      (file) =>
-        process.env.TEST_SKIP_WORKER_TYPECHECK !== "true" ||
-        file !== join("test", "worker-tsconfig.test.ts"),
-    )
-    .map((file) => join(compiledRoot, file.replace(/\.(?:ts|tsx)$/, ".js")))
+    .architecture.map((file) => join(compiledRoot, file.replace(/\.(?:ts|tsx)$/, ".js")))
     .sort();
 }
 
 function classifyTest(file) {
-  if (file.startsWith(`test-workers${sep}`) && file.endsWith(".test.ts")) return "worker";
   if (
     [
       `test${sep}admin-bundle-report.test.mjs`,
@@ -130,25 +98,15 @@ function classifyTest(file) {
     ].includes(file)
   )
     return "build";
-  if (file === `test${sep}migration-evidence.test.mjs`) return "migration-evidence";
-  if (
-    [
-      `test${sep}unified-migrations.test.ts`,
-      `test${sep}unified-migration-history.test.mjs`,
-      `test${sep}verify-migration-schema.test.mjs`,
-    ].includes(file)
-  ) {
-    return "migration";
-  }
   if (
     file.startsWith(`test${sep}`) &&
     [
+      "service-persistence-architecture.test.ts",
       "entitlement-writer-architecture.test.ts",
       "html-response-architecture.test.ts",
       "tenant-delete-architecture.test.ts",
-      "unified-database-architecture.test.ts",
-      "unified-runtime-ddl-regression.test.ts",
-      "worker-tsconfig.test.ts",
+      "persistence-runtime-ddl-architecture.test.ts",
+      "native-runtime-architecture.test.ts",
     ].includes(file.slice(`test${sep}`.length))
   ) {
     return "architecture";
@@ -195,15 +153,12 @@ const INTEGRATION_TESTS = new Set([
   "test/cloudflare-guild-rbac-store.test.ts",
   "test/cloudflare-player-count-store.test.ts",
   "test/cloudflare-platform-link-store.test.ts",
-  "test/cloudflare-steam-link-store.test.ts",
   "test/cloudflare-timed-role-rbac-store.test.ts",
   "test/cloudflare-user-preferences-store.test.ts",
   "test/cloudflare-webhook-proxy-store.test.ts",
   "test/gateway-bot-orchestration.test.ts",
   "test/gateway-event-dispatcher.test.ts",
   "test/gateway-protocol.test.ts",
-  "test/gateway-session.test.ts",
-  "test/index-queue.test.ts",
   "test/queue-delivery.test.ts",
   "test/runtime-app.test.ts",
   "test/evidence-vault-image-route.test.ts",

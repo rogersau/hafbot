@@ -9,7 +9,7 @@
 - [Getting started](https://docs.hafbot.xyz/getting-started): Install, configure, publish and test a member workflow.
 - [Self-host with Docker](https://docs.hafbot.xyz/self-hosting): Run your own Discord application, PostgreSQL and private storage with optional Cloudflare Tunnel. Self-hosted mode includes all core features with operator-owned external services and existing resource/safety limits. Source access is required while the public release is prepared.
 - [Deploy with Cloudflare](https://docs.hafbot.xyz/deploy-cloudflare): Tunnel, private R2 and Pages setup. A deployment entirely on Cloudflare is not currently maintained or tested.
-- [Plans](https://docs.hafbot.xyz/plans): Free and paid limits, storage, billing and conditional Founder Pricing.
+- [Plans](https://docs.hafbot.xyz/plans): Free and paid limits, storage, billing and standard subscription prices.
 - [Dashboard](https://docs.hafbot.xyz/admin-dashboard): Staff configuration, permissions and troubleshooting.
 - [Discord commands](https://docs.hafbot.xyz/commands): Member and staff command reference.
 
@@ -52,4 +52,4 @@
 - [Terms](https://hafbot.xyz/terms): Service terms.
 - [Privacy](https://hafbot.xyz/privacy): Data handling and privacy-request route.
 
-Free is not a time-limited trial. Premium covers one assigned Discord server; Premium Plus covers up to three and includes one shared white-label bot identity. Quantity, storage, Discord and provider limits still apply. Consult current plans instead of assuming historical prices or Founder Pricing availability. This directory contains only public product information, not private member records, credentials or support transcripts.
+Free is not a time-limited trial. Premium covers one assigned Discord server; Premium Plus covers up to three and includes one shared white-label bot identity. Quantity, storage, Discord and provider limits still apply. Consult current plans for standard subscription prices. This directory contains only public product information, not private member records, credentials or support transcripts.

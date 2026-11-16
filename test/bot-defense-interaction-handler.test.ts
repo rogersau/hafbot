@@ -224,7 +224,7 @@ test("already-issued Bot Defense controls are explicitly rejected", async () => 
     "bot-token",
   );
   const body = (await response.json()) as { data: { content?: string } };
-  assert.match(body.data.content ?? "", /predates generation binding/);
+  assert.match(body.data.content ?? "", /Unsupported Bot Defense action/);
 });
 
 test("concurrent Confirm and Dismiss interactions produce one matching outcome", async () => {

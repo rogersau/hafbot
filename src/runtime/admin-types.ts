@@ -56,23 +56,6 @@ export interface AdminGuildDirectoryResponse {
   guilds: AdminGuildDirectoryEntry[];
 }
 
-export type AdminPremiumClaimStatus = "claimable" | "claimed-by-you" | "claimed-by-another";
-
-export interface AdminPremiumClaimGuild {
-  guildId: string;
-  name: string;
-  icon: string | null;
-  isOwner: boolean;
-  canManage: boolean;
-  entitlementTier: GuildEntitlementTier;
-  claimStatus: AdminPremiumClaimStatus;
-  claimedByUserId: string | null;
-}
-
-export interface AdminPremiumGuildsResponse {
-  guilds: AdminPremiumClaimGuild[];
-}
-
 export type AdminPermissionFeature =
   | "blocklist"
   | "timed-roles"
@@ -82,7 +65,6 @@ export type AdminPermissionFeature =
   | "player-count"
   | "wardogs"
   | "server-levels"
-  | "steam-link"
   | "evidence-vault"
   | "mention-protection"
   | "managed-messages"

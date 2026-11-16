@@ -929,17 +929,13 @@ export function createGuildOverviewAdminRoutes(
           options.stores.blocklist.readConfig(),
           options.stores.reactionLimits.readReactionLimitConfig(guildId),
           options.stores.timedRoles.listTimedRolesByGuild(guildId),
-          options.stores.timedRoles.readNewMemberTimedRoleConfig
-            ? options.stores.timedRoles.readNewMemberTimedRoleConfig(guildId)
-            : Promise.resolve(null),
-          options.stores.timedRoles.readManualAssignmentTimedRoleConfig
-            ? options.stores.timedRoles.readManualAssignmentTimedRoleConfig(guildId)
-            : Promise.resolve(null),
-          options.stores.tickets.listTicketPanelConfigs
-            ? options.stores.tickets.listTicketPanelConfigs(guildId)
-            : options.stores.tickets
-                .readTicketPanelConfig(guildId)
-                .then((panel) => (panel ? [panel] : [])),
+          options.stores.timedRoles
+            .readTimedRoleConfigRules(guildId, "new-member")
+            .then((roles) => ({ guildId, roles })),
+          options.stores.timedRoles
+            .readTimedRoleConfigRules(guildId, "manual-assignment")
+            .then((roles) => ({ guildId, roles })),
+          options.stores.tickets.listTicketPanelConfigs(guildId),
           options.stores.lfg.readLfgConfig(guildId),
           options.stores.clans?.readConfig(guildId) ?? Promise.resolve(null),
           options.stores.suggestions?.readConfig(guildId) ?? Promise.resolve(null),
@@ -986,8 +982,8 @@ export function createGuildOverviewAdminRoutes(
           : [];
         const commerceAccount =
           (await options.commerce?.store.readConnectedAccountByGuild(guildId)) ?? null;
-        const commerceLifecycles = commerceAccount
-          ? await options.commerce!.catalog.listLifecycles(commerceAccount.id)
+        const commerceOfferingsForGuild = commerceAccount
+          ? await options.commerce!.catalog.listOfferings(commerceAccount.id)
           : [];
 
         const communityTools: NonNullable<GuildOverviewSummaryInput["communityTools"]> = {};
@@ -1060,8 +1056,8 @@ export function createGuildOverviewAdminRoutes(
           incidents: openIncidents,
           commerce: {
             connected: commerceAccount !== null,
-            publishedOfferings: commerceLifecycles.filter(
-              (lifecycle) => lifecycle.state === "published",
+            publishedOfferings: commerceOfferingsForGuild.filter(
+              (offering) => offering.state === "published",
             ).length,
           },
         });

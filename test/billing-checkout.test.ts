@@ -13,12 +13,9 @@ import {
 import type { BillingSubscriptionProjection } from "../src/runtime/billing/types";
 
 const catalog = createBillingCatalog({
-  founderPremiumMonthlyPriceId: "price_fpm",
-  founderPremiumYearlyPriceId: "price_fpy",
-  legacyFounderPremiumYearlyPriceId: "price_legacy_fpy",
-  founderPremiumPlusMonthlyPriceId: "price_fppm",
-  founderPremiumPlusYearlyPriceId: "price_fppy",
-  legacyFounderPremiumPlusYearlyPriceId: "price_legacy_fppy",
+  historicalPricesJson: JSON.stringify([
+    { priceId: "price_historical", productId: "prod_p", plan: "premium", frequency: "yearly" },
+  ]),
   premiumMonthlyPriceId: "price_pm",
   premiumMonthlyProductId: "prod_p",
   premiumYearlyPriceId: "price_py",
@@ -29,37 +26,11 @@ const catalog = createBillingCatalog({
   premiumPlusYearlyProductId: "prod_pp",
 });
 
-test("Billing catalogue requires unique Price identities with explicit cohorts", () => {
-  assert.equal(catalog.size, 10);
-  assert.deepEqual(
-    new Set([...catalog.values()].map((entry) => entry.cohort)),
-    new Set(["founder", "standard"]),
-  );
-  assert.throws(
-    () =>
-      createBillingCatalog({
-        founderPremiumMonthlyPriceId: "duplicate",
-        founderPremiumYearlyPriceId: "fpy",
-        founderPremiumPlusMonthlyPriceId: "fppm",
-        founderPremiumPlusYearlyPriceId: "fppy",
-        premiumMonthlyPriceId: "duplicate",
-        premiumMonthlyProductId: "p",
-        premiumYearlyPriceId: "py",
-        premiumYearlyProductId: "p",
-        premiumPlusMonthlyPriceId: "ppm",
-        premiumPlusMonthlyProductId: "pp",
-        premiumPlusYearlyPriceId: "ppy",
-        premiumPlusYearlyProductId: "pp",
-      }),
-    /unique/,
-  );
-});
-
-test("Checkout binds a Customer first and supports the currently purchasable cohort", async () => {
+test("Checkout binds a Customer first and supports every current standard Price", async () => {
   const provider = new FakeProvider();
   const store = new MemoryStore();
   const service = createService(provider, store);
-  for (const { priceId } of [...catalog.values()].filter((entry) => entry.cohort === "standard")) {
+  for (const { priceId } of await service.listCatalog()) {
     const result = await service.startCheckout({
       ownerId: "owner",
       email: "owner@example.test",
@@ -99,82 +70,24 @@ test("duplicate submission reuses a stable business-intent idempotency key", asy
   );
 });
 
-test("Founder Checkout admission switches at 50 without reserving in-flight places", async () => {
-  const provider = new FakeProvider();
+test("a cancelled subscriber can return at the current rate", async () => {
   const store = new MemoryStore();
-  const service = createService(provider, store);
-  store.founderCount = 49;
-  assert.deepEqual(
-    (await service.listCatalog()).map((entry) => entry.cohort),
-    ["founder", "founder", "founder", "founder"],
-  );
-  await assert.rejects(
-    service.startCheckout({
-      ownerId: "owner",
-      email: null,
-      priceId: "price_legacy_fpy",
-      intentId: "intent_legacy_founder",
-    }),
-    /unsupported_price/,
-  );
-  await service.startCheckout({
+  store.projection = projection({
+    subscriptionId: "sub_previous",
+    priceId: "price_pm",
+    productId: "prod_p",
+    plan: "free",
+    frequency: "monthly",
+    status: "cancelled",
+  });
+  const provider = new FakeProvider();
+  await createService(provider, store).startCheckout({
     ownerId: "owner",
     email: null,
-    priceId: "price_fpm",
-    intentId: "intent_founder_open",
+    priceId: "price_pm",
+    intentId: "intent_returning_owner",
   });
-  await assert.rejects(
-    service.startCheckout({
-      ownerId: "owner",
-      email: null,
-      priceId: "price_pm",
-      intentId: "intent_forged_standard",
-    }),
-    /stale_pricing_cohort/,
-  );
-
-  store.founderCount = 50;
-  assert.ok((await service.listCatalog()).every((entry) => entry.cohort === "standard"));
-  await assert.rejects(
-    service.startCheckout({
-      ownerId: "owner",
-      email: null,
-      priceId: "price_fpm",
-      intentId: "intent_stale_founder",
-    }),
-    /stale_pricing_cohort/,
-  );
-
-  store.projection = projection({
-    subscriptionId: "sub_founder",
-    priceId: "price_fpm",
-    productId: "prod_p",
-    plan: "premium",
-    frequency: "monthly",
-    status: "active",
-    pricingCohort: "founder",
-    founderAwardedAtMs: 1,
-  });
-  assert.ok((await service.listCatalog("owner")).every((entry) => entry.cohort === "founder"));
-});
-
-test("unqualified Founder TEST subscriptions offer no unsupported plan changes while standard subscriptions keep their cohort", async () => {
-  const store = new MemoryStore();
-  const service = createService(new FakeProvider(), store);
-  store.projection = projection({
-    subscriptionId: "sub_founder_test",
-    priceId: "price_fpm",
-    productId: "prod_p",
-    plan: "premium",
-    frequency: "monthly",
-    status: "active",
-    pricingCohort: null,
-  });
-  assert.deepEqual(await service.listCatalog("owner"), []);
-  store.projection = { ...store.projection, priceId: "price_pm" };
-  const supported = await service.listCatalog("owner");
-  assert.ok(supported.length > 0);
-  assert.ok(supported.every((entry) => entry.cohort === "standard"));
+  assert.equal(provider.checkoutCalls[0]?.priceId, "price_pm");
 });
 
 test("usable Subscription and quarantine block Checkout while abandonment grants nothing", async () => {
@@ -257,7 +170,6 @@ class FakeProvider implements BillingCheckoutProvider {
 }
 
 class MemoryStore implements BillingCheckoutStore {
-  founderCount = 50;
   customerId: string | null = null;
   projection: BillingSubscriptionProjection | null = null;
   async readCustomerId(): Promise<string | null> {
@@ -268,9 +180,6 @@ class MemoryStore implements BillingCheckoutStore {
   }
   async readProjection(): Promise<BillingSubscriptionProjection | null> {
     return this.projection;
-  }
-  async countFounderPlaces(): Promise<number> {
-    return this.founderCount;
   }
 }
 
@@ -297,3 +206,24 @@ function projection(
     ...overrides,
   };
 }
+
+test("historical prices cannot start Checkout or appear in the public catalog", async () => {
+  const provider = new FakeProvider();
+  const service = createService(provider, new MemoryStore());
+  assert.equal((await service.listCatalog()).length, 4);
+  assert.equal(
+    (await service.listCatalog()).some((entry) => entry.priceId === "price_historical"),
+    false,
+  );
+  await assert.rejects(
+    service.startCheckout({
+      ownerId: "owner",
+      email: null,
+      priceId: "price_historical",
+      intentId: "intent_historical",
+    }),
+    /unsupported_price/,
+  );
+  assert.equal(provider.customerCalls.length, 0);
+  assert.equal(provider.checkoutCalls.length, 0);
+});

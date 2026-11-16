@@ -5,13 +5,13 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareGuildR2ObjectStore } from "../src/runtime/cloudflare-guild-r2-object-store";
+import { createSqliteGuildR2ObjectStore } from "./support/sqlite/runtime/sqlite-guild-r2-object-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("createCloudflareGuildR2ObjectStore tracks usage per guild", async () => {
+test("createSqliteGuildR2ObjectStore tracks usage per guild", async () => {
   const database = new SqliteD1Database();
-  const firstStore = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
-  const secondStore = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const firstStore = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
+  const secondStore = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
 
   assert.strictEqual(firstStore, secondStore);
   assert.equal(await firstStore.getGuildUsageBytes("guild-1"), 0);
@@ -56,7 +56,7 @@ test("createCloudflareGuildR2ObjectStore tracks usage per guild", async () => {
 
 test("Guild R2 notification timestamps fence stale creates and deletes", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/object.bin",
@@ -101,7 +101,7 @@ test("Guild R2 notification timestamps fence stale creates and deletes", async (
 
 test("Guild R2 reservations atomically reject concurrent writes beyond the limit", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
 
   const results = await Promise.all([
     store.reserveObject({
@@ -134,7 +134,7 @@ test("Guild R2 reservations atomically reject concurrent writes beyond the limit
 
 test("Guild R2 replacement reservations account for only the net size change", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/existing.bin",
@@ -184,7 +184,7 @@ test("Guild R2 replacement reservations account for only the net size change", a
 
 test("Guild R2 shrinking replacements do not free capacity until commit", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/existing.bin",
@@ -225,7 +225,7 @@ test("Guild R2 shrinking replacements do not free capacity until commit", async 
 
 test("Guild R2 allows non-increasing replacements to recover after a downgrade", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/existing.bin",
@@ -258,7 +258,7 @@ test("Guild R2 allows non-increasing replacements to recover after a downgrade",
 
 test("Guild R2 failed and expired reservations restore prior committed usage", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/existing.bin",
@@ -307,7 +307,7 @@ test("Guild R2 failed and expired reservations restore prior committed usage", a
 
 test("Guild R2 reservation rollback restores a committed zero-byte object", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareGuildR2ObjectStore(database as unknown as D1Database);
+  const store = createSqliteGuildR2ObjectStore(database as unknown as D1Database);
   await store.upsertObject({
     guildId: "guild-1",
     key: "guild-1/empty.bin",

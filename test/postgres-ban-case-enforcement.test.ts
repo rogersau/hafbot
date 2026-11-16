@@ -1,14 +1,9 @@
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
-import { createCloudflareOperationalIncidentStore } from "../src/runtime/cloudflare-operational-incident-store";
+import { createPostgresOperationalIncidentStore } from "../src/runtime/postgres/postgres-operational-incident-store";
 import { OperationalIncidentService } from "../src/operations/incidents";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolve } from "node:path";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresBanEnforcementStore } from "../src/runtime/postgres/postgres-wardogs-store";
 import type { Operation } from "../src/ban-case-enforcement/model";
 const url = process.env.TEST_POSTGRES_URL;
@@ -23,16 +18,10 @@ test(
       NODE_ENV: "test",
     });
     try {
-      await applyPostgresMigrations(
-        db,
-        await readPostgresMigrations(resolve("migrations/postgres")),
-      );
+      await initializePostgresSchema(db);
       const store = createPostgresBanEnforcementStore(db);
       const incidents = new OperationalIncidentService(
-        createCloudflareOperationalIncidentStore(
-          createPostgresD1CompatibilityDatabase(db),
-          "ban-cases",
-        ),
+        createPostgresOperationalIncidentStore(db, "ban-cases"),
       );
       const key = {
         feature: "ban-cases" as const,
@@ -112,20 +101,17 @@ test(
     assert.ok(url);
     assert.match(new URL(url).pathname, /_test$/);
     const { BanCaseEnforcement } = await import("../src/ban-case-enforcement/service");
-    const { createCloudflareBanCaseStore } =
-      await import("../src/runtime/cloudflare-ban-case-store");
+    const { createPostgresBanCaseStore } =
+      await import("../src/runtime/postgres/postgres-ban-case-store");
     const { WardogsError } = await import("../src/wardogs/model");
     const db = createPostgresDatabaseCapabilityFromEnvironment({
       DATABASE_URL: url,
       NODE_ENV: "test",
     });
     try {
-      await applyPostgresMigrations(
-        db,
-        await readPostgresMigrations(resolve("migrations/postgres")),
-      );
+      await initializePostgresSchema(db);
       const store = createPostgresBanEnforcementStore(db);
-      const cases = createCloudflareBanCaseStore(createPostgresD1CompatibilityDatabase(db));
+      const cases = createPostgresBanCaseStore(db);
       const id = crypto.randomUUID();
       await cases.createBanCase({
         guildId: id,

@@ -34,7 +34,6 @@ export interface WardogsOptions {
   canChangeOrigin?: (guildId: string, targetId: string) => Promise<boolean>;
   keyRing?: () => Promise<WebhookCredentialKeyRing>;
   policy?: NetworkPolicy;
-  runtime: "cloudflare" | "portable";
   transport?: ReadTransport;
   now?: () => number;
   wait?: (ms: number) => Promise<void>;
@@ -49,9 +48,7 @@ export class WardogsService {
   async list(guildId: string) {
     return (await this.options.store.list(guildId)).map((target) => {
       const dto = publicTarget(target);
-      const entry = this.policy.origins.find(
-        (entry) => entry.id === target.originRef && entry.runtime === this.options.runtime,
-      );
+      const entry = this.policy.origins.find((entry) => entry.id === target.originRef);
       dto.stale ||=
         !this.policy.enabled ||
         !target.enabled ||
@@ -71,9 +68,7 @@ export class WardogsService {
     const target = await this.options.store.read(guildId, targetId);
     if (!target)
       return { target: null, ready: false, error: "WARDOGS target is unavailable for this Guild." };
-    const entry = this.policy.origins.find(
-      (entry) => entry.id === target.originRef && entry.runtime === this.options.runtime,
-    );
+    const entry = this.policy.origins.find((entry) => entry.id === target.originRef);
     const approved =
       entry &&
       this.policy.approvals.some(
@@ -105,9 +100,7 @@ export class WardogsService {
   }
   async observationReadiness(guildId: string, targetId: string) {
     const state = await this.statusReadiness(guildId, targetId);
-    const entry = this.policy.origins.find(
-      (e) => e.id === state.target?.originRef && e.runtime === this.options.runtime,
-    );
+    const entry = this.policy.origins.find((e) => e.id === state.target?.originRef);
     const approval = this.policy.approvals.find(
       (a) =>
         a.targetId === targetId &&
@@ -131,9 +124,7 @@ export class WardogsService {
     return {
       networkEnabled: this.policy.enabled,
       credentialEncryptionAvailable: Boolean(this.options.keyRing),
-      origins: this.policy.origins
-        .filter((entry) => entry.runtime === this.options.runtime)
-        .map(({ id }) => ({ id })),
+      origins: this.policy.origins.map(({ id }) => ({ id })),
       maxTargets: WARDOGS_POLICY.maxTargets,
     };
   }
@@ -291,9 +282,7 @@ export class WardogsService {
     let target = await this.owned(input.guildId, input.targetId, input.generation);
     if (!this.policy.enabled || !target.enabled || target.disconnected)
       throw new WardogsError("disabled");
-    const initialEntry = this.policy.origins.find(
-      (entry) => entry.id === target.originRef && entry.runtime === this.options.runtime,
-    );
+    const initialEntry = this.policy.origins.find((entry) => entry.id === target.originRef);
     if (
       !initialEntry ||
       !this.policy.approvals.some(
@@ -345,8 +334,7 @@ export class WardogsService {
       if (!this.policy.enabled || !target.enabled || target.disconnected)
         throw new WardogsError("disabled");
       const currentEntry = this.policy.origins.find(
-        (candidate) =>
-          candidate.id === target.originRef && candidate.runtime === this.options.runtime,
+        (candidate) => candidate.id === target.originRef,
       );
       const currentOrigin = currentEntry ? approvedOrigin(currentEntry) : null;
       if (
@@ -453,9 +441,7 @@ export class WardogsService {
     }
     const target = await this.owned(input.guildId, input.targetId, input.generation);
     target.verifiedOrigin = approvedOrigin(
-      this.policy.origins.find(
-        (entry) => entry.id === target.originRef && entry.runtime === this.options.runtime,
-      )!,
+      this.policy.origins.find((entry) => entry.id === target.originRef)!,
     );
     target.verifiedGeneration = target.generation;
     target.verifiedAtMs = this.now();
@@ -466,9 +452,7 @@ export class WardogsService {
   async accessReadiness(guildId: string, targetId: string) {
     const state = await this.statusReadiness(guildId, targetId);
     const target = state.target;
-    const entry = this.policy.origins.find(
-      (e) => e.id === target?.originRef && e.runtime === this.options.runtime,
-    );
+    const entry = this.policy.origins.find((e) => e.id === target?.originRef);
     const approval = this.policy.approvals.find(
       (a) =>
         a.targetId === targetId &&
@@ -565,9 +549,7 @@ export class WardogsService {
   async banReadiness(guildId: string, targetId: string, action: "ban" | "unban") {
     const state = await this.statusReadiness(guildId, targetId);
     const target = state.target;
-    const entry = this.policy.origins.find(
-      (e) => e.id === target?.originRef && e.runtime === this.options.runtime,
-    );
+    const entry = this.policy.origins.find((e) => e.id === target?.originRef);
     const approval = this.policy.approvals.find(
       (a) =>
         a.targetId === targetId &&
@@ -655,12 +637,7 @@ export class WardogsService {
   }
   private validateConfig(name: string, originRef: string | null) {
     if (!name.trim() || name.length > 100) throw new WardogsError("invalid_response");
-    if (
-      originRef !== null &&
-      !this.policy.origins.some(
-        (entry) => entry.id === originRef && entry.runtime === this.options.runtime,
-      )
-    )
+    if (originRef !== null && !this.policy.origins.some((entry) => entry.id === originRef))
       throw new WardogsError("unapproved_target");
   }
 }

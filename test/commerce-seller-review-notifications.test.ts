@@ -33,11 +33,13 @@ test("seller review notifications use a stable Discord-sized nonce", async () =>
     });
 
     await service.syncSeller({ account: account(), profile: profile() });
-    assert.equal(typeof body?.nonce, "string");
-    assert.ok((body?.nonce as string).length <= 25);
-    assert.match(body?.nonce as string, /^review_[a-f0-9]{16}$/);
+    assert.ok(body);
+    const nonce = body.nonce;
+    assert.ok(typeof nonce === "string");
+    assert.ok(nonce.length <= 25);
+    assert.match(nonce, /^review_[a-f0-9]{16}$/);
     assert.match(
-      String(body?.content),
+      String(body.content),
       /Guild age: 10 days \[REVIEW WARNING: guild is under 30 days old\]/,
     );
   } finally {

@@ -202,7 +202,7 @@ ${legalHeader({ href: "/terms", label: "Terms of Service" })}
   <li><strong>Discord profile data</strong> — when you sign in to the admin dashboard with Discord, we receive your display name, email address, and avatar URL (via Discord OAuth with the <code>identify</code>, <code>email</code>, and <code>guilds</code> scopes).</li>
   <li><strong>Authentication and session data</strong> — OAuth access and refresh tokens, session tokens, IP address, and user agent, stored to keep you signed in.</li>
   <li><strong>User-generated content</strong> — LFG posts, marketplace listings, suggestion submissions, and the answers and messages your members post in tickets.</li>
-  <li><strong>Ticket transcripts</strong> — the full message content and attachments from a ticket channel, rendered as an HTML transcript and archived (including attachments) in Cloudflare R2 object storage when a ticket is closed.</li>
+  <li><strong>Ticket transcripts</strong> — the full message content and attachments from a ticket channel, rendered as an HTML transcript and archived (including attachments) in configured private object storage when a ticket is closed.</li>
   <li><strong>Evidence Vault records</strong> — when staff hide a message, the Bot stores the source message text, extracted links, attached images (archived in R2), author and hider identifiers, and any inferred subject identifiers (Discord, Steam, Xbox, PlayStation, or CfTools IDs).</li>
   <li><strong>Platform link data</strong> — SteamID64 (via Steam OpenID), Xbox gamertag/XUID (via Microsoft OAuth), and self-reported PSN Online ID. For Steam links, optional game ownership data (game names and playtime) may also be stored.</li>
   <li><strong>Image Rules metadata</strong> — confidence scores and the Discord CDN URL for classified images. Image files themselves are not stored by Image Rules; only the Discord-hosted URL is retained.</li>
@@ -240,7 +240,7 @@ ${legalHeader({ href: "/terms", label: "Terms of Service" })}
 <p>Product analytics events expire after <strong>13 months</strong>. A Guild administrator may disable future Guild product analytics using the <strong>Share anonymous product usage</strong> setting. Earlier analytics deletion may be requested through the same support privacy-request process.</p>
 
 <h2>6. Security</h2>
-<p>We take reasonable measures to protect your data, including signed session cookies and restricted access controls for the Evidence Vault. However, no internet transmission or storage is entirely secure, and we cannot guarantee absolute security. Discord bot tokens are stored in Cloudflare Secrets Store rather than the database.</p>
+<p>We take reasonable measures to protect your data, including signed session cookies and restricted access controls for the Evidence Vault. However, no internet transmission or storage is entirely secure, and we cannot guarantee absolute security. Discord bot tokens are supplied through operator-controlled environment configuration.</p>
 
 <h2>7. Your Rights</h2>
 <p>Depending on your jurisdiction, you may have the right to access, rectify, or request deletion of your personal data. Because the Bot does not provide a self-service erasure endpoint, please exercise these rights by joining our <a href="${DISCORD_INVITE}">support server</a> and contacting staff. We will respond within a reasonable timeframe.</p>
@@ -249,7 +249,7 @@ ${legalHeader({ href: "/terms", label: "Terms of Service" })}
 <p>The admin dashboard uses essential session cookies to maintain your login state: an HMAC-signed operator session cookie and Better Auth session cookies. These cookies are HTTP-only and used solely for authentication. Product analytics sets no cookies, uses no browser storage or fingerprinting, and honors Global Privacy Control and Do Not Track for browser-originated events. No advertising or tracking cookies are set by the Bot. The Google Fonts request made by your browser may set its own cache headers, but the Bot does not control these.</p>
 
 <h2>9. International Data Transfers</h2>
-<p>The Bot runs on Cloudflare's global edge network and PostHog analytics is processed in the region selected by the operator. Data may be processed and stored in countries other than your own. By using the Bot, you consent to these transfers in accordance with this Privacy Policy.</p>
+<p>The operator selects the Bot's hosting and storage regions. PostHog analytics is processed in the region selected by the operator. Data may be processed and stored in countries other than your own. By using the Bot, you consent to these transfers in accordance with this Privacy Policy.</p>
 
 <h2>10. Children's Privacy</h2>
 <p>Discord requires users to be at least 13 years old (or the minimum age required in their country). The Bot is not directed at children and does not knowingly collect data from anyone under that age.</p>

@@ -5,15 +5,13 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareImageRulesStore } from "../src/runtime/cloudflare-image-rules-store";
+import { createSqliteImageRulesStore } from "./support/sqlite/runtime/sqlite-image-rules-store";
 import type { ImageRulesConfig } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-const RESTORE_CLAIMS_ENABLED_AT_KEY = "image_rules_restore_claims_enabled_at_ms";
-
-test("createCloudflareImageRulesStore reads, writes, updates, and deletes config", async () => {
+test("createSqliteImageRulesStore reads, writes, updates, and deletes config", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareImageRulesStore(database as unknown as D1Database);
+  const store = createSqliteImageRulesStore(database as unknown as D1Database);
 
   assert.equal(await store.readConfig("guild-1"), null);
 
@@ -52,16 +50,16 @@ test("createCloudflareImageRulesStore reads, writes, updates, and deletes config
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareImageRulesStore returns the same instance per database", async () => {
+test("createSqliteImageRulesStore returns the same instance per database", async () => {
   const database = new SqliteD1Database();
-  const first = createCloudflareImageRulesStore(database as unknown as D1Database);
-  const second = createCloudflareImageRulesStore(database as unknown as D1Database);
+  const first = createSqliteImageRulesStore(database as unknown as D1Database);
+  const second = createSqliteImageRulesStore(database as unknown as D1Database);
   assert.strictEqual(first, second);
 });
 
-test("createCloudflareImageRulesStore defaults missing rows", async () => {
+test("createSqliteImageRulesStore defaults missing rows", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareImageRulesStore(database as unknown as D1Database);
+  const store = createSqliteImageRulesStore(database as unknown as D1Database);
 
   await store.upsertConfig({
     guildId: "guild-default",
@@ -91,9 +89,9 @@ test("createCloudflareImageRulesStore defaults missing rows", async () => {
   assert.equal(row?.dryRun, false);
 });
 
-test("createCloudflareImageRulesStore creates mod queue items", async () => {
+test("createSqliteImageRulesStore creates mod queue items", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareImageRulesStore(database as unknown as D1Database);
+  const store = createSqliteImageRulesStore(database as unknown as D1Database);
 
   const item = await store.createModQueueItem({
     guildId: "guild-1",
@@ -142,9 +140,9 @@ test("createCloudflareImageRulesStore creates mod queue items", async () => {
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareImageRulesStore fences restore claims and terminal outcomes", async () => {
+test("createSqliteImageRulesStore fences restore claims and terminal outcomes", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareImageRulesStore(database as unknown as D1Database);
+  const store = createSqliteImageRulesStore(database as unknown as D1Database);
 
   const restoredItem = await store.createModQueueItem(buildQueueItemInput("message-restore"));
   await store.setModQueueItemQueueMessage(
@@ -157,16 +155,6 @@ test("createCloudflareImageRulesStore fences restore claims and terminal outcome
   assert.equal(withQueueMessage?.queueMessageId, "queue-message-1");
   assert.equal(withQueueMessage?.updatedAtMs, 150);
 
-  const gatedClaim = await store.claimModQueueItemRestore(
-    restoredItem.id,
-    "claim-gated",
-    "moderator-gated",
-    200,
-    60_000,
-  );
-  assert.equal(gatedClaim, null);
-
-  enableRestoreClaims(database);
   const [firstClaim, secondClaim] = await Promise.all([
     store.claimModQueueItemRestore(restoredItem.id, "claim-1", "moderator-1", 200, 60_000),
     store.claimModQueueItemRestore(restoredItem.id, "claim-2", "moderator-2", 200, 60_000),
@@ -251,12 +239,6 @@ test("createCloudflareImageRulesStore fences restore claims and terminal outcome
   const stale = await store.markModQueueItemApproved(restoredItem.id, "moderator-3", 400);
   assert.equal(stale, null);
 });
-
-function enableRestoreClaims(database: SqliteD1Database): void {
-  database.execRaw(
-    `UPDATE app_config SET value = '0' WHERE key = '${RESTORE_CLAIMS_ENABLED_AT_KEY}'`,
-  );
-}
 
 function buildQueueItemInput(messageId: string) {
   return {

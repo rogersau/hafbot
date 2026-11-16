@@ -5,13 +5,13 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareBotDefenseStore } from "../src/runtime/cloudflare-bot-defense-store";
+import { createSqliteBotDefenseStore } from "./support/sqlite/runtime/sqlite-bot-defense-store";
 import type { BotDefenseConfig } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("createCloudflareBotDefenseStore reads, writes, updates, and deletes config", async () => {
+test("createSqliteBotDefenseStore reads, writes, updates, and deletes config", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const store = createSqliteBotDefenseStore(database as unknown as D1Database);
 
   const defaultConfig = await store.readConfig("guild-1");
   assert.equal(defaultConfig?.guildId, "guild-1");
@@ -66,16 +66,16 @@ test("createCloudflareBotDefenseStore reads, writes, updates, and deletes config
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareBotDefenseStore returns the same instance per database", async () => {
+test("createSqliteBotDefenseStore returns the same instance per database", async () => {
   const database = new SqliteD1Database();
-  const first = createCloudflareBotDefenseStore(database as unknown as D1Database);
-  const second = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const first = createSqliteBotDefenseStore(database as unknown as D1Database);
+  const second = createSqliteBotDefenseStore(database as unknown as D1Database);
   assert.strictEqual(first, second);
 });
 
 test("openBotFlag inserts only when no open flag and member is not confirmed", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const store = createSqliteBotDefenseStore(database as unknown as D1Database);
 
   const evidence = { kind: "honeypot" as const, channelId: "channel-1", messageId: "msg-1" };
   const first = await store.openBotFlag("guild-1", "user-1", "honeypot", evidence);
@@ -102,7 +102,7 @@ test("openBotFlag inserts only when no open flag and member is not confirmed", a
 
 test("resolveBotFlag allows exactly one concurrent resolution to win", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const store = createSqliteBotDefenseStore(database as unknown as D1Database);
 
   const opened = await store.openBotFlag("guild-1", "user-1", "honeypot", {
     kind: "honeypot",
@@ -135,7 +135,7 @@ test("resolveBotFlag allows exactly one concurrent resolution to win", async () 
 
 test("dismissed members can be re-flagged", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const store = createSqliteBotDefenseStore(database as unknown as D1Database);
 
   const evidence = { kind: "honeypot" as const, channelId: "channel-1", messageId: "msg-1" };
   const first = await store.openBotFlag("guild-1", "user-1", "honeypot", evidence);
@@ -156,7 +156,7 @@ test("dismissed members can be re-flagged", async () => {
 test("concurrent first trips and dismissed re-trips each have exactly one flag opener", async (t) => {
   const database = new SqliteD1Database();
   t.after(() => database.close());
-  const store = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const store = createSqliteBotDefenseStore(database as unknown as D1Database);
   const evidence = {
     kind: "rate" as const,
     channelIds: ["a", "b"],
@@ -179,7 +179,7 @@ test("concurrent first trips and dismissed re-trips each have exactly one flag o
 test("rate window ignores future rows and includes the exact trailing-window boundary", async (t) => {
   const database = new SqliteD1Database();
   t.after(() => database.close());
-  const store = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const store = createSqliteBotDefenseStore(database as unknown as D1Database);
   await store.recordRateMessage("guild", "user", "old", "images", 999);
   await store.recordRateMessage("guild", "user", "boundary", "images", 1000);
   await store.recordRateMessage("guild", "user", "now", "images", 2000);
@@ -192,7 +192,7 @@ test("rate window ignores future rows and includes the exact trailing-window bou
 
 test("rate window store groups matching messages by distinct channel and expires old rows", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const store = createSqliteBotDefenseStore(database as unknown as D1Database);
 
   await store.recordRateMessage("guild-1", "user-1", "channel-1", "message-a", 1000);
   await store.recordRateMessage("guild-1", "user-1", "channel-2", "message-a", 2000);
@@ -220,7 +220,7 @@ test("rate window store groups matching messages by distinct channel and expires
 
 test("setBotFlagQueueMessage stores the queue message id", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const store = createSqliteBotDefenseStore(database as unknown as D1Database);
 
   const evidence = { kind: "honeypot" as const, channelId: "channel-1", messageId: "msg-1" };
   const opened = await store.openBotFlag("guild-1", "user-1", "honeypot", evidence);
@@ -238,7 +238,7 @@ test("setBotFlagQueueMessage stores the queue message id", async () => {
 
 test("listOpenBotFlagsMissingQueueMessage returns only stranded open flags past the grace period", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareBotDefenseStore(database as unknown as D1Database);
+  const store = createSqliteBotDefenseStore(database as unknown as D1Database);
 
   const stranded = await store.openBotFlag("guild-1", "user-stranded", "honeypot", {
     kind: "honeypot",

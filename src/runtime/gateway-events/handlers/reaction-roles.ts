@@ -10,7 +10,6 @@ export const reactionRoleGatewayHandler = defineGatewayEventHandler(
     order: 80,
     isEnabled: ({ features }) => features.reactionRoles !== false,
     async handle({ env, stores, discord, operations }, envelope) {
-      if (!stores?.reactionRole) return;
       const service = new ReactionRoleService(
         stores.reactionRole,
         discord.reactionRoles,

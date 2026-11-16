@@ -272,7 +272,7 @@ function isMaintenanceReadOnlyRequest(request: Request, url: URL): boolean {
   if (request.method === "OPTIONS") return true;
   if (request.method !== "GET" && request.method !== "HEAD") return false;
 
-  // Better Auth uses GET callbacks that create sessions and workspace records. During migration,
+  // Better Auth uses GET callbacks that create sessions and workspace records. During maintenance,
   // only the exact session lookup is read-only; all other auth handlers must remain fenced.
   if (url.pathname === "/api/auth" || url.pathname.startsWith("/api/auth/")) {
     return url.pathname === "/api/auth/get-session";

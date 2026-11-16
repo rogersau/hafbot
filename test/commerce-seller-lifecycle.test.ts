@@ -12,7 +12,7 @@ import {
   type CommerceSellerAccountProvider,
   type StripeConnectedAccountProjection,
 } from "../src/commerce";
-import { createCloudflareCommerceStore } from "../src/runtime/cloudflare-commerce-store";
+import { createSqliteCommerceStore } from "./support/sqlite/runtime/sqlite-commerce-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
 
 const NOW = 1_800_000_000_000;
@@ -101,7 +101,7 @@ test("seller lifecycle prioritises suspension, onboarding, review, and provider 
 test("eligible Premium seller can onboard, accept versioned terms, and reach approval", async () => {
   const database = await createTestDatabase();
   try {
-    const store = createCloudflareCommerceStore(database.d1);
+    const store = createSqliteCommerceStore(database.d1);
     const provider = new FakeSellerProvider();
     const premium = new MutablePremiumReader(true);
     let id = 0;
@@ -180,7 +180,7 @@ test("eligible Premium seller can onboard, accept versioned terms, and reach app
 test("Premium, provider capability, and suspension failures block new purchases only", async () => {
   const database = await createTestDatabase();
   try {
-    const store = createCloudflareCommerceStore(database.d1);
+    const store = createSqliteCommerceStore(database.d1);
     const provider = new FakeSellerProvider();
     const premium = new MutablePremiumReader(true);
     const service = new CommerceSellerLifecycleService(

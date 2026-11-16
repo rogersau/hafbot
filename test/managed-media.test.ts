@@ -14,7 +14,7 @@ import {
 import { createPublicRoutes } from "../src/routes/public-routes";
 import { createAdminApiHandler } from "./helpers/admin-api";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
-import { createCloudflarePublicManagedMediaStore } from "../src/runtime/cloudflare-public-managed-media-store";
+import { createSqlitePublicManagedMediaStore } from "./support/sqlite/runtime/sqlite-public-managed-media-store";
 import { createPortablePublicManagedMediaStore } from "../src/runtime/portable-blob-stores";
 
 const IMAGE_ID = "11111111-1111-4111-8111-111111111111";
@@ -22,10 +22,10 @@ const PNG_BASE64 = "iVBORw0KGgo=";
 
 test("managed media stores release downloads rejected by the visibility boundary", async () => {
   for (const [runtime, errored] of [
-    ["cloudflare", false],
-    ["portable", false],
-    ["cloudflare", true],
-    ["portable", true],
+    ["sqlite", false],
+    ["native", false],
+    ["sqlite", true],
+    ["native", true],
   ] as const) {
     let cancelled = false;
     const body = new ReadableStream<Uint8Array>({
@@ -38,8 +38,8 @@ test("managed media stores release downloads rejected by the visibility boundary
     });
     const metadata = { visibility: "private", contentClass: "ticket-transcript" };
     const store =
-      runtime === "cloudflare"
-        ? createCloudflarePublicManagedMediaStore({
+      runtime === "sqlite"
+        ? createSqlitePublicManagedMediaStore({
             bucket: { get: async () => ({ body, customMetadata: metadata }) } as never,
             guildEntitlements: {} as never,
             guildR2Objects: {} as never,

@@ -1,9 +1,7 @@
+import { createPostgresGatewayEventOperationStore } from "../runtime/postgres/postgres-gateway-event-operation-store";
 import type { PostgresDatabaseCapability } from "../runtime/postgres/postgres-capability";
 import type { RuntimeStores } from "../runtime/app-types";
-import {
-  createGatewayEventOperationRunner,
-  createGatewayEventOperationStore,
-} from "../runtime/gateway-event-idempotency";
+import { createGatewayEventOperationRunner } from "../runtime/gateway-event-idempotency";
 import { hasInteractionAdminAccess } from "../runtime/interaction-admin-access";
 import { GuildServicePolicy } from "../runtime/guild-service-policy";
 import { CommunityToolsStore } from "./store";
@@ -13,13 +11,12 @@ import { createCommunityDiscord } from "./discord";
 
 export function createCommunityToolsRuntime(options: {
   database: PostgresDatabaseCapability;
-  d1: D1Database;
   stores: RuntimeStores;
   resolveGuildBotIdentity: (guildId: string) => Promise<{ token: string; userId: string }>;
   twitchClientId?: string;
   twitchClientSecret?: string;
 }) {
-  const operations = createGatewayEventOperationStore(options.d1);
+  const operations = createPostgresGatewayEventOperationStore(options.database);
   const policy = new GuildServicePolicy(options.stores.guildServiceSuspensions);
   return new CommunityToolsService({
     store: new CommunityToolsStore(options.database),

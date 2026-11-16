@@ -10,6 +10,7 @@ import {
   parseBlocklistEmojis,
 } from "../src/blocklist";
 import { BlocklistService } from "../src/services/blocklist-service";
+import { createProductionRuntimeStores } from "./support/production-runtime-stores";
 
 import assert from "node:assert/strict";
 // @ts-ignore -- The worker typecheck config omits Node built-ins and full node:test types conflict with Workers globals; tsconfig.tests provides the runtime test types.
@@ -123,12 +124,10 @@ test("getBlocklistFromStore reads the latest config from the moderation store", 
 
   assert.deepEqual(actual, expected);
 });
-test("getGuildBlocklist falls back to an enabled empty state for unknown guilds", async () => {
-  const service = new BlocklistService({
-    readConfig: async () => ({ botUserId: "bot", guilds: {} }),
-    readGuildConfig: async () => ({ botUserId: "bot", guilds: {} }),
-    applyGuildEmojiMutation: async () => ({ botUserId: "bot", guilds: {} }),
-  });
+test("getGuildBlocklist returns an enabled empty state for unknown guilds", async (t) => {
+  const fixture = createProductionRuntimeStores({ botUserId: "bot" });
+  t.after(() => fixture.close());
+  const service = new BlocklistService(fixture.stores.blocklist);
 
   const result = await service.getGuildBlocklist("missing-guild");
 

@@ -390,7 +390,6 @@ function createStores(options: { tier: "free" | "premium"; writes?: unknown[] })
       listDueLfgRenewalReminders: async () => [],
     },
     playerCount: { listPlayerCountServers: async () => [] },
-    steamLink: { readSteamLinkConfig: async () => null },
     appConfig: {},
     guildRbac: {},
     webhookProxy: {},

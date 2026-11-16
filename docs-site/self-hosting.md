@@ -9,11 +9,11 @@ You can run HAF Bot on a Linux Docker host using your own Discord application, P
 and private S3-compatible or Azure Blob object storage. Cloudflare Tunnel can publish the HTTPS
 application without opening an inbound application port on your host.
 
-This initial public release provides reviewed source and a build-from-source Docker path.
-No public container image is published with this release. You do not need access to the hosted
-service's private registry or infrastructure.
+Build from reviewed source or use a tested Linux amd64 container archive from an automated
+[GitHub release](https://github.com/rogersau/hafbot/releases). The initial `v1.0.0` release contains
+source only. You do not need access to the hosted service's private registry or infrastructure.
 
-Automated tests cover the source build, PostgreSQL contracts, migrations and local container
+Automated tests cover the source build, PostgreSQL contracts, fresh schema initialization and local container
 readiness. A fresh independent live Discord/OAuth installation rehearsal has not been completed.
 Live signed ingress, Gateway/commands, Tunnel/private-object integration and an end-to-end
 encrypted backup/isolated restore rehearsal remain unverified for an independent installation.
@@ -30,7 +30,7 @@ remains available for communities that want HAF to operate it.
 | ------------------------------------ | --------------------------------------------- | ------------------------------------------------------------------ |
 | Docker + Cloudflare Tunnel           | Supported starting point                      | Your host runs Node.js and PostgreSQL; Cloudflare provides ingress |
 | Docker + another HTTPS reverse proxy | Same runtime; configure your proxy separately | Your host or managed PostgreSQL                                    |
-| Entire app on Cloudflare Workers/D1  | Legacy, not the current release target        | Requires separate engineering and release validation               |
+| Entire app on Cloudflare Workers/D1  | Not supplied by this release                  | Requires separate engineering and release validation               |
 | Cloudflare Containers                | No deployment adapter supplied                | See [Cloudflare deployment boundaries](/deploy-cloudflare)         |
 
 ## Prerequisites
@@ -81,7 +81,7 @@ chmod 600 .env
 Replace every required placeholder. Do not commit `.env` or paste its contents into an issue.
 
 Set `HAF_DEPLOYMENT_MODE=self-hosted` to enable core features without a hosted HAF subscription.
-The backward-compatible default is `hosted`; use that only for the hosted subscription service.
+The default is `hosted`; select it explicitly only when operating the subscription service.
 
 Identify your installation with `SELF_HOSTED_OPERATOR_NAME` and set
 `SELF_HOSTED_SUPPORT_URL`, `SELF_HOSTED_TERMS_URL` and `SELF_HOSTED_PRIVACY_URL` to your own
@@ -137,19 +137,27 @@ docker compose -f compose.yaml -f compose.source.yaml up -d --wait
 This builds the production Dockerfile, including the dashboard, landing pages, and Node runtime.
 Record the source commit and resulting image ID. Use these Compose commands for source builds.
 
-### Use a tested registry image
+### Use a tested release image
 
-The initial release supplies no public registry image. If you operate your own registry, build
-the reviewed source, run its validation, push the result and set `HAF_IMAGE` to that immutable
-digest. Keep registry credentials private. The hosted service's images are separately controlled.
+Download the container archive, `image-id.txt` and `SHA256SUMS` from the same automated release.
+Verify the downloaded files with `sha256sum --ignore-missing -c SHA256SUMS`, then load the archive:
+
+```sh
+# Replace VERSION with the chosen release, for example v1.0.3.
+docker load --input hafbot-image-VERSION-linux-amd64.tar.gz
+```
+
+Set `HAF_IMAGE=hafbot:VERSION` in `.env`, using the chosen version. The archive contains the exact
+production image that passed CI's container smoke test. Releases currently supply Linux amd64
+images; use a source build for another architecture. Record the image ID from `image-id.txt`.
 
 ```sh
 docker compose config --quiet
-docker compose pull
 docker compose up -d --wait
 ```
 
-Both paths apply PostgreSQL migrations on startup with `HAF_RUN_MIGRATIONS=true`. Inspect container
+Both paths initialize the current public schema on an empty PostgreSQL database. No inherited
+upgrade history is applied. Inspect container
 status and sanitized logs if startup fails. `docker compose config --quiet` validates configuration
 without printing the resolved secrets.
 
@@ -205,9 +213,9 @@ dashboard's authenticated responses or private object content.
 
 ## 5. Activate and verify
 
-For a fresh installation, confirm you are using a new database and your own bot identity. For a
-migration, stop the previous deployment's Gateway and mutable roles before activating this one.
-Database leases cannot coordinate two installations using different databases.
+Use an empty PostgreSQL database and your own bot identity. This public release initializes the
+current schema and provides no data conversion or upgrade runner. Database leases coordinate
+processes using the same database.
 
 1. Set `HAF_GATEWAY_ENABLED=true`, recreate the app using your selected Compose files, and verify
    Gateway ownership with authenticated `/internal/status`. Keep maintenance enabled.
@@ -262,8 +270,8 @@ a backup. Do not reuse the production bot identity during a restore drill.
 
 Before updating, record the previous image and take a verified backup. Pull a tested digest, or
 build a new reviewed commit under a new local tag, and recreate the app with the same Compose files.
-Verify readiness, Gateway ownership, jobs, scheduler, OAuth and a safe Discord workflow. Forward
-migrations can change data; reverting an image does not reverse them. Keep the previous image and
-use the release's migration/recovery guidance if the old application cannot read the new schema.
+Verify readiness, Gateway ownership, jobs, scheduler, OAuth and a safe Discord workflow. The
+application expects the current installation schema. This release contains no schema upgrade
+mechanism; a backup restore must use the matching application release.
 
 See `infra/self-host/README.md` for the generic Compose layout.

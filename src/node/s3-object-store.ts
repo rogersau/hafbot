@@ -21,7 +21,6 @@ import {
   type ObjectStoreHead,
   type ObjectStorePutOptions,
 } from "../runtime/object-store";
-import { decodeR2WorkersMetadata } from "./r2-s3-metadata";
 
 export interface S3ObjectStoreEnvironment {
   NODE_ENV?: string;
@@ -31,13 +30,8 @@ export interface S3ObjectStoreEnvironment {
   S3_FORCE_PATH_STYLE?: string;
 }
 
-export interface S3ObjectStoreOptions {
-  metadataReadMode?: "portable" | "r2-workers";
-}
-
 export function createS3ObjectStoreFromEnvironment(
   environment: S3ObjectStoreEnvironment,
-  options: S3ObjectStoreOptions = {},
 ): ObjectStore {
   const bucket = environment.S3_BUCKET_NAME?.trim();
   const region = environment.S3_REGION?.trim();
@@ -51,14 +45,10 @@ export function createS3ObjectStoreFromEnvironment(
     forcePathStyle: environment.S3_FORCE_PATH_STYLE === "true",
     ...(endpoint ? { endpoint } : {}),
   };
-  return createS3ObjectStore(new S3Client(config), bucket, options);
+  return createS3ObjectStore(new S3Client(config), bucket);
 }
 
-export function createS3ObjectStore(
-  client: Pick<S3Client, "send">,
-  bucket: string,
-  storeOptions: S3ObjectStoreOptions = {},
-): ObjectStore {
+export function createS3ObjectStore(client: Pick<S3Client, "send">, bucket: string): ObjectStore {
   if (!bucket.trim()) throw new Error("S3 bucket name is required.");
   return {
     async put(key, body, options = {}) {
@@ -97,12 +87,7 @@ export function createS3ObjectStore(
           body: toWebStream(response.Body),
           sizeBytes: response.ContentLength ?? 0,
           contentType: response.ContentType ?? null,
-          metadata: decodeS3Metadata(
-            response.Metadata,
-            response.MissingMeta,
-            storeOptions.metadataReadMode,
-            key,
-          ),
+          metadata: decodeS3Metadata(response.Metadata, response.MissingMeta, key),
           etag: response.ETag ?? null,
           uploadedAt: response.LastModified ?? null,
         };
@@ -120,12 +105,7 @@ export function createS3ObjectStore(
           key,
           sizeBytes: response.ContentLength ?? 0,
           contentType: response.ContentType ?? null,
-          metadata: decodeS3Metadata(
-            response.Metadata,
-            response.MissingMeta,
-            storeOptions.metadataReadMode,
-            key,
-          ),
+          metadata: decodeS3Metadata(response.Metadata, response.MissingMeta, key),
           etag: response.ETag ?? null,
           uploadedAt: response.LastModified ?? null,
         };
@@ -175,16 +155,14 @@ export function createS3ObjectStore(
 function decodeS3Metadata(
   metadata: Record<string, string> | undefined,
   missingMeta: number | undefined,
-  mode: S3ObjectStoreOptions["metadataReadMode"] = "portable",
   key: string,
 ): Record<string, string> {
-  if (mode !== "r2-workers") return decodePortableObjectMetadata(metadata);
   if (missingMeta !== undefined && missingMeta > 0) {
     throw new Error(
-      `R2 omitted ${missingMeta} custom metadata field(s) for ${key} from its S3 response.`,
+      `S3 omitted ${missingMeta} custom metadata field(s) for ${key}; refusing to read incomplete metadata.`,
     );
   }
-  return decodeR2WorkersMetadata(metadata);
+  return decodePortableObjectMetadata(metadata);
 }
 
 function requireBodySize(body: ObjectStoreBody, options: ObjectStorePutOptions): number {

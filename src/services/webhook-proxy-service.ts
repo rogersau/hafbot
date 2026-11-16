@@ -51,7 +51,7 @@ export interface WebhookProxyServiceOptions {
   persistDeliveryLogs?: boolean;
   guildEntitlements?: GuildEntitlementStore;
   isGuildSuspended?: (guildId: string) => Promise<boolean>;
-  credentialService?: WebhookCredentialService;
+  credentialService?: Pick<WebhookCredentialService, "resolve">;
   operationalIncidents?: OperationalIncidentReporter;
   configCache?: WebhookProxyConfigCache;
 }
@@ -64,43 +64,27 @@ export interface SteamBanLookupQueue {
   send(message: SteamBanLookupQueueMessage): Promise<unknown>;
 }
 
-export type SteamBanLookupQueueMessage =
-  | {
-      version: 2;
-      guildId: string;
-      publicId: string;
-      steamIds: string[];
-      notificationCredentialId: string;
-      banLookupAppIds: number[];
-    }
-  | {
-      version?: 1;
-      guildId: string;
-      steamIds: string[];
-      notificationUrl: string;
-      banLookupAppIds: number[];
-    };
+export interface SteamBanLookupQueueMessage {
+  version: 2;
+  guildId: string;
+  publicId: string;
+  steamIds: string[];
+  notificationCredentialId: string;
+  banLookupAppIds: number[];
+}
 
 export interface WebhookDeliveryTargetRef {
   destinationId: string;
   credentialId: string;
 }
 
-export type WebhookProxyDeliveryEnvelope =
-  | {
-      version: 2;
-      config: WebhookProxyDeliveryConfig;
-      destinations: readonly WebhookDeliveryTargetRef[];
-      body: string;
-      contentType: string | null;
-    }
-  | {
-      version?: 1;
-      config: WebhookProxyDeliveryConfig;
-      destinations: readonly WebhookProxyDestination[];
-      body: string;
-      contentType: string | null;
-    };
+export interface WebhookProxyDeliveryEnvelope {
+  version: 2;
+  config: WebhookProxyDeliveryConfig;
+  destinations: readonly WebhookDeliveryTargetRef[];
+  body: string;
+  contentType: string | null;
+}
 
 export interface WebhookProxyDeliveryConfig {
   guildId: string;
@@ -135,7 +119,7 @@ export class WebhookProxyService {
   private readonly persistDeliveryLogs: boolean;
   private readonly guildEntitlements?: GuildEntitlementStore;
   private readonly isGuildSuspended?: (guildId: string) => Promise<boolean>;
-  private readonly credentialService?: WebhookCredentialService;
+  private readonly credentialService?: Pick<WebhookCredentialService, "resolve">;
   private readonly operationalIncidents?: OperationalIncidentReporter;
   private readonly configCache: WebhookProxyConfigCache;
   private readonly eligibleConfigCache = new Map<
@@ -180,32 +164,23 @@ export class WebhookProxyService {
       return { publicId, acceptedDestinations: 0 };
     }
 
+    const targets = destinations.map(({ id, credentialId }) => ({
+      destinationId: id,
+      credentialId,
+    }));
     if (this.deliveryQueue) {
-      const refs = destinations.flatMap((destination) => {
-        const stored = config.source.destinationsV2?.find((entry) => entry.id === destination.id);
-        return stored ? [{ destinationId: stored.id, credentialId: stored.credentialId }] : [];
+      await this.deliveryQueue.send({
+        version: 2,
+        config: { guildId: config.source.guildId, publicId: config.source.publicId },
+        destinations: targets,
+        body: evaluation.transformedBody,
+        contentType,
       });
-      await this.deliveryQueue.send(
-        refs.length === destinations.length
-          ? {
-              version: 2,
-              config: { guildId: config.source.guildId, publicId: config.source.publicId },
-              destinations: refs,
-              body: evaluation.transformedBody,
-              contentType,
-            }
-          : {
-              config: { guildId: config.source.guildId, publicId: config.source.publicId },
-              destinations,
-              body: evaluation.transformedBody,
-              contentType,
-            },
-      );
       return { publicId, acceptedDestinations: destinations.length };
     }
 
     const delivery = Promise.all(
-      destinations.map((destination) =>
+      targets.map((destination) =>
         this.forwardWithRetry(config.source, destination, evaluation.transformedBody, contentType),
       ),
     ).then(() => undefined);
@@ -231,11 +206,7 @@ export class WebhookProxyService {
   }
 
   private async enqueueSteamBanLookups(config: WebhookProxyConfig, body: string): Promise<void> {
-    if (
-      !this.steamBanLookupQueue ||
-      !config.banLookupEnabled ||
-      (!config.banLookupCredentialId && !config.banLookupNotificationUrl)
-    ) {
+    if (!this.steamBanLookupQueue || !config.banLookupEnabled || !config.banLookupCredentialId) {
       return;
     }
 
@@ -245,23 +216,14 @@ export class WebhookProxyService {
       if (chunk.length === 0) {
         continue;
       }
-      await this.steamBanLookupQueue.send(
-        config.banLookupCredentialId
-          ? {
-              version: 2,
-              guildId: config.guildId,
-              publicId: config.publicId,
-              steamIds: chunk,
-              notificationCredentialId: config.banLookupCredentialId,
-              banLookupAppIds: config.banLookupAppIds ?? [],
-            }
-          : {
-              guildId: config.guildId,
-              steamIds: chunk,
-              notificationUrl: config.banLookupNotificationUrl!,
-              banLookupAppIds: config.banLookupAppIds ?? [],
-            },
-      );
+      await this.steamBanLookupQueue.send({
+        version: 2,
+        guildId: config.guildId,
+        publicId: config.publicId,
+        steamIds: chunk,
+        notificationCredentialId: config.banLookupCredentialId,
+        banLookupAppIds: config.banLookupAppIds,
+      });
     }
   }
 
@@ -349,7 +311,7 @@ export class WebhookProxyService {
 
   private async forwardWithRetry(
     config: WebhookProxyDeliveryConfig,
-    destination: WebhookProxyDestination | WebhookDeliveryTargetRef,
+    destination: WebhookDeliveryTargetRef,
     body: string,
     contentType: string | null,
   ): Promise<WebhookProxyDeliveryResult> {
@@ -360,11 +322,7 @@ export class WebhookProxyService {
       if (error instanceof WebhookCredentialStoreUnavailableError) {
         return { status: "retry", reasonCode: "credential_store_unavailable" };
       }
-      await this.recordWebhookFailure(
-        config,
-        destinationIdOf(destination),
-        "credential_unavailable",
-      );
+      await this.recordWebhookFailure(config, destination.destinationId, "credential_unavailable");
       return { status: "terminal", reasonCode: "credential_unavailable" };
     }
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
@@ -438,23 +396,20 @@ export class WebhookProxyService {
 
   private async resolveDeliveryTarget(
     config: WebhookProxyDeliveryConfig,
-    destination: WebhookProxyDestination | WebhookDeliveryTargetRef,
+    destination: WebhookDeliveryTargetRef,
   ): Promise<{ url: string; destinationId: string; fingerprint: string | null }> {
-    if ("credentialId" in destination) {
-      if (!this.credentialService) throw new Error("Credential service unavailable");
-      const resolved = await this.credentialService.resolve(destination.credentialId, {
-        kind: "proxy_destination",
-        guildId: config.guildId,
-        publicId: config.publicId,
-        destinationId: destination.destinationId,
-      });
-      return {
-        url: resolved.url,
-        destinationId: destination.destinationId,
-        fingerprint: resolved.fingerprint,
-      };
-    }
-    return { url: destination.url, destinationId: destination.id, fingerprint: null };
+    if (!this.credentialService) throw new Error("Credential service unavailable");
+    const resolved = await this.credentialService.resolve(destination.credentialId, {
+      kind: "proxy_destination",
+      guildId: config.guildId,
+      publicId: config.publicId,
+      destinationId: destination.destinationId,
+    });
+    return {
+      url: resolved.url,
+      destinationId: destination.destinationId,
+      fingerprint: resolved.fingerprint,
+    };
   }
 
   private async logAttempt(
@@ -568,10 +523,6 @@ function combineWebhookDeliveryResults(
   if (retry) return retry;
   const terminal = outcomes.find((outcome) => outcome.status === "terminal");
   return terminal ?? { status: "complete" };
-}
-
-function destinationIdOf(destination: WebhookProxyDestination | WebhookDeliveryTargetRef): string {
-  return "destinationId" in destination ? destination.destinationId : destination.id;
 }
 
 function statusFamily(status: number | undefined): "2xx" | "4xx" | "5xx" | "network" | "unknown" {

@@ -3,13 +3,13 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { createCloudflareServerLevelCredentialStore } from "../src/runtime/cloudflare-server-level-credential-store";
-import { createCloudflareServerLevelStore } from "../src/runtime/cloudflare-server-level-store";
+import { createSqliteServerLevelCredentialStore } from "./support/sqlite/runtime/sqlite-server-level-credential-store";
+import { createSqliteServerLevelStore } from "./support/sqlite/runtime/sqlite-server-level-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("Server Levels persists opt-in configuration and enforces five Configured Game Servers", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     await store.upsertConfig({
       guildId: "guild-1",
@@ -66,7 +66,7 @@ test("Server Levels persists opt-in configuration and enforces five Configured G
 
 test("Server Levels durably deduplicates provider deliveries before acknowledgement", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     await store.upsertConfig({
       guildId: "guild-1",
@@ -134,7 +134,7 @@ test("Server Levels durably deduplicates provider deliveries before acknowledgem
 
 test("Server Levels compacts old interval facts without changing lifetime progression", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     await store.appendAward({
       awardId: "interval-old",
@@ -195,7 +195,7 @@ test("Server Levels compacts old interval facts without changing lifetime progre
 
 test("Server Levels processing leases serialize a Configured Game Server and expire safely", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     assert.equal(await store.acquireProcessingLease?.("server-1", "lease-a", 100, 200), true);
     assert.equal(await store.acquireProcessingLease?.("server-1", "lease-b", 150, 250), false);
@@ -210,7 +210,7 @@ test("Server Levels processing leases serialize a Configured Game Server and exp
 
 test("Server Levels configured-server pagination has a stable complete ordering", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     for (const [guildId, serverId] of [
       ["guild-1", "server-b"],
@@ -252,7 +252,7 @@ test("Server Levels configured-server pagination has a stable complete ordering"
 
 test("Server Levels scopes presence deletion to the owning Guild", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     await store.createConfiguredGameServer({
       id: "server-1",
@@ -299,7 +299,7 @@ test("Server Levels scopes presence deletion to the owning Guild", async () => {
 
 test("Server Levels announcement delivery state is idempotent and member erasure is complete", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     await store.appendAward({
       awardId: "award-1",
@@ -370,7 +370,7 @@ test("Server Levels announcement delivery state is idempotent and member erasure
 
 test("Server Levels projects concurrent awards once and floors negative adjustments at zero", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   const award = (awardId: string, xpUnits: number, createdAtMs: number) => ({
     awardId,
     guildId: "guild-1",
@@ -428,7 +428,7 @@ test("Server Levels projects concurrent awards once and floors negative adjustme
 
 test("Server Levels purges Guild data only after the uninstall retention deadline", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     await store.upsertConfig({
       guildId: "guild-1",
@@ -448,7 +448,7 @@ test("Server Levels purges Guild data only after the uninstall retention deadlin
 
 test("Server Levels purge rechecks the removal marker before deleting a restored Guild", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     await store.upsertConfig({
       guildId: "guild-restored",
@@ -493,8 +493,8 @@ test("Server Levels purge rechecks the removal marker before deleting a restored
 
 test("configured-server deletion atomically removes every owned credential", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
-  const credentials = createCloudflareServerLevelCredentialStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
+  const credentials = createSqliteServerLevelCredentialStore(database.d1);
   try {
     await store.createConfiguredGameServer({
       id: "server-delete",

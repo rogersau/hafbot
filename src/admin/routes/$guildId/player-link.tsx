@@ -13,8 +13,8 @@ export const Route = createGuildRoute<PlayerLinkLoaderData>({
   path: "player-link",
   loader: loadPlayerLinkRoute,
   page: {
-    load: () => import("../../components/admin-steam-link-page"),
-    exportName: "AdminSteamLinkPage",
+    load: () => import("../../components/admin-platform-link-page"),
+    exportName: "AdminPlatformLinkPage",
   },
   validateSearch: (search) => playerLinkSearchSchema.parse(search),
   loaderDeps: ({ search }) => {

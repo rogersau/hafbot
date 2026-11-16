@@ -8,7 +8,6 @@ import { createBillingCatalog } from "../src/runtime/billing/catalog";
 import {
   createBillingOwnerSync,
   BillingOwnerSyncBusyError,
-  projectOwnerState,
   reconcileAllBillingOwners,
   type BillingSyncStore,
   type StripeOwnerStateReader,
@@ -20,11 +19,7 @@ import type {
   StripeSubscriptionState,
 } from "../src/runtime/billing/types";
 
-const catalog = createBillingCatalog({
-  founderPremiumMonthlyPriceId: "price_fpm",
-  founderPremiumYearlyPriceId: "price_fpy",
-  founderPremiumPlusMonthlyPriceId: "price_fppm",
-  founderPremiumPlusYearlyPriceId: "price_fppy",
+const catalogConfig = {
   premiumMonthlyPriceId: "price_pm",
   premiumMonthlyProductId: "prod_p",
   premiumYearlyPriceId: "price_py",
@@ -33,7 +28,8 @@ const catalog = createBillingCatalog({
   premiumPlusMonthlyProductId: "prod_pp",
   premiumPlusYearlyPriceId: "price_ppy",
   premiumPlusYearlyProductId: "prod_pp",
-});
+};
+const catalog = createBillingCatalog(catalogConfig);
 
 test("full-owner sync projects every Stripe lifecycle state through the catalog", async () => {
   const cases: Array<
@@ -72,92 +68,48 @@ test("missing and unknown catalog observations fail closed", async () => {
   assert.equal(unknown.plan, "free");
 });
 
-test("paid zero-value invoices retain catalogue plan access without awarding a Founder Place", async () => {
-  for (const entry of catalog.values()) {
-    const projected = await run(
-      ownerState([
-        {
-          ...subscription("active"),
-          priceId: entry.priceId,
-          productId: entry.productId,
-          livemode: true,
-          latestInvoicePaid: true,
-          latestInvoiceAmountPaid: 0,
-          latestInvoiceBillingReason: "subscription_create",
-        },
-      ]),
-    );
-    assert.equal(projected.ownerId, "owner");
-    assert.equal(projected.customerId, "cus_1");
-    assert.equal(projected.status, "active");
-    assert.equal(projected.plan, entry.plan);
-    assert.equal(projected.frequency, entry.frequency);
-    assert.equal(projected.quarantineReason, null);
-    assert.equal(projected.founderAwardedAtMs, null);
+test("private retired prices are unknown to public subscription reconciliation", async () => {
+  for (const priceId of ["price_fpm", "price_legacy_fpy", "price_legacy_fppy"]) {
+    const projected = await run(ownerState([{ ...subscription("active"), priceId }]));
+    assert.equal(projected.status, "quarantined");
+    assert.equal(projected.quarantineReason, "unknown_catalog");
+    assert.equal(projected.plan, "free");
   }
 });
 
-test("Founder Places require a successful positive first live payment and survive non-terminal lifecycle changes", () => {
-  const founder = subscription("active");
-  founder.priceId = "price_fpm";
-  founder.livemode = true;
-  founder.latestInvoicePaid = true;
-  founder.latestInvoiceAmountPaid = 499;
-  founder.latestInvoiceBillingReason = "subscription_create";
-  const awarded = projectOwnerState("owner", ownerState([founder]), catalog);
-  assert.equal(awarded.pricingCohort, "founder");
-  assert.equal(awarded.founderAwardedAtMs, 1_000);
-
-  const changed = { ...founder, priceId: "price_fpy", status: "past_due" as const };
-  delete changed.latestInvoicePaid;
-  delete changed.latestInvoiceAmountPaid;
-  const preserved = projectOwnerState("owner", ownerState([changed]), catalog, awarded);
-  assert.equal(preserved.pricingCohort, "founder");
-  assert.equal(preserved.founderAwardedAtMs, 1_000);
-
-  const cancelled = projectOwnerState(
-    "owner",
-    ownerState([{ ...changed, status: "canceled", cancelledAtMs: 2_000 }]),
-    catalog,
-    preserved,
-  );
-  assert.equal(cancelled.pricingCohort, null);
-  assert.equal(cancelled.founderAwardedAtMs, null);
-
-  for (const disqualified of [
-    { livemode: false, latestInvoicePaid: true, latestInvoiceAmountPaid: 499 },
-    { livemode: true, latestInvoicePaid: true, latestInvoiceAmountPaid: 0 },
-    { livemode: true, latestInvoicePaid: false, latestInvoiceAmountPaid: 499 },
-    {
-      livemode: true,
-      latestInvoicePaid: true,
-      latestInvoiceAmountPaid: 499,
-      latestInvoiceBillingReason: "subscription_cycle",
-    },
-  ]) {
-    const projected = projectOwnerState(
-      "owner",
-      ownerState([{ ...founder, ...disqualified }]),
-      catalog,
-    );
-    assert.equal(projected.founderAwardedAtMs, null);
+test("owner sync recognizes reviewed yearly aliases without repricing and quarantines unknown products", async () => {
+  const historicalCatalog = createBillingCatalog({
+    ...catalogConfig,
+    historicalPricesJson: JSON.stringify([
+      {
+        priceId: "price_historical_plus_yearly",
+        productId: "prod_historical_plus",
+        plan: "premium_plus",
+        frequency: "yearly",
+      },
+    ]),
+  });
+  for (const [priceId, productId, recognized] of [
+    ["price_ppy", "prod_pp", true],
+    ["price_historical_plus_yearly", "prod_historical_plus", true],
+    ["price_historical_plus_yearly", "prod_pp", false],
+    ["price_unknown", "prod_historical_plus", false],
+  ] as const) {
+    const store = new MemoryBillingSyncStore();
+    const sync = createBillingOwnerSync({
+      stripe: new FakeStripe(ownerState([{ ...subscription("active"), priceId, productId }])),
+      store,
+      catalog: historicalCatalog,
+    });
+    const result = await sync({ ownerId: "owner", customerId: "cus_1", source: "operator" });
+    assert.equal(result.priceId, priceId);
+    assert.equal(result.productId, productId);
+    assert.equal(result.plan, recognized ? "premium_plus" : "free");
+    assert.equal(result.frequency, recognized ? "yearly" : null);
+    assert.equal(result.quarantineReason, recognized ? null : "unknown_catalog");
+    assert.equal(result.status, recognized ? "active" : "quarantined");
+    assert.equal((await sync({ ownerId: "owner", source: "scheduled" })).priceId, priceId);
   }
-});
-
-test("Founder TEST reconciliation repeatedly retains plan access without awarding a live Founder place", () => {
-  const testSubscription = {
-    ...subscription("active"),
-    priceId: "price_fpm",
-    livemode: false,
-    latestInvoicePaid: true,
-    latestInvoiceAmountPaid: 499,
-    latestInvoiceBillingReason: "subscription_create",
-  };
-  const initial = projectOwnerState("owner", ownerState([testSubscription]), catalog);
-  const repeated = projectOwnerState("owner", ownerState([testSubscription]), catalog, initial);
-  assert.equal(repeated.plan, "premium");
-  assert.equal(repeated.pricingCohort, null);
-  assert.equal(repeated.founderAwardedAtMs, null);
 });
 
 test("quarantine preserves only established access and recovers from an unambiguous catalog match", async () => {

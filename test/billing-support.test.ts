@@ -101,7 +101,9 @@ test("Billing summary includes the validated display Price catalogue", async () 
   const body = (await response?.json()) as {
     prices: Array<{ formattedAmount: string }>;
   };
+  assert.equal(response?.status, 200);
   assert.equal(body.prices[0]?.formattedAmount, "$4.99");
+  assert.equal(Object.hasOwn(body, "founderAdmission"), false);
 });
 
 test("Billing Support authorization is freshly checked and broad admin sessions do not grant access", async () => {

@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -199,7 +200,7 @@ for (const stale of [false, true]) {
         if (path === "/admin/api/tickets/resources") return resourcesResponse();
         if (path === "/admin/api/clans/requests/review") {
           return stale
-            ? Response.json({ error: "Request revision changed." }, { status: 409 })
+            ? adminErrorResponse("Request revision changed.", 409)
             : Response.json({ ok: true });
         }
         if (path === "/admin/api/clans") return Response.json(latest);
@@ -349,7 +350,7 @@ for (const staleReview of [false, true]) {
         }
         if (path === "/admin/api/clans/requests/review") {
           return staleReview
-            ? Response.json({ error: "Request revision changed." }, { status: 409 })
+            ? adminErrorResponse("Request revision changed.", 409)
             : Response.json({ ok: true });
         }
         assert.equal(path, "/admin/api/clans");
@@ -483,7 +484,7 @@ test("Server Levels toggles only saved settings, saves channel with saved enable
       writes.push(JSON.parse(String(init?.body)));
       if (failNext) {
         failNext = false;
-        return Response.json({ error: "Could not save channel." }, { status: 503 });
+        return adminErrorResponse("Could not save channel.", 503);
       }
       return Response.json({ ok: true });
     };
@@ -601,15 +602,11 @@ test("feedback dismissal and failed send preserve draft and original context; su
       submissions.push(JSON.parse(String(init?.body)));
       if (failNext) {
         failNext = false;
-        return Response.json(
-          {
-            error: "Try later.",
-            code: "service_unavailable",
-            correlationId: "failed-send",
-            retryable: true,
-          },
-          { status: 503 },
-        );
+        return adminErrorResponse("Try later.", 503, {
+          code: "service_unavailable",
+          correlationId: "failed-send",
+          retryable: true,
+        });
       }
       return Response.json({ ok: true, reference: "FB-123", receivedAtMs: 1 }, { status: 201 });
     };
@@ -736,12 +733,8 @@ test(
           defaultRedirectTarget: null,
           guildDirectory: [],
           guildLookupError: null,
-          workspaces: [],
-          workspacesLoading: false,
-          workspaceLookupError: null,
           guildResourcesRefreshVersion: 0,
           onSelectedGuildChange: () => {},
-          onSelectedWorkspaceChange: () => {},
           refreshGuildDirectory: async () => {},
           onRefresh: async () => {},
           playstationLinkEnabled: true,

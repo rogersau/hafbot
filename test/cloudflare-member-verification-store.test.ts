@@ -5,13 +5,13 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareMemberVerificationStore } from "../src/runtime/cloudflare-member-verification-store";
+import { createSqliteMemberVerificationStore } from "./support/sqlite/runtime/sqlite-member-verification-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 import type { MemberVerificationConfig } from "../src/types";
 
 test("MemberVerificationStore persists and reads verification attempts", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMemberVerificationStore(database as unknown as D1Database);
+  const store = createSqliteMemberVerificationStore(database as unknown as D1Database);
   await store.upsertConfig({
     guildId: "guild-1",
     enabled: true,
@@ -52,7 +52,7 @@ test("MemberVerificationStore persists and reads verification attempts", async (
 
 test("MemberVerificationStore updateVerificationAttempt records usedAtMs", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMemberVerificationStore(database as unknown as D1Database);
+  const store = createSqliteMemberVerificationStore(database as unknown as D1Database);
 
   const attempt = {
     id: "22222222-2222-2222-2222-222222222222",
@@ -77,7 +77,7 @@ test("MemberVerificationStore updateVerificationAttempt records usedAtMs", async
 
 test("MemberVerificationStore deleteVerificationAttempt removes the attempt", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMemberVerificationStore(database as unknown as D1Database);
+  const store = createSqliteMemberVerificationStore(database as unknown as D1Database);
 
   const attempt = {
     id: "33333333-3333-3333-3333-333333333333",
@@ -98,7 +98,7 @@ test("MemberVerificationStore deleteVerificationAttempt removes the attempt", as
 
 test("MemberVerificationStore listActiveVerificationAttempts excludes expired attempts", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMemberVerificationStore(database as unknown as D1Database);
+  const store = createSqliteMemberVerificationStore(database as unknown as D1Database);
 
   const activeAttempt = {
     id: "44444444-4444-4444-4444-444444444444",
@@ -130,7 +130,7 @@ test("MemberVerificationStore listActiveVerificationAttempts excludes expired at
 
 test("MemberVerificationStore reads verification_method from config", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMemberVerificationStore(database as unknown as D1Database);
+  const store = createSqliteMemberVerificationStore(database as unknown as D1Database);
   const config: MemberVerificationConfig = {
     guildId: "guild-1",
     enabled: true,
@@ -156,7 +156,7 @@ test("MemberVerificationStore reads verification_method from config", async () =
 
 test("MemberVerificationStore normalizes unknown verification_method to discord-button", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMemberVerificationStore(database as unknown as D1Database);
+  const store = createSqliteMemberVerificationStore(database as unknown as D1Database);
 
   await (database as unknown as { exec: (sql: string) => Promise<void> }).exec(
     `INSERT INTO member_verification_configs (
@@ -171,7 +171,7 @@ test("MemberVerificationStore normalizes unknown verification_method to discord-
 
 test("MemberVerificationStore tryClaimVerificationAttempt is atomic and one-use", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMemberVerificationStore(database as unknown as D1Database);
+  const store = createSqliteMemberVerificationStore(database as unknown as D1Database);
 
   const attempt = {
     id: "66666666-6666-6666-6666-666666666666",
@@ -197,7 +197,7 @@ test("MemberVerificationStore tryClaimVerificationAttempt is atomic and one-use"
 
 test("MemberVerificationStore durably limits manual DMs and resets the window", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMemberVerificationStore(database as unknown as D1Database);
+  const store = createSqliteMemberVerificationStore(database as unknown as D1Database);
   const input = {
     guildId: "guild-1",
     scopeType: "target" as const,
@@ -223,7 +223,7 @@ test("MemberVerificationStore durably limits manual DMs and resets the window", 
 
 test("MemberVerificationStore rejects expiry at the atomic claim boundary", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareMemberVerificationStore(database as unknown as D1Database);
+  const store = createSqliteMemberVerificationStore(database as unknown as D1Database);
   const attempt = {
     id: "77777777-7777-7777-7777-777777777777",
     guildId: "guild-1",

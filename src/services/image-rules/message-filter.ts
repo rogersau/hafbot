@@ -1,7 +1,5 @@
 import type { Env } from "../../env";
 import type { AuditEventId } from "../../types";
-import { createCloudflareImageRulesStore } from "../../runtime/cloudflare-image-rules-store";
-import { createCloudflareGuildAuditLogStore } from "../../runtime/cloudflare-guild-audit-log-store";
 import type { ImageRulesConfig, DiscordMessageCreate, ImageRulesModQueueItem } from "../../types";
 import {
   allowUserMentions,
@@ -10,14 +8,8 @@ import {
   suppressMentions,
   type CreateChannelMessageInput,
 } from "../../discord/messages";
-import {
-  createChannelMessage,
-  createReaction,
-  createUserDmMessage,
-  deleteChannelMessage,
-} from "../../discord";
-import { postMessageAuditEvent, type MessageAuditEventData } from "../guild-audit-log-service";
-import { classifyImage, type ClassifyImageError, type ImageRulesConfidences } from "./classifier";
+import type { MessageAuditEventData } from "../guild-audit-log-service";
+import type { ClassifyImageError, ImageRulesConfidences } from "./classifier";
 import { parseImageRulesEnv, type ImageRulesClassifierEnv } from "./env";
 import {
   selectImagesForClassification,
@@ -26,12 +18,9 @@ import {
   type ClassifiableImage,
   type ImageRulesVerdict,
 } from "./verdict";
-import { createComponentIdSigner } from "../../security/component-id-signer";
-import { signSensitiveMessageComponentIds } from "../../security/sensitive-component-ids";
 
 type ImageRulesEnv = Pick<
   Env,
-  | "HAF_DB"
   | "BOT_USER_ID"
   | "DISCORD_BOT_TOKEN"
   | "IMAGE_RULES_API_BASE_URL"
@@ -41,8 +30,6 @@ type ImageRulesEnv = Pick<
   | "IMAGE_RULES_MAX_IMAGE_DIMENSION"
   | "IMAGE_RULES_TIMEOUT_MS"
   | "IMAGE_RULES_MAX_RETRIES"
-  | "COMPONENT_ID_SIGNING_SECRET"
-  | "COMPONENT_ID_PREVIOUS_SIGNING_SECRET"
 >;
 
 export interface ImageRulesMessageFilterDependencies {
@@ -78,48 +65,9 @@ export interface ImageRulesMessageFilterDependencies {
 export async function moderateImageRulesMessageCreate(
   message: DiscordMessageCreate | null,
   env: ImageRulesEnv,
-  partialDependencies: Partial<ImageRulesMessageFilterDependencies> = {},
-  resolveBotDisplayName?: (guildId: string) => Promise<string>,
+  dependencies: ImageRulesMessageFilterDependencies,
 ): Promise<void> {
-  const componentIdSigner = env.COMPONENT_ID_SIGNING_SECRET
-    ? createComponentIdSigner({
-        currentSecret: env.COMPONENT_ID_SIGNING_SECRET,
-        previousSecret: env.COMPONENT_ID_PREVIOUS_SIGNING_SECRET,
-      })
-    : undefined;
-  const dependencies: ImageRulesMessageFilterDependencies = {
-    readConfig: partialDependencies.readConfig ?? ((guildId) => readConfig(guildId, env)),
-    resolveBotDisplayName:
-      resolveBotDisplayName ?? partialDependencies.resolveBotDisplayName ?? (async () => "HAF Bot"),
-    classifyImage: partialDependencies.classifyImage ?? classifyImage,
-    deleteChannelMessage: partialDependencies.deleteChannelMessage ?? deleteChannelMessage,
-    createReaction: partialDependencies.createReaction ?? createReaction,
-    createUserDmMessage: partialDependencies.createUserDmMessage ?? createUserDmMessage,
-    postAuditEvent:
-      partialDependencies.postAuditEvent ?? ((eventId, data) => postAuditEvent(eventId, data, env)),
-    createModQueueItem:
-      partialDependencies.createModQueueItem ??
-      (async (item) => createCloudflareImageRulesStore(env.HAF_DB!).createModQueueItem(item)),
-    setModQueueItemQueueMessage:
-      partialDependencies.setModQueueItemQueueMessage ??
-      (async (itemId, queueChannelId, queueMessageId, nowMs) =>
-        createCloudflareImageRulesStore(env.HAF_DB!).setModQueueItemQueueMessage(
-          itemId,
-          queueChannelId,
-          queueMessageId,
-          nowMs,
-        )),
-    createChannelMessage:
-      partialDependencies.createChannelMessage ??
-      ((channelId, body, guildId) =>
-        signSensitiveMessageComponentIds(body, componentIdSigner, { guildId }).then((signed) =>
-          createChannelMessage(channelId, signed, env.DISCORD_BOT_TOKEN),
-        )),
-  };
-
-  if (!message?.guild_id || !env.HAF_DB) {
-    return;
-  }
+  if (!message?.guild_id) return;
 
   let config: ImageRulesConfig | null;
   try {
@@ -497,30 +445,6 @@ async function handleOffTopicMessage(
     },
     ...(config.dryRun && { dryRun: true }),
   });
-}
-
-async function readConfig(guildId: string, env: ImageRulesEnv): Promise<ImageRulesConfig | null> {
-  if (!env.HAF_DB) {
-    return null;
-  }
-  return createCloudflareImageRulesStore(env.HAF_DB).readConfig(guildId);
-}
-
-async function postAuditEvent(
-  eventId: AuditEventId,
-  data: MessageAuditEventData,
-  env: ImageRulesEnv,
-): Promise<void> {
-  if (!env.HAF_DB) {
-    return;
-  }
-  await postMessageAuditEvent(
-    eventId,
-    data,
-    createCloudflareGuildAuditLogStore(env.HAF_DB),
-    env.DISCORD_BOT_TOKEN,
-    env.BOT_USER_ID,
-  );
 }
 
 function isClassifierError(

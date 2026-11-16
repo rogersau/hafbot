@@ -19,7 +19,7 @@ export type ConfigurationRevisionSource =
   | "dashboard-save"
   | "restore"
   | "clone"
-  | "system-migration";
+  | "system-snapshot";
 export type ConfigurationRevisionOperation =
   | "baseline"
   | "create"
@@ -67,7 +67,7 @@ export interface ConfigurationRevisionAdapter<TCurrent, TSnapshot> {
     current: TCurrent | null,
     resourceKey: string,
   ): ConfigurationSnapshotEnvelope<TSnapshot>;
-  migrateSnapshot(
+  parseSnapshot(
     snapshot: ConfigurationSnapshotEnvelope<unknown>,
   ): ConfigurationSnapshotEnvelope<TSnapshot>;
 }
@@ -262,15 +262,12 @@ export function serializeTicketPanelConfiguration(
               required: question.required,
               validation: question.validation ?? "none",
             })),
-            autoReplyEnabled: ticketType.autoReplyEnabled ?? false,
-            autoReplyMessage: ticketType.autoReplyMessage ?? null,
             defaultTicketLinkPlatform: ticketType.defaultTicketLinkPlatform ?? null,
             responseRules: (ticketType.responseRules ?? []).map((rule) => ({
               id: rule.id,
               conditions: rule.conditions.map((condition) => ({ ...condition })),
               message: rule.message,
             })),
-            anonymousEnabled: ticketType.anonymousEnabled ?? false,
             anonymousSupportEnabled: ticketType.anonymousSupportEnabled ?? false,
             staffDiscussionThreadEnabled: ticketType.staffDiscussionThreadEnabled ?? false,
             ticketHistoryPromptVisibility: ticketType.ticketHistoryPromptVisibility ?? "off",
@@ -350,7 +347,7 @@ export async function prepareConfigurationRevisions(input: {
           operation: "baseline",
           actor: {
             actorUserId: null,
-            source: "system-migration",
+            source: "system-snapshot",
             operationId: "configurationRevision.captureBaseline",
             correlationId: input.actor.correlationId,
           },

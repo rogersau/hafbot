@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -9,9 +10,11 @@ import test from "node:test";
 
 import {
   loadBlocklistRoute,
+  loadBotDefenseRoute,
   loadEvidenceVaultRoute,
   loadGuildOverviewRoute,
   loadGuildSettingsRoute,
+  loadImageRulesRoute,
   loadManagedMessagesRoute,
   loadMemberVerificationRoute,
   loadMentionProtectionRoute,
@@ -27,19 +30,15 @@ import { createDefaultMentionProtectionConfig } from "../src/services/mention-pr
 test("Guild Settings isolates privacy read errors but preserves authorization failures", async () => {
   const originalFetch = globalThis.fetch;
   let status = 500;
-  let code = "internal_error";
+  let code: import("../src/contracts/admin/errors").AdminErrorCode = "internal_error";
   globalThis.fetch = async (input) =>
     String(input).startsWith("/admin/api/product-analytics/")
-      ? Response.json(
-          {
-            error: "Unavailable",
-            code,
-            correlationId: "fictional-ref",
-            retryable: true,
-            action: "retry",
-          },
-          { status },
-        )
+      ? adminErrorResponse("Unavailable", status, {
+          code,
+          correlationId: "fictional-ref",
+          retryable: true,
+          action: "retry",
+        })
       : Response.json({
           guildId: "guild-1",
           adminRoleId: "admin-role-1",
@@ -78,16 +77,12 @@ test("Overview omits an empty workspace, accepts attention cards, and exposes fe
     assert.equal(url.searchParams.has("workspaceId"), false);
     if (url.pathname === "/admin/api/guild-overview") {
       return fail
-        ? Response.json(
-            {
-              error: "Unavailable",
-              code: "internal_error",
-              correlationId: "fictional-ref",
-              retryable: true,
-              action: "retry",
-            },
-            { status: 500 },
-          )
+        ? adminErrorResponse("Unavailable", 500, {
+            code: "internal_error",
+            correlationId: "fictional-ref",
+            retryable: true,
+            action: "retry",
+          })
         : Response.json({
             guildId: "guild-1",
             tier: "free",
@@ -615,6 +610,223 @@ test("loadEvidenceVaultRoute loads record usage and configuration for a Free Gui
 
     assert.equal(result.data.entitlement?.tier, "free");
     assert.deepEqual(result.data.recordUsage, { used: 27, max: 30 });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+const configurationLoaders = [
+  {
+    name: "Evidence Vault",
+    path: "/admin/api/evidence-vault",
+    load: loadEvidenceVaultRoute,
+  },
+  {
+    name: "Image Rules",
+    path: "/admin/api/image-rules",
+    load: loadImageRulesRoute,
+  },
+  {
+    name: "Bot Defense",
+    path: "/admin/api/bot-defense",
+    load: loadBotDefenseRoute,
+  },
+  {
+    name: "Member Verification",
+    path: "/admin/api/member-verification",
+    load: loadMemberVerificationRoute,
+  },
+] as const;
+
+function premiumEntitlementResponse() {
+  const limits = getGuildEntitlementLimits("premium");
+  return Response.json({
+    tier: "premium",
+    limits,
+    supportInvite: null,
+    r2Usage: {
+      usedBytes: 0,
+      reservedBytes: 0,
+      maxBytes: limits.r2MaxBytes,
+      lastReconciledAtMs: null,
+    },
+  });
+}
+
+function configurationLoaderContext() {
+  return {
+    params: { guildId: "guild-1" },
+    location: { searchStr: "?workspaceId=workspace-1" },
+  };
+}
+
+test("configuration loaders fail for HTTP 401, 403 and 503 instead of inventing empty state", async () => {
+  const originalFetch = globalThis.fetch;
+  const failures = [
+    { status: 401, code: "authentication_required", action: "sign_in" },
+    { status: 403, code: "permission_denied", action: "retry" },
+    { status: 503, code: "service_unavailable", action: "retry" },
+  ] as const;
+
+  try {
+    for (const loader of configurationLoaders) {
+      for (const failure of failures) {
+        globalThis.fetch = (async (input: RequestInfo | URL) => {
+          const url = new URL(String(input), "https://fixture.local");
+          if (url.pathname === "/admin/api/entitlement") return premiumEntitlementResponse();
+          if (url.pathname === loader.path) {
+            return Response.json(
+              {
+                error: `${loader.name} is unavailable`,
+                code: failure.code,
+                correlationId: `ref-${failure.status}`,
+                retryable: failure.status >= 500,
+                action: failure.action,
+              },
+              { status: failure.status },
+            );
+          }
+          throw new Error(`Unexpected request: ${url.pathname}`);
+        }) as typeof fetch;
+
+        await assert.rejects(
+          loader.load(configurationLoaderContext()),
+          (error: unknown) =>
+            error instanceof AdminApiError &&
+            error.status === failure.status &&
+            error.code === failure.code,
+          `${loader.name} must reject HTTP ${failure.status}`,
+        );
+      }
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("configuration loaders fail for malformed JSON and aborted requests", async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    for (const loader of configurationLoaders) {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), "https://fixture.local");
+        if (url.pathname === "/admin/api/entitlement") return premiumEntitlementResponse();
+        if (url.pathname === loader.path) {
+          return new Response('{"config":', {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }) as typeof fetch;
+
+      await assert.rejects(
+        loader.load(configurationLoaderContext()),
+        (error: unknown) => error instanceof SyntaxError,
+        `${loader.name} must reject malformed JSON`,
+      );
+
+      const controller = new AbortController();
+      controller.abort();
+      globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.signal?.aborted) {
+          throw new DOMException("The operation was aborted.", "AbortError");
+        }
+        return premiumEntitlementResponse();
+      }) as typeof fetch;
+
+      await assert.rejects(
+        loader.load({ ...configurationLoaderContext(), abortController: controller }),
+        (error: unknown) => error instanceof Error && error.name === "AbortError",
+        `${loader.name} must reject an aborted request`,
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("successful first-run configuration:null still returns a normal loaded configuration", async () => {
+  const originalFetch = globalThis.fetch;
+  const firstRunResponses: Record<string, Record<string, unknown>> = {
+    "/admin/api/evidence-vault": {
+      guildId: "guild-1",
+      config: null,
+      enumValueUsage: {},
+      recordUsage: { used: 12, max: 30 },
+    },
+    "/admin/api/image-rules": { guildId: "guild-1", config: null },
+    "/admin/api/bot-defense": { guildId: "guild-1", config: null },
+    "/admin/api/member-verification": {
+      guildId: "guild-1",
+      config: null,
+      paidMethodsAvailable: false,
+      turnstileAvailable: false,
+      steamLinkAvailable: true,
+    },
+  };
+
+  try {
+    for (const loader of configurationLoaders) {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), "https://fixture.local");
+        if (url.pathname === "/admin/api/entitlement") return premiumEntitlementResponse();
+        if (url.pathname === loader.path) return Response.json(firstRunResponses[loader.path]);
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }) as typeof fetch;
+
+      const result = await loader.load(configurationLoaderContext());
+      assert.equal(result.data.config, null, `${loader.name} keeps a successful first run usable`);
+      assert.equal(result.data.entitlement?.tier, "premium");
+      if (loader.name === "Evidence Vault") {
+        assert.deepEqual(
+          (result.data as { recordUsage: unknown }).recordUsage,
+          { used: 12, max: 30 },
+          "successful Evidence Vault usage is preserved instead of invented as zero",
+        );
+      }
+      if (loader.name === "Member Verification") {
+        assert.equal((result.data as { steamLinkConfigured: boolean }).steamLinkConfigured, false);
+      }
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Free Image Rules and Bot Defense keep their deliberate empty configuration without fetching", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "https://fixture.local");
+    requests.push(url.pathname);
+    if (url.pathname === "/admin/api/entitlement") {
+      const limits = getGuildEntitlementLimits("free");
+      return Response.json({
+        tier: "free",
+        limits,
+        supportInvite: null,
+        r2Usage: {
+          usedBytes: 0,
+          reservedBytes: 0,
+          maxBytes: limits.r2MaxBytes,
+          lastReconciledAtMs: null,
+        },
+      });
+    }
+    throw new Error(`Free-tier fallback must not fetch configuration: ${url.pathname}`);
+  }) as typeof fetch;
+
+  try {
+    const imageRules = await loadImageRulesRoute(configurationLoaderContext());
+    const botDefense = await loadBotDefenseRoute(configurationLoaderContext());
+
+    assert.equal(imageRules.data.config, null);
+    assert.equal(botDefense.data.config, null);
+    assert.equal(imageRules.data.entitlement?.tier, "free");
+    assert.equal(botDefense.data.entitlement?.tier, "free");
+    assert.deepEqual(requests, ["/admin/api/entitlement", "/admin/api/entitlement"]);
   } finally {
     globalThis.fetch = originalFetch;
   }

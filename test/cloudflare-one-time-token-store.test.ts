@@ -5,12 +5,12 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareOneTimeTokenStore } from "../src/runtime/cloudflare-one-time-token-store";
+import { createSqliteOneTimeTokenStore } from "./support/sqlite/runtime/sqlite-one-time-token-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("one-time token consumption succeeds exactly once under concurrency", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareOneTimeTokenStore(database.d1);
+  const store = createSqliteOneTimeTokenStore(database.d1);
   const input = { nonce: "nonce-1", expiresAtMs: 2_000, consumedAtMs: 1_000 };
 
   const results = await Promise.all(Array.from({ length: 20 }, () => store.consume(input)));
@@ -22,7 +22,7 @@ test("one-time token consumption succeeds exactly once under concurrency", async
 
 test("one-time token consumption is independent by nonce", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareOneTimeTokenStore(database.d1);
+  const store = createSqliteOneTimeTokenStore(database.d1);
 
   assert.equal(
     await store.consume({ nonce: "nonce-1", expiresAtMs: 2_000, consumedAtMs: 1_000 }),
@@ -41,7 +41,7 @@ test("one-time token consumption is independent by nonce", async () => {
 
 test("expired one-time tokens are not consumed", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareOneTimeTokenStore(database.d1);
+  const store = createSqliteOneTimeTokenStore(database.d1);
 
   assert.equal(
     await store.consume({ nonce: "expired", expiresAtMs: 1_000, consumedAtMs: 1_000 }),

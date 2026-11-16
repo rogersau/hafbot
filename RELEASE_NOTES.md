@@ -6,7 +6,7 @@ not publish a registry image or provide access to the official hosted service's 
 credentials, data or infrastructure.
 
 Automated validation covers dependency installation, application and documentation builds,
-typechecks, unit/integration and PostgreSQL contracts, local container migrations/readiness,
+typechecks, unit/integration and PostgreSQL contracts, local container fresh initialization/readiness,
 dependency vulnerability checks and source secret scanning. These checks do not establish that
 every external integration works with a newly configured operator account.
 
@@ -20,3 +20,7 @@ own test Discord application/Guild and verify those paths before inviting users.
 Self-hosted mode enables core capabilities using your own provider accounts. Configure your own
 operator identity, support and policy links. The official hosted service remains separately
 operated. Review [security guidance](SECURITY.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+
+The public architecture starts with no active installations or private data to preserve. It ships
+one current PostgreSQL schema, native PostgreSQL stores and Node composition. Historical migrations,
+Worker startup, SQL dialect translation and private compatibility paths are excluded.

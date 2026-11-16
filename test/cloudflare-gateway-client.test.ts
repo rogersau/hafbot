@@ -5,11 +5,11 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareGatewayClient } from "../src/runtime/cloudflare-gateway-client";
+import { createSqliteGatewayClient } from "./support/sqlite/runtime/sqlite-gateway-client";
 
-test("createCloudflareGatewayClient wraps gateway status and bootstrap calls", async () => {
+test("createSqliteGatewayClient wraps gateway status and bootstrap calls", async () => {
   const requests: Array<{ url: string; method: string }> = [];
-  const gatewayClient = createCloudflareGatewayClient({
+  const gatewayClient = createSqliteGatewayClient({
     fetch(input, init) {
       requests.push({ url: String(input), method: init?.method ?? "GET" });
       return Promise.resolve(
@@ -37,8 +37,8 @@ test("createCloudflareGatewayClient wraps gateway status and bootstrap calls", a
   ]);
 });
 
-test("createCloudflareGatewayClient throws descriptive error on non-ok response", async () => {
-  const gatewayClient = createCloudflareGatewayClient({
+test("createSqliteGatewayClient throws descriptive error on non-ok response", async () => {
+  const gatewayClient = createSqliteGatewayClient({
     fetch() {
       return Promise.resolve(
         new Response("provider response is not logged", {
@@ -60,8 +60,8 @@ test("createCloudflareGatewayClient throws descriptive error on non-ok response"
   );
 });
 
-test("createCloudflareGatewayClient excludes untrusted response details", async () => {
-  const gatewayClient = createCloudflareGatewayClient({
+test("createSqliteGatewayClient excludes untrusted response details", async () => {
+  const gatewayClient = createSqliteGatewayClient({
     fetch() {
       return Promise.resolve(
         new Response('{"token":"provider-secret","customer":"customer@example.com"}', {
@@ -86,7 +86,7 @@ test("createCloudflareGatewayClient excludes untrusted response details", async 
 });
 
 test("gateway JSON parse failures cannot expose response fragments", async () => {
-  const gatewayClient = createCloudflareGatewayClient({
+  const gatewayClient = createSqliteGatewayClient({
     fetch: async () => new Response('private@example.com {"token":"provider-secret"}'),
   });
   await assert.rejects(
@@ -101,14 +101,14 @@ test("gateway JSON parse failures cannot expose response fragments", async () =>
   );
 });
 
-test("createCloudflareGatewayClient sends bot identity headers when configured", async () => {
+test("createSqliteGatewayClient sends bot identity headers when configured", async () => {
   const requests: Array<{
     url: string;
     method: string;
     token: string | null;
     identity: string | null;
   }> = [];
-  const gatewayClient = createCloudflareGatewayClient(
+  const gatewayClient = createSqliteGatewayClient(
     {
       fetch(input, init) {
         const headers = new Headers(init?.headers);

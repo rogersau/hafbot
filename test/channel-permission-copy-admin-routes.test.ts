@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { createAdminApiHandler } from "./helpers/admin-api";
 import type { RuntimeStores } from "../src/runtime/app-types";
-import { createCloudflareOneTimeTokenStore } from "../src/runtime/cloudflare-one-time-token-store";
+import { createSqliteOneTimeTokenStore } from "./support/sqlite/runtime/sqlite-one-time-token-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 const guildId = "100";
@@ -132,7 +132,7 @@ test("channel permission copy keeps consumption final after a lost Discord respo
   const options = {
     stores: {
       ...routeStores(),
-      oneTimeTokens: createCloudflareOneTimeTokenStore(database.d1),
+      oneTimeTokens: createSqliteOneTimeTokenStore(database.d1),
     },
     discordBotToken: "token",
     discordBotUserId: botId,
@@ -173,7 +173,7 @@ for (const checkpoint of ["concurrent apply", "lost consumption acknowledgement"
     const patches: Array<{ body: unknown; reason: string | null }> = [];
     const originalFetch = globalThis.fetch;
     globalThis.fetch = discordFetch(patches);
-    const durableTokens = createCloudflareOneTimeTokenStore(database.d1);
+    const durableTokens = createSqliteOneTimeTokenStore(database.d1);
     const options = {
       stores: { ...routeStores(), oneTimeTokens: durableTokens },
       discordBotToken: "token",
@@ -258,7 +258,7 @@ test("channel permission copy rechecks Discord authority without consuming a den
     return provider(input, init);
   }) as typeof fetch;
   const options = {
-    stores: { ...routeStores(), oneTimeTokens: createCloudflareOneTimeTokenStore(database.d1) },
+    stores: { ...routeStores(), oneTimeTokens: createSqliteOneTimeTokenStore(database.d1) },
     discordBotToken: "token",
     discordBotUserId: botId,
     configurationRevisionSigningSecret: "test signing secret long enough",

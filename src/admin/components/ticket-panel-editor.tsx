@@ -985,11 +985,7 @@ export function TicketPanelEditor({
                         <div className="space-y-2 md:col-span-3">
                           <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
                             <Checkbox
-                              checked={
-                                ticketType.anonymousSupportEnabled ??
-                                ticketType.anonymousEnabled ??
-                                false
-                              }
+                              checked={ticketType.anonymousSupportEnabled ?? false}
                               disabled={!paidAutomationAvailable}
                               onCheckedChange={(checked) =>
                                 updateTicketType(ticketTypeIndex, (current) => ({
@@ -1009,11 +1005,7 @@ export function TicketPanelEditor({
                         <div className="space-y-2 md:col-span-3">
                           <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
                             <Checkbox
-                              checked={
-                                ticketType.staffDiscussionThreadEnabled ??
-                                ticketType.anonymousEnabled ??
-                                false
-                              }
+                              checked={ticketType.staffDiscussionThreadEnabled ?? false}
                               disabled={!paidAutomationAvailable}
                               onCheckedChange={(checked) =>
                                 updateTicketType(ticketTypeIndex, (current) => ({
@@ -1042,11 +1034,7 @@ export function TicketPanelEditor({
                               value={ticketType.ticketHistoryPromptVisibility ?? "off"}
                               disabled={
                                 !paidAutomationAvailable ||
-                                !(
-                                  ticketType.staffDiscussionThreadEnabled ??
-                                  ticketType.anonymousEnabled ??
-                                  false
-                                )
+                                !(ticketType.staffDiscussionThreadEnabled ?? false)
                               }
                               onValueChange={(value) =>
                                 updateTicketType(ticketTypeIndex, (current) => ({

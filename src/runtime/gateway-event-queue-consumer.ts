@@ -1,16 +1,15 @@
-import type { QueueBatch } from "./queue-types";
+import type { QueueJobMetadata } from "./queue-types";
 import type { Env } from "../env";
 import { isRecord } from "../unknown-parse";
 import {
   classifyQueueDeliveryError,
-  DEFAULT_QUEUE_MAX_ATTEMPTS,
-  deliverQueueBatch,
+  deliverQueueJob,
   queueDeliveryEmitter,
+  type QueueDeliveryOutcome,
   type QueueParseResult,
   QueueTerminalError,
 } from "./queue-delivery";
 import {
-  createGatewayEventOperationStore,
   deriveGatewayEventKey,
   GATEWAY_EVENT_RECEIPT_RETENTION_MS,
   isValidGatewayEventKey,
@@ -18,7 +17,7 @@ import {
 import {
   createEnvelopeOperationRunner,
   createGatewayEventCapabilities,
-  type GatewayEventCapabilityOverrides,
+  type GatewayEventDependencies,
 } from "./gateway-events/capabilities";
 import type { GatewayEventEnvelope, GatewayEventQueueLogger } from "./gateway-events/contracts";
 import { dispatchRegisteredGatewayEvent } from "./gateway-events/registry";
@@ -47,49 +46,40 @@ const IDEMPOTENT_GATEWAY_EVENT_TYPES = new Set([
 
 export type { GatewayEventEnvelope, GatewayEventQueueLogger } from "./gateway-events/contracts";
 
-export async function handleGatewayEventQueueBatch(
-  batch: QueueBatch<unknown>,
+export async function deliverGatewayEvent(
+  payload: unknown,
+  metadata: QueueJobMetadata,
   env: Env,
   logger: GatewayEventQueueLogger = console,
-  overrides: GatewayEventCapabilityOverrides = {},
-): Promise<void> {
-  await deliverGatewayEventQueueBatch(batch, env, logger, overrides);
-}
-
-export async function deliverGatewayEventQueueBatch(
-  batch: QueueBatch<unknown>,
-  env: Env,
-  logger: GatewayEventQueueLogger = console,
-  overrides: GatewayEventCapabilityOverrides = {},
-): Promise<void> {
-  await deliverQueueBatch(batch, {
-    maxAttempts: DEFAULT_QUEUE_MAX_ATTEMPTS,
+  dependencies: GatewayEventDependencies,
+): Promise<QueueDeliveryOutcome> {
+  const outcome = await deliverQueueJob(payload, {
+    metadata,
     parse: parseGatewayEventEnvelope,
     async handle(envelope) {
-      await processGatewayEventEnvelope(envelope, env, logger, overrides);
+      await processGatewayEventEnvelope(envelope, env, logger, dependencies);
       return { status: "complete" };
     },
     classifyError: classifyQueueDeliveryError,
     emit: queueDeliveryEmitter(logger),
   });
-  if (env.HAF_DB) {
-    try {
-      await createGatewayEventOperationStore(env.HAF_DB).cleanupCompletedBefore(
-        Date.now() - GATEWAY_EVENT_RECEIPT_RETENTION_MS,
-      );
-    } catch {
-      logger.error("Gateway Event receipt cleanup failed", {
-        reasonCode: "d1_unavailable",
-      });
-    }
+  try {
+    await dependencies.operationStore.cleanupCompletedBefore(
+      Date.now() - GATEWAY_EVENT_RECEIPT_RETENTION_MS,
+    );
+  } catch {
+    logger.error("Gateway Event receipt cleanup failed", {
+      reasonCode: "database_unavailable",
+    });
   }
+  return outcome;
 }
 
 export async function processGatewayEventQueueMessages(
   messages: unknown[],
   env: Env,
   logger: GatewayEventQueueLogger = console,
-  overrides: GatewayEventCapabilityOverrides = {},
+  dependencies: GatewayEventDependencies,
 ): Promise<void> {
   for (const message of messages) {
     const parsed = parseGatewayEventEnvelope(message);
@@ -101,7 +91,7 @@ export async function processGatewayEventQueueMessages(
     }
 
     try {
-      await processGatewayEventEnvelope(parsed.value, env, logger, overrides);
+      await processGatewayEventEnvelope(parsed.value, env, logger, dependencies);
     } catch (error) {
       logger.error("Failed to process gateway event queue message", {
         reasonCode: classifyQueueDeliveryError(error).reasonCode,
@@ -115,7 +105,7 @@ async function processGatewayEventEnvelope(
   envelope: GatewayEventEnvelope,
   env: Env,
   logger: GatewayEventQueueLogger = console,
-  overrides: GatewayEventCapabilityOverrides = {},
+  dependencies: GatewayEventDependencies,
 ): Promise<void> {
   if (env.discordE2eActors) {
     const data = isRecord(envelope.data) ? envelope.data : {};
@@ -132,11 +122,11 @@ async function processGatewayEventEnvelope(
       ),
     };
   }
-  if (!shouldLeaseGatewayEvent(envelope, env)) {
-    await processGatewayEventOperations(envelope, env, logger, overrides);
+  if (!IDEMPOTENT_GATEWAY_EVENT_TYPES.has(envelope.type)) {
+    await processGatewayEventOperations(envelope, env, logger, dependencies);
     return;
   }
-  const store = createGatewayEventOperationStore(env.HAF_DB!);
+  const store = dependencies.operationStore;
   const receipt = await store.read(envelope.eventKey, "event:dispatch");
   if (receipt?.state === "terminal") {
     throw new QueueTerminalError(receipt.outcomeCode ?? "gateway_operation_terminal");
@@ -150,9 +140,9 @@ async function processGatewayEventEnvelope(
     });
     return;
   }
-  const eventReceipt = createEnvelopeOperationRunner(envelope, env, logger);
+  const eventReceipt = createEnvelopeOperationRunner(envelope, logger, dependencies.operationStore);
   try {
-    await processGatewayEventOperations(envelope, env, logger, overrides);
+    await processGatewayEventOperations(envelope, env, logger, dependencies);
   } catch (error) {
     if (error instanceof QueueTerminalError) {
       await eventReceipt.run("event:dispatch", async () => {
@@ -164,18 +154,13 @@ async function processGatewayEventEnvelope(
   await eventReceipt.run("event:dispatch", async () => {});
 }
 
-function shouldLeaseGatewayEvent(envelope: GatewayEventEnvelope, env: Env): boolean {
-  if (!env.HAF_DB) return false;
-  return IDEMPOTENT_GATEWAY_EVENT_TYPES.has(envelope.type);
-}
-
 async function processGatewayEventOperations(
   envelope: GatewayEventEnvelope,
   env: Env,
   logger: GatewayEventQueueLogger,
-  overrides: GatewayEventCapabilityOverrides = {},
+  dependencies: GatewayEventDependencies,
 ): Promise<void> {
-  const capabilities = await createGatewayEventCapabilities(envelope, env, logger, overrides);
+  const capabilities = await createGatewayEventCapabilities(envelope, env, logger, dependencies);
   if (!capabilities) return;
   await dispatchRegisteredGatewayEvent(capabilities, envelope, logger);
 }
@@ -185,20 +170,17 @@ function parseGatewayEventEnvelope(message: unknown): QueueParseResult<GatewayEv
     return { ok: false, reasonCode: "invalid_gateway_event" };
   }
 
-  if (message.version !== undefined && message.version !== 2) {
+  if (message.version !== 2) {
     return { ok: false, reasonCode: "unsupported_gateway_event_version" };
   }
 
   const expectedEventKey = deriveGatewayEventKey(message);
   const eventKey =
-    message.version === 2 &&
     typeof message.eventKey === "string" &&
     isValidGatewayEventKey(message.eventKey) &&
     message.eventKey === expectedEventKey
       ? message.eventKey
-      : message.version === undefined
-        ? expectedEventKey
-        : null;
+      : null;
   if (!eventKey) return { ok: false, reasonCode: "invalid_gateway_event_key" };
 
   return {

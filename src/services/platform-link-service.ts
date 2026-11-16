@@ -61,12 +61,6 @@ export function createPlatformLinkService(
       if (config.logChannelId) resources?.requireTextChannel(config.logChannelId);
       if (config.panelChannelId) resources?.requireTextChannel(config.panelChannelId);
       await options.platformLinkStore.upsertPlatformLinkConfig(config);
-      if (config.enabled !== undefined)
-        await options.platformLinkStore.setPlatformLinkEnabled?.(
-          config.guildId,
-          config.platform,
-          config.enabled,
-        );
     },
 
     async createPendingLink(

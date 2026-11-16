@@ -682,8 +682,7 @@ function MarketplaceEditor({
                       Advanced · internal question ID
                     </summary>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Changing an ID can affect saved post metadata. Legacy IDs are preserved until
-                      you edit them.
+                      Changing an ID can affect metadata on existing posts.
                     </p>
                     <Input
                       className="mt-2"

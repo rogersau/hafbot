@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { parseImageRulesEnv } from "../src/services/image-rules/env";
-import type { Env } from "../src/env";
+import type { Env } from "./support/test-env";
 
 function createEnv(overrides: Partial<Env> = {}): Env {
   return {

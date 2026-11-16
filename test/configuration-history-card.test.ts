@@ -23,8 +23,8 @@ test("configuration history explains operations and sources in customer language
     "Restored from an earlier revision",
   );
   assert.equal(
-    configurationRevisionLabel({ operation: "update", source: "system-migration" }),
-    "Updated by a system migration",
+    configurationRevisionLabel({ operation: "update", source: "system-snapshot" }),
+    "Captured from current configuration",
   );
   assert.equal(
     configurationRevisionLabel({ operation: "clone", source: "clone" }),

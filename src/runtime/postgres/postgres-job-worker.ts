@@ -1,21 +1,23 @@
 import { randomUUID } from "node:crypto";
 
 import type { ManagedNodeComponent } from "../../node/host";
-import { classifyQueueDeliveryError, type QueueDeliveryOutcome } from "../queue-delivery";
+import type { QueueJobMetadata } from "../queue-types";
+import {
+  classifyQueueDeliveryError,
+  normalizeQueueDeliveryOutcome,
+  type QueueDeliveryOutcome,
+} from "../queue-delivery";
 import type { ClaimedPostgresJob, PortableQueueName, PostgresJobQueue } from "./postgres-job-queue";
 
-export interface PostgresJobHandlerContext {
-  jobId: string;
+export interface PostgresJobHandlerContext extends QueueJobMetadata {
   queueName: PortableQueueName;
-  attempts: number;
-  maxAttempts: number;
   signal: AbortSignal;
 }
 
 export type PostgresJobHandler = (
   payload: unknown,
   context: PostgresJobHandlerContext,
-) => Promise<QueueDeliveryOutcome | void>;
+) => Promise<QueueDeliveryOutcome>;
 
 export interface PostgresJobWorkerOptions {
   queue: PostgresJobQueue;
@@ -170,13 +172,23 @@ export function createPostgresJobWorker(options: PostgresJobWorkerOptions): Post
     try {
       let outcome: QueueDeliveryOutcome;
       try {
-        outcome = (await handler(job.payload, {
+        const handled = await handler(job.payload, {
           jobId: job.id,
           queueName: job.queueName,
           attempts: job.attempts,
           maxAttempts: job.maxAttempts,
           signal: leaseController.signal,
-        })) ?? { status: "complete" };
+        });
+        const normalized = normalizeQueueDeliveryOutcome(handled);
+        if (normalized) {
+          outcome = normalized;
+        } else {
+          outcome = { status: "terminal", reasonCode: "missing_delivery_outcome" };
+          options.onError?.(
+            new Error(`PostgreSQL job handler returned no valid outcome for ${job.queueName}.`),
+            { jobId: job.id, queueName: job.queueName },
+          );
+        }
       } catch (error) {
         options.onError?.(error, { jobId: job.id, queueName: job.queueName });
         outcome = classifyQueueDeliveryError(error);

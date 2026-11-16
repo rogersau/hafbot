@@ -1,5 +1,5 @@
 import { hasGuildAdminPermission } from "../discord-interactions";
-import type { DiscordAccountStore } from "./cloudflare-discord-account-store";
+import type { DiscordAccountStore } from "./contracts/discord-account-store";
 
 export interface DiscordDiscoverableGuild {
   guildId: string;

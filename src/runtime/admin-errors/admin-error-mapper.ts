@@ -1,3 +1,4 @@
+import { isDatabaseUnavailable } from "../database-availability";
 import { isRecord } from "../../unknown-parse";
 import {
   ADMIN_ERROR_CODES,
@@ -97,7 +98,7 @@ export function mapAdminFailure(error: unknown, context: AdminRequestContext): R
       });
     }
   }
-  if (isD1AvailabilityError(error)) {
+  if (isDatabaseUnavailable(error)) {
     emitAdminError(context, error, "database_unavailable", 503);
     return errorResponse(context, 503, {
       error: "The dashboard is temporarily unavailable.",
@@ -133,13 +134,13 @@ export async function normalizeAdminErrorResponse(
     code: response.status >= 500 ? ("internal_error" as const) : ("invalid_request" as const),
     message: response.status >= 500 ? "Something went wrong." : "Invalid request.",
   };
-  const trustedLegacyMessage =
+  const trustedMessage =
     response.status < 500 && isRecord(body) && typeof body.error === "string"
       ? body.error
       : fallback.message;
   const fieldIssues =
-    isRecord(body) && Array.isArray(body.issues)
-      ? (body.issues as AdminErrorEnvelopeV1["fieldIssues"])
+    isRecord(body) && Array.isArray(body.fieldIssues)
+      ? (body.fieldIssues as AdminErrorEnvelopeV1["fieldIssues"])
       : undefined;
   const trustedCode =
     isRecord(body) &&
@@ -148,33 +149,27 @@ export async function normalizeAdminErrorResponse(
       ? (body.code as AdminErrorCode)
       : undefined;
   const retryAfterSeconds =
-    isRecord(body) && typeof body.retryAfterMs === "number"
-      ? Math.max(1, Math.min(300, Math.ceil(body.retryAfterMs / 1000)))
+    isRecord(body) && typeof body.retryAfterSeconds === "number"
+      ? boundRetry(Math.ceil(body.retryAfterSeconds))
       : undefined;
   const staleReason = parseStaleReason(body);
-  return errorResponse(
-    context,
-    response.status,
-    {
-      error: trustedLegacyMessage,
-      code: fieldIssues?.some((issue) => issue.code === "invalid_json")
-        ? "invalid_json"
-        : (trustedCode ?? fallback.code),
-      retryable: response.status === 429,
-      retryAfterSeconds,
-      action: response.status === 429 ? "wait" : fallback.action,
-      fieldIssues,
-      staleReason,
-    },
-    fieldIssues ? { issues: fieldIssues } : undefined,
-  );
+  return errorResponse(context, response.status, {
+    error: trustedMessage,
+    code: fieldIssues?.some((issue) => issue.code === "invalid_json")
+      ? "invalid_json"
+      : (trustedCode ?? fallback.code),
+    retryable: response.status === 429,
+    retryAfterSeconds,
+    action: response.status === 429 ? "wait" : fallback.action,
+    fieldIssues,
+    staleReason,
+  });
 }
 
 function errorResponse(
   context: AdminRequestContext,
   status: number,
   value: Omit<AdminErrorEnvelopeV1, "correlationId"> & { correlationId?: undefined },
-  compatibility?: Record<string, unknown>,
 ): Response {
   const envelope: AdminErrorEnvelopeV1 = { ...value, correlationId: context.correlationId };
   const headers = new Headers({
@@ -183,7 +178,7 @@ function errorResponse(
   });
   if (envelope.retryAfterSeconds !== undefined)
     headers.set("retry-after", String(envelope.retryAfterSeconds));
-  return Response.json({ ...envelope, ...compatibility }, { status, headers });
+  return Response.json(envelope, { status, headers });
 }
 
 function withCorrelation(response: Response, correlationId: string): Response {
@@ -221,13 +216,6 @@ function emitAdminError(
   });
 }
 
-function isD1AvailabilityError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return (
-    error.name === "D1Error" || error.name === "D1DatabaseError" || error.name === "TimeoutError"
-  );
-}
-
 function boundRetry(seconds: number): number {
   return Math.max(1, Math.min(300, seconds));
 }
@@ -241,8 +229,5 @@ function parseStaleReason(body: unknown): AdminStaleReason | undefined {
   ) {
     return body.staleReason;
   }
-  if (body.stale === "stale_source") return "source";
-  if (body.stale === "stale_target") return "target";
-  if (body.stale === "stale_source_and_target") return "source_and_target";
   return undefined;
 }

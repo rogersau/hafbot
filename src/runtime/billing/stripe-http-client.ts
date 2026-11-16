@@ -52,9 +52,7 @@ export class StripeHttpClient
   async readOwnerState(customerId: string): Promise<StripeOwnerState> {
     const [customer, subscriptions] = await Promise.all([
       this.get(`/v1/customers/${encodeURIComponent(customerId)}`),
-      this.get(
-        `/v1/subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=10&expand[]=data.latest_invoice`,
-      ),
+      this.get(`/v1/subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=10`),
     ]);
     if (!isRecord(customer) || customer.deleted === true || customer.id !== customerId) {
       throw new SafeDiagnosticError("Stripe Customer was not found.");
@@ -341,7 +339,6 @@ function parseSubscription(value: unknown, customerId: string): StripeSubscripti
   const item = items[0];
   const price = isRecord(item) && isRecord(item.price) ? item.price : null;
   const status = normalizeStatus(value.status);
-  const latestInvoice = isRecord(value.latest_invoice) ? value.latest_invoice : null;
   const id = asString(value.id);
   const priceId = price ? asString(price.id) : null;
   const productId = price
@@ -367,12 +364,6 @@ function parseSubscription(value: unknown, customerId: string): StripeSubscripti
     cancelledAtMs: secondsToMs(value.canceled_at),
     latestInvoiceId: objectOrId(value.latest_invoice),
     scheduleId: objectOrId(value.schedule),
-    livemode: value.livemode === true,
-    latestInvoicePaid: latestInvoice?.paid === true,
-    latestInvoiceAmountPaid:
-      typeof latestInvoice?.amount_paid === "number" ? latestInvoice.amount_paid : null,
-    latestInvoiceBillingReason:
-      typeof latestInvoice?.billing_reason === "string" ? latestInvoice.billing_reason : null,
   };
 }
 

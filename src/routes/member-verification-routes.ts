@@ -1,5 +1,5 @@
 import { verificationAttemptState } from "../services/member-verification-state";
-import type { CustomerAuth } from "../runtime/auth/auth";
+import type { CustomerAuth } from "../runtime/auth/customer-auth";
 import { readCustomerSession } from "../runtime/auth/customer-session";
 import type { MemberVerificationService } from "../services/member-verification-service";
 import { safeTextResponse } from "../http/safe-text-response";

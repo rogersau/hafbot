@@ -523,7 +523,6 @@ function getPageMetadataKey(currentPath: AdminDashboardPath): string {
 
   const segments = trimmedPath.split("/").filter(Boolean);
   const lastSegment = segments[segments.length - 1] ?? "overview";
-  if (lastSegment === "steam-link") return "player-link";
   if (DEFAULT_PAGE_METADATA[lastSegment]) return lastSegment;
   if (segments.length === 2 && segments[0] === "admin") return "overview";
   return lastSegment;

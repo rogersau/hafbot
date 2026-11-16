@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { act } from "react";
@@ -53,7 +54,7 @@ test("Reputation dashboard retains edits and displays a revision conflict withou
             voiceChannels: [],
             forumChannels: [],
           })
-        : Response.json({ error: "Settings changed. Reload the page." }, { status: 409 });
+        : adminErrorResponse("Settings changed. Reload the page.", 409);
     await render(
       <AdminReputationPage
         selectedGuildId="100"

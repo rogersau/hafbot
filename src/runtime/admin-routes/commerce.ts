@@ -190,7 +190,9 @@ const brandingBody = z.object({
 });
 
 export interface CommerceAdminServices {
-  gameAccess?: ReturnType<typeof import("../commerce/game-access-runtime").createGameAccessRuntime>;
+  gameAccess?: ReturnType<
+    typeof import("../postgres/postgres-commerce-game-access-runtime").createGameAccessRuntime
+  >;
   store: Pick<
     CommerceStore,
     | "readConnectedAccountByGuild"
@@ -852,7 +854,7 @@ export function createCommerceAdminRoutes(
           return forbidden();
         }
         return Response.json({
-          lifecycle: await services.offerings.retire({
+          offering: await services.offerings.retire({
             offeringId: body.offeringId,
             actorUserId,
             reasonCode: body.reasonCode ?? "seller_offering_retired",
@@ -1238,7 +1240,7 @@ function actionRoute(
         return forbidden();
       }
       return Response.json({
-        lifecycle: await action(services.offerings, body.offeringId),
+        offering: await action(services.offerings, body.offeringId),
       });
     },
   });

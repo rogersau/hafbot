@@ -31,11 +31,6 @@ export interface AdminRouteTableRow<TResponse, TData = TResponse> {
   path: string;
   entitlementGate?: "attach" | "return-null-on-free";
   freeTierFallback?: (ctx: AdminLoaderContext, entitlement: EntitlementInfo | null) => TData;
-  fetchErrorFallback?: (
-    ctx: AdminLoaderContext,
-    entitlement: EntitlementInfo | null,
-    error: unknown,
-  ) => TData;
   query?: (ctx: AdminLoaderContext) => AdminLoaderQuery;
   transform?: (
     response: TResponse,
@@ -84,7 +79,7 @@ export function createAdminLoaderClient(signal?: AbortSignal): AdminLoaderClient
       });
 
       if (!response.ok) {
-        throw await parseAdminApiError(response, `${response.status} ${response.statusText}`);
+        throw await parseAdminApiError(response, "The dashboard request failed. Please try again.");
       }
 
       return response.json() as Promise<T>;
@@ -113,15 +108,10 @@ export function createAdminLoaderClient(signal?: AbortSignal): AdminLoaderClient
 
       const query = row.query ? row.query(ctx) : { workspaceId: getWorkspaceId(ctx), guildId };
       const client = createAdminLoaderClient(ctx.abortController?.signal);
-      let response: TResponse;
-      try {
-        response = await client.getJson<TResponse>(row.path, query);
-      } catch (error) {
-        if (row.fetchErrorFallback) {
-          return wrapLoaded(row.fetchErrorFallback(ctx, entitlement, error));
-        }
-        throw error;
-      }
+      // A route configuration read only succeeds with real response data. Failures
+      // propagate to the shared route error/retry boundary; they must never be
+      // converted into local defaults that an editor could later save.
+      const response = await client.getJson<TResponse>(row.path, query);
 
       const data = row.transform
         ? row.transform(response, ctx, entitlement)

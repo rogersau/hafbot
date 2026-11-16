@@ -13,7 +13,7 @@ import type {
   AdminFeedbackStore,
 } from "../src/runtime/contracts/admin-feedback-store";
 
-import { createCloudflareAdminFeedbackStore } from "../src/runtime/cloudflare-admin-feedback-store";
+import { createSqliteAdminFeedbackStore } from "./support/sqlite/runtime/sqlite-admin-feedback-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 function harness(
@@ -447,7 +447,7 @@ test("opted-in diagnostics use bounded client values or safe User-Agent fallback
 test("Cloudflare feedback store counts, updates, and purges only the oldest bounded rows", async () => {
   const database = new SqliteD1Database();
   try {
-    const store = createCloudflareAdminFeedbackStore(database.d1);
+    const store = createSqliteAdminFeedbackStore(database.d1);
     const make = (id: string, createdAtMs: number): AdminFeedbackRecord => ({
       id,
       reference: `FB-${id}`,

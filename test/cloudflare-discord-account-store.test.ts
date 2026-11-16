@@ -1,89 +1,63 @@
-/// <reference types="node/assert" />
-/// <reference types="node/assert/strict" />
-
 import assert from "node:assert/strict";
-// @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareDiscordAccountStore } from "../src/runtime/cloudflare-discord-account-store";
+import { account, user } from "./support/sqlite/db/auth-schema";
+import { createSqliteDiscordAccountStore } from "./support/sqlite/runtime/sqlite-discord-account-store";
+import { createD1DrizzleDatabase } from "./support/sqlite/runtime/drizzle-db";
+import { createTestDatabase } from "./support/sqlite-d1-database";
 
-test("createCloudflareDiscordAccountStore returns null when no Discord account exists", async () => {
-  const database = new FakeD1Database();
-  const store = createCloudflareDiscordAccountStore(database as unknown as D1Database);
-
-  assert.equal(await store.readDiscordAccessToken("user-1"), null);
+test("createSqliteDiscordAccountStore returns null when no Discord account exists", async () => {
+  const database = await createTestDatabase();
+  try {
+    const store = createSqliteDiscordAccountStore(database.d1);
+    assert.equal(await store.readDiscordAccessToken("user-1"), null);
+  } finally {
+    database.close();
+  }
 });
 
-test("createCloudflareDiscordAccountStore returns the stored Discord access token", async () => {
-  const database = new FakeD1Database();
-  database.seedAccount({
-    userId: "user-1",
-    providerId: "google",
-    accessToken: "google-token",
-    updatedAt: "2026-05-25T10:00:00.000Z",
-  });
-  database.seedAccount({
-    userId: "user-1",
-    providerId: "discord",
-    accessToken: "discord-token",
-    updatedAt: "2026-05-25T12:00:00.000Z",
-  });
-  const store = createCloudflareDiscordAccountStore(database as unknown as D1Database);
+test("createSqliteDiscordAccountStore returns the latest Discord token for the requested user", async () => {
+  const database = await createTestDatabase();
+  try {
+    const db = createD1DrizzleDatabase(database.d1);
+    const createdAt = new Date("2026-05-25T10:00:00.000Z");
+    await db
+      .insert(user)
+      .values(
+        ["user-1", "user-2"].map((id) => ({
+          id,
+          name: id,
+          email: `${id}@example.test`,
+          emailVerified: true,
+          discordUserId: `discord-${id}`,
+          createdAt,
+          updatedAt: createdAt,
+        })),
+      )
+      .run();
+    await db
+      .insert(account)
+      .values(
+        [
+          { id: "old-discord", userId: "user-1", providerId: "discord", hour: 10 },
+          { id: "current-discord", userId: "user-1", providerId: "discord", hour: 12 },
+          { id: "google", userId: "user-1", providerId: "google", hour: 13 },
+          { id: "other-user", userId: "user-2", providerId: "discord", hour: 14 },
+        ].map(({ hour, ...entry }) => ({
+          ...entry,
+          accountId: entry.id,
+          accessToken: `${entry.id}-token`,
+          createdAt,
+          updatedAt: new Date(`2026-05-25T${hour}:00:00.000Z`),
+        })),
+      )
+      .run();
 
-  assert.equal(await store.readDiscordAccessToken("user-1"), "discord-token");
+    const store = createSqliteDiscordAccountStore(database.d1);
+    assert.equal(await store.readDiscordAccessToken("user-1"), "current-discord-token");
+    assert.equal(await store.readDiscordAccessToken("user-2"), "other-user-token");
+    assert.equal(await store.readDiscordAccessToken("missing-user"), null);
+  } finally {
+    database.close();
+  }
 });
-
-interface AccountRow {
-  userId: string;
-  providerId: string;
-  accessToken: string | null;
-  updatedAt: string;
-}
-
-class FakeD1Database {
-  private readonly accounts: AccountRow[] = [];
-
-  prepare(query: string): FakeD1PreparedStatement {
-    return new FakeD1PreparedStatement(this, normalizeSql(query));
-  }
-
-  seedAccount(account: AccountRow): void {
-    this.accounts.push(account);
-  }
-
-  selectFirst<T>(query: string, values: readonly unknown[]): T | null {
-    if (
-      query ===
-      'SELECT "accessToken" FROM "Account" WHERE "userId" = ? AND "providerId" = ? ORDER BY "updatedAt" DESC LIMIT 1'
-    ) {
-      const [userId, providerId] = values;
-      const row = [...this.accounts]
-        .filter((account) => account.userId === userId && account.providerId === providerId)
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
-
-      return row ? ({ accessToken: row.accessToken } as T) : null;
-    }
-
-    throw new Error(`Unsupported first query: ${query}`);
-  }
-}
-
-class FakeD1PreparedStatement {
-  constructor(
-    private readonly database: FakeD1Database,
-    private readonly query: string,
-    private readonly values: readonly unknown[] = [],
-  ) {}
-
-  bind(...values: unknown[]): FakeD1PreparedStatement {
-    return new FakeD1PreparedStatement(this.database, this.query, values);
-  }
-
-  async first<T>(): Promise<T | null> {
-    return this.database.selectFirst<T>(this.query, this.values);
-  }
-}
-
-function normalizeSql(query: string): string {
-  return query.replace(/\s+/g, " ").trim();
-}

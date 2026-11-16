@@ -5,9 +5,9 @@ import type { QueueProducer } from "../src/runtime/queue-types";
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import type { Env } from "../src/env";
-import { createCloudflareCommerceRuntime } from "../src/runtime/commerce/cloudflare-commerce-runtime";
-import { CloudflareCommerceReconciliationStore } from "../src/runtime/commerce/cloudflare-reconciliation-store";
+import type { Env } from "./support/test-env";
+import { createSqliteCommerceRuntime } from "./support/sqlite/runtime/commerce/sqlite-commerce-runtime";
+import { SqliteCommerceReconciliationStore } from "./support/sqlite/runtime/commerce/sqlite-reconciliation-store";
 import {
   CommerceProjectionQuarantineError,
   processCommerceReconciliationMessage,
@@ -25,7 +25,7 @@ const NOW = 1_800_000_000_000;
 test("duplicate and out-of-order triggers allocate one durable generation each", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     const first = await store.accept(webhook("evt-1", "customer.subscription.updated"));
     const duplicate = await store.accept(webhook("evt-1", "customer.subscription.updated"));
     const second = await store.accept({
@@ -76,7 +76,7 @@ test("duplicate and out-of-order triggers allocate one durable generation each",
 test("Commerce outbox marks preserve generation, seller scope and first sent time on SQLite", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     await store.accept(webhook("evt-earlier", "invoice.paid"));
     await store.accept(webhook("evt-current", "invoice.paid"));
     await store.accept({
@@ -148,7 +148,7 @@ test("webhook quarantine accepts provider events without disabling scheduled rec
       VALUES ('control-1','guild','guild-1','webhook_quarantine',1,
         'provider_investigation','operator-1',NULL,${NOW},${NOW});
     `);
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     assert.deepEqual(await store.accept(webhook("evt-quarantine", "invoice.paid")), {
       accepted: true,
       outboxPending: false,
@@ -179,7 +179,7 @@ test("webhook quarantine accepts provider events without disabling scheduled rec
 test("Commerce commit fences replaced leases and newer generations on SQLite", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     await store.accept(webhook("evt-old", "invoice.paid"));
     const claim = (eventId: string, generation: number, leaseToken: string, nowMs: number) =>
       store.claim({ message: message(eventId, generation), leaseToken, nowMs, leaseMs: 1_000 });
@@ -219,7 +219,7 @@ test("Commerce commit fences replaced leases and newer generations on SQLite", a
 test("one reconciliation commit converges all seller projections without duplicates", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     await store.accept(webhook("evt-1", "invoice.paid"));
     let providerReads = 0;
     const provider = {
@@ -343,7 +343,7 @@ test("one reconciliation commit converges all seller projections without duplica
 test("terminal account events dispatch before snapshot reads and complete duplicate work safely", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     const providerReads: string[] = [];
     const dispatches: Array<{ eventId: string; eventType: string; actionId: string }> = [];
     const provider = {
@@ -414,7 +414,7 @@ test("terminal account events dispatch before snapshot reads and complete duplic
 test("terminal dispatch failures retry and quarantine without crossing account scope", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     await store.accept(webhook("evt-terminal-unknown", "account.closed"));
     const provider = {
       async readSellerSnapshot() {
@@ -472,7 +472,7 @@ test("Cloudflare terminal dispatch uses the financial workflow without Stripe ac
     await seedSeller(database);
     await seedSellerProfile(database);
     const queue = { async send() {}, async sendBatch() {} } as QueueProducer<unknown>;
-    const runtime = createCloudflareCommerceRuntime({
+    const runtime = createSqliteCommerceRuntime({
       DISCORD_BOT_TOKEN: "",
       BOT_USER_ID: "",
       DISCORD_PUBLIC_KEY: "",
@@ -486,7 +486,7 @@ test("Cloudflare terminal dispatch uses the financial workflow without Stripe ac
       STRIPE_API_VERSION: "2026-06-24.dahlia",
     } as Env);
     assert.ok(runtime);
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     await store.accept(webhook("evt-runtime-terminal", "account.closed"));
 
     assert.equal(await runtime.processMessage(message("evt-runtime-terminal", 1), 1), "processed");
@@ -538,10 +538,10 @@ test("Commerce runtime rejects malformed or cross-environment Stripe secret bind
     { STRIPE_CONNECT_WEBHOOK_SECRET: "not-a-webhook-secret" },
     { STRIPE_CONNECT_WEBHOOK_SECRET: "whsec_short" },
   ]) {
-    assert.equal(createCloudflareCommerceRuntime({ ...base, ...overrides }), null);
+    assert.equal(createSqliteCommerceRuntime({ ...base, ...overrides }), null);
   }
   assert.ok(
-    createCloudflareCommerceRuntime({
+    createSqliteCommerceRuntime({
       ...base,
       STAGING_MODE: undefined,
       STRIPE_SECRET_KEY: "sk_live_runtime_key_material",
@@ -552,7 +552,7 @@ test("Commerce runtime rejects malformed or cross-environment Stripe secret bind
 test("outbox sweep and scheduled reconciliation repair queue gaps and missed webhooks", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     const sent: CommerceReconciliationMessage[] = [];
     await store.accept(webhook("evt-gap", "account.updated"));
     assert.equal(
@@ -603,7 +603,7 @@ test("outbox sweep and scheduled reconciliation repair queue gaps and missed web
 test("checkout success can request refresh but scope mismatch is quarantined without access", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     const queued: CommerceReconciliationMessage[] = [];
     const trigger = await requestCommerceRefresh({
       connectedAccountId: "acct_seller",
@@ -665,7 +665,7 @@ test("checkout success can request refresh but scope mismatch is quarantined wit
 test("explicit unsupported provider state creates a seller-visible incident", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     await seedSeller(database);
     await store.accept(webhook("evt-unknown", "customer.subscription.updated"));
     assert.equal(
@@ -693,7 +693,7 @@ test("explicit unsupported provider state creates a seller-visible incident", as
 test("a stale leased worker cannot quarantine a newer seller generation", async () => {
   const database = await createTestDatabase();
   try {
-    const store = new CloudflareCommerceReconciliationStore(database.d1, () => NOW);
+    const store = new SqliteCommerceReconciliationStore(database.d1, () => NOW);
     await seedSeller(database);
     await store.accept(webhook("evt-old", "invoice.paid"));
     assert.equal(

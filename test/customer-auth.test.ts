@@ -7,14 +7,14 @@ import test from "node:test";
 import { getTableColumns } from "drizzle-orm";
 import { createHmac } from "node:crypto";
 
-import { session } from "../src/db/auth-schema";
+import { session } from "./support/sqlite/db/auth-schema";
 import {
   customerAuthUserOptions,
   createCustomerAuth,
   createDiscordSocialProviderConfig,
   mapDiscordProfileToUser,
   rejectDiscordUserIdUpdate,
-} from "../src/runtime/auth/auth";
+} from "./support/sqlite/runtime/auth/auth";
 import { getCustomerAuthCookieSettings } from "../src/contracts/auth-session-cookie";
 import { parseAdditionalUserInputFromProviderProfile } from "better-auth/db";
 import { createPostgresCustomerAuth } from "../src/runtime/postgres/postgres-customer-auth";

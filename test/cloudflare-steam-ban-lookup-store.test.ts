@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareSteamBanLookupStore } from "../src/runtime/cloudflare-steam-ban-lookup-store";
+import { createSqliteSteamBanLookupStore } from "./support/sqlite/runtime/sqlite-steam-ban-lookup-store";
 
 class FakeKV {
   public puts: Array<{ key: string; value: string; expirationTtl?: number }> = [];
@@ -23,9 +23,9 @@ class FakeKV {
   }
 }
 
-test("createCloudflareSteamBanLookupStore sets expirationTtl on writes", async () => {
+test("createSqliteSteamBanLookupStore sets expirationTtl on writes", async () => {
   const kv = new FakeKV();
-  const store = createCloudflareSteamBanLookupStore(kv as unknown as KVNamespace);
+  const store = createSqliteSteamBanLookupStore(kv as unknown as KVNamespace);
 
   await store.write("76561198000000001", {
     lastCheckedAtMs: 1,

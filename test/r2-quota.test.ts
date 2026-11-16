@@ -9,7 +9,7 @@ import {
   getKnownR2BodyBytes,
   putManagedGuildR2Object,
   resolveR2BodyBytes,
-} from "../src/runtime/r2-quota";
+} from "./support/sqlite/runtime/r2-quota";
 import type { GuildR2QuotaStore } from "../src/runtime/contracts";
 import {
   createProductionRuntimeStores,

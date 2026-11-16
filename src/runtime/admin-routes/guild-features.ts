@@ -366,10 +366,7 @@ export function createGuildFeaturesAdminRoutes(
       handler: async ({ body }) => {
         const config = await options.stores.evidenceVault.readConfig(body.guildId);
         if (!config) return Response.json({ error: "Configuration not found." }, { status: 404 });
-        const update = options.stores.evidenceVault.setEnabled;
-        if (!update)
-          return Response.json({ error: "Availability changes are unavailable." }, { status: 503 });
-        if (!(await update(body.guildId, body.enabled)))
+        if (!(await options.stores.evidenceVault.setEnabled(body.guildId, body.enabled)))
           return Response.json({ error: "Configuration not found." }, { status: 404 });
         return Response.json({ ok: true });
       },

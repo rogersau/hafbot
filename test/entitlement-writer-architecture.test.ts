@@ -28,11 +28,11 @@ test("entitlement projection writers remain inside the Billing boundary", () => 
     .sort();
 
   assert.deepEqual(writers, [
-    "src/runtime/billing/cloudflare-adverse-store.ts",
-    "src/runtime/billing/cloudflare-assignment-store.ts",
-    "src/runtime/billing/cloudflare-billing-sync-store.ts",
-    "src/runtime/billing/cloudflare-grace-store.ts",
-    "src/runtime/cloudflare-guild-plan-projection-store.ts",
+    "src/runtime/postgres/postgres-billing-adverse-store.ts",
+    "src/runtime/postgres/postgres-billing-assignment-store.ts",
+    "src/runtime/postgres/postgres-billing-grace-store.ts",
+    "src/runtime/postgres/postgres-billing-sync-store.ts",
+    "src/runtime/postgres/postgres-guild-plan-projection-store.ts",
   ]);
 });
 

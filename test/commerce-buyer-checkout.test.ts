@@ -20,8 +20,11 @@ test("public catalog keeps only currently purchase-eligible offerings", async ()
     storefront(),
     {
       ...storefront(),
-      offering: { ...storefront().offering, id: "22222222-2222-4222-8222-222222222222" },
-      lifecycle: { ...storefront().lifecycle, state: "draft" },
+      offering: {
+        ...storefront().offering,
+        id: "22222222-2222-4222-8222-222222222222",
+        state: "draft",
+      },
     },
     {
       ...storefront(),
@@ -164,7 +167,7 @@ test("checkout rechecks stale offering, seller capability, membership, bot and r
       [
         "retired offering",
         (store) => {
-          store.view.lifecycle.state = "retiring";
+          store.view.offering.state = "retiring";
         },
         VALID_PREFLIGHT,
         "commerce_offering_not_purchasable",
@@ -551,21 +554,13 @@ function storefront(): CommerceStorefront {
       name: "VIP",
       description: "VIP access",
       purchaseType: "subscription",
-      status: "active",
-      archivedAtMs: null,
-      createdAtMs: NOW,
-      updatedAtMs: NOW,
-    },
-    lifecycle: {
-      offeringId: OFFERING_ID,
-      connectedAccountId: "acct_seller",
-      guildId: "111111111111111111",
       state: "published",
       termsVersion: "seller-terms-2026-07",
       includedBenefits: ["VIP channels"],
       supportContact: "seller@example.com",
       roleManageable: true,
       repairDeadlineAtMs: null,
+      repairPreviousState: null,
       retireAtMs: null,
       publishedAtMs: NOW,
       archivedAtMs: null,

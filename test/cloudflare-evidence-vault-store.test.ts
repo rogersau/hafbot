@@ -5,13 +5,13 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createCloudflareEvidenceVaultStore } from "../src/runtime/cloudflare-evidence-vault-store";
+import { createSqliteEvidenceVaultStore } from "./support/sqlite/runtime/sqlite-evidence-vault-store";
 import type { EvidenceVaultConfig, EvidenceVaultRecord } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("createCloudflareEvidenceVaultStore reads and writes Evidence Vault config", async () => {
+test("createSqliteEvidenceVaultStore reads and writes Evidence Vault config", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEvidenceVaultStore(database as unknown as D1Database);
+  const store = createSqliteEvidenceVaultStore(database as unknown as D1Database);
 
   assert.equal(await store.readConfig("guild-1"), null);
 
@@ -44,9 +44,9 @@ test("createCloudflareEvidenceVaultStore reads and writes Evidence Vault config"
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareEvidenceVaultStore reads and writes hidden evidence records", async () => {
+test("createSqliteEvidenceVaultStore reads and writes hidden evidence records", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEvidenceVaultStore(database as unknown as D1Database);
+  const store = createSqliteEvidenceVaultStore(database as unknown as D1Database);
   const record = buildEvidenceVaultRecord();
 
   assert.equal(await store.readRecord("record-1"), null);
@@ -93,9 +93,9 @@ test("createCloudflareEvidenceVaultStore reads and writes hidden evidence record
   assert.equal(database.execCalls, 0);
 });
 
-test("createCloudflareEvidenceVaultStore searches and amends subjects", async () => {
+test("createSqliteEvidenceVaultStore searches and amends subjects", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEvidenceVaultStore(database as unknown as D1Database);
+  const store = createSqliteEvidenceVaultStore(database as unknown as D1Database);
   await store.createRecord(buildEvidenceVaultRecord({ id: "old", hiddenAtMs: 100 }));
   await store.createRecord(buildEvidenceVaultRecord({ id: "new", hiddenAtMs: 200 }));
   await store.createRecord(
@@ -130,9 +130,9 @@ test("createCloudflareEvidenceVaultStore searches and amends subjects", async ()
   );
 });
 
-test("createCloudflareEvidenceVaultStore lists adds and disables identity patterns", async () => {
+test("createSqliteEvidenceVaultStore lists adds and disables identity patterns", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareEvidenceVaultStore(database as unknown as D1Database);
+  const store = createSqliteEvidenceVaultStore(database as unknown as D1Database);
 
   const seeded = await store.listEnabledIdentityPatterns();
   assert.equal(seeded[0]?.id, "seed-steam-profile-url");
@@ -181,7 +181,6 @@ function buildEvidenceVaultRecord(
         contentType: "image/png",
         sizeBytes: 1234,
         r2Key: "guild-1/evidence/record-1/image-1",
-        url: "/evidence-vault/images/record-1/image-1",
       },
     ],
     totalImageBytes: 1234,

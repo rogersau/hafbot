@@ -9,10 +9,10 @@ import type { ManagedMessage, ManagedMessageDraft } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("managed message store persists Managed Message Draft lifecycle data", async () => {
-  const { createCloudflareManagedMessageStore } =
-    await import("../src/runtime/cloudflare-managed-message-store");
+  const { createSqliteManagedMessageStore } =
+    await import("./support/sqlite/runtime/sqlite-managed-message-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareManagedMessageStore(database as unknown as D1Database);
+  const store = createSqliteManagedMessageStore(database as unknown as D1Database);
   const draft: ManagedMessageDraft = {
     id: "draft-1",
     guildId: "guild-1",
@@ -37,10 +37,10 @@ test("managed message store persists Managed Message Draft lifecycle data", asyn
 });
 
 test("managed message store atomically claims a due Scheduled Publish once", async () => {
-  const { createCloudflareManagedMessageStore } =
-    await import("../src/runtime/cloudflare-managed-message-store");
+  const { createSqliteManagedMessageStore } =
+    await import("./support/sqlite/runtime/sqlite-managed-message-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareManagedMessageStore(database as unknown as D1Database);
+  const store = createSqliteManagedMessageStore(database as unknown as D1Database);
   await store.upsertDraft({
     id: "draft-1",
     guildId: "guild-1",
@@ -66,10 +66,10 @@ test("managed message store atomically claims a due Scheduled Publish once", asy
 });
 
 test("managed message store persists ordered content and marks canonical deletions Missing", async () => {
-  const { createCloudflareManagedMessageStore } =
-    await import("../src/runtime/cloudflare-managed-message-store");
+  const { createSqliteManagedMessageStore } =
+    await import("./support/sqlite/runtime/sqlite-managed-message-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareManagedMessageStore(database as unknown as D1Database);
+  const store = createSqliteManagedMessageStore(database as unknown as D1Database);
   const message: ManagedMessage = {
     id: "managed-1",
     guildId: "guild-1",
@@ -124,10 +124,10 @@ test("managed message store persists ordered content and marks canonical deletio
 });
 
 test("managed message store atomically marks only one concurrent canonical deletion", async () => {
-  const { createCloudflareManagedMessageStore } =
-    await import("../src/runtime/cloudflare-managed-message-store");
+  const { createSqliteManagedMessageStore } =
+    await import("./support/sqlite/runtime/sqlite-managed-message-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareManagedMessageStore(database as unknown as D1Database);
+  const store = createSqliteManagedMessageStore(database as unknown as D1Database);
   await store.upsert({
     id: "managed-1",
     guildId: "guild-1",
@@ -157,10 +157,10 @@ test("managed message store atomically marks only one concurrent canonical delet
 });
 
 test("managed message store deletes entities and media ownership atomically", async () => {
-  const { createCloudflareManagedMessageStore } =
-    await import("../src/runtime/cloudflare-managed-message-store");
+  const { createSqliteManagedMessageStore } =
+    await import("./support/sqlite/runtime/sqlite-managed-message-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareManagedMessageStore(database as unknown as D1Database);
+  const store = createSqliteManagedMessageStore(database as unknown as D1Database);
   const orphan = "orphan.png";
   const shared = "shared.png";
   await store.registerMediaAsset("guild-1", orphan);
@@ -214,10 +214,10 @@ test("managed message store deletes entities and media ownership atomically", as
 });
 
 test("managed message media deletion rechecks references before claiming an orphan", async () => {
-  const { createCloudflareManagedMessageStore } =
-    await import("../src/runtime/cloudflare-managed-message-store");
+  const { createSqliteManagedMessageStore } =
+    await import("./support/sqlite/runtime/sqlite-managed-message-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareManagedMessageStore(database as unknown as D1Database);
+  const store = createSqliteManagedMessageStore(database as unknown as D1Database);
   const filename = "race.png";
   await store.registerMediaAsset("guild-1", filename);
   const message = {

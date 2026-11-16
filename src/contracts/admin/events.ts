@@ -279,7 +279,6 @@ const eventTeamBulkPreviewSchema = z.object({
   includeIncomplete: z.boolean(),
   namePrefix: z.string(),
   revision: z.string(),
-  fingerprint: z.string(),
   proposals: z.array(eventTeamBulkProposalSchema),
   unassignedUserIds: z.array(z.string()),
   consideredSignupUserIds: z.array(z.string()),

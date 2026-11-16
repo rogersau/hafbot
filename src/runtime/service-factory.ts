@@ -1,3 +1,4 @@
+import type { Cache } from "./discord-json-cache";
 import type { QueueProducer } from "./queue-types";
 import type { OperationalIncidentStore as BanIncidentStore } from "../operations/incidents";
 import { createBanCaseEnforcementRuntime } from "./ban-case-enforcement-runtime";
@@ -33,10 +34,7 @@ import { fetchGuildMember, guildMemberHasRole } from "../discord/members";
 import { BlocklistService } from "../services/blocklist-service";
 import { LfgService } from "../services/lfg-service";
 import { EventsService } from "../services/events-service";
-import {
-  EventTeamDeliveryService,
-  type EventTeamDeliveryStore,
-} from "../services/event-team-delivery-service";
+import { EventTeamDeliveryService } from "../services/event-team-delivery-service";
 import { MarketplaceService } from "../services/marketplace-service";
 import {
   PlayerCountService,
@@ -74,10 +72,7 @@ import { ClanService } from "../services/clan-service";
 import { ClanFeatureSetupService } from "../services/clan-feature-setup";
 import { SuggestionService } from "../services/suggestion-service";
 import { createDiscordSuggestionProjection } from "../discord/suggestions";
-import {
-  createMemoryOperationalIncidentStore,
-  OperationalIncidentService,
-} from "../operations/incidents";
+import { OperationalIncidentService } from "../operations/incidents";
 import { FeatureSetupRunner } from "../services/feature-setup-runner";
 import {
   createClanCategory,
@@ -106,19 +101,18 @@ import {
   postPlayerCountAuditEvent,
   postSuggestionAuditEvent,
 } from "../services/guild-audit-log-service";
-import type { GuildNotificationChannelStore } from "../services/activity-log";
+
 import type { EvidenceVaultBlobStore, RuntimeStores } from "./app-types";
 import type { EvidenceMediaCapability } from "../security/evidence-media-capability";
 import type { WebhookCredentialService } from "../security/webhook-credentials/store";
 import { parseDiscordWebhookCredential } from "../security/webhook-credentials";
 import { createGuildBrandingResolver } from "./guild-branding";
-import { createJsonKvCache } from "./discord-json-cache";
+import { createJsonCache } from "./discord-json-cache";
 import {
   getCachedGuildTicketResources,
   getCoalescedGuildTicketResources,
 } from "./admin-discord-cache";
 import type { WhiteLabelBotStore } from "./contracts";
-import type { SuggestionStore } from "./contracts";
 import { GuildServicePolicy } from "./guild-service-policy";
 import {
   DISCORD_PERMISSION_FLAGS,
@@ -139,6 +133,7 @@ import type { ComponentIdSigner } from "../security/component-id-signer";
 import type { ProductAnalyticsReporter } from "../product-analytics";
 import { signSensitiveMessageComponentIds } from "../security/sensitive-component-ids";
 import { ServerLevelProcessor } from "../server-levels/processor";
+import { logServerLevelTelemetry } from "../server-levels/telemetry";
 import type { reportOperationalEvent } from "../observability/operational-reporter";
 
 export interface ServiceFactory {
@@ -148,7 +143,7 @@ export interface ServiceFactory {
   marketplaceService: MarketplaceService;
   lfgService: LfgService;
   eventsService: EventsService;
-  eventTeamDeliveryService?: EventTeamDeliveryService;
+  eventTeamDeliveryService: EventTeamDeliveryService;
   playerCountService: PlayerCountService;
   webhookProxyService: WebhookProxyService;
   platformLinkService: PlatformLinkService;
@@ -180,7 +175,7 @@ export interface ServiceFactoryOptions {
   discordBotToken: string;
   discordBotUserId?: string;
   guildResources?: GuildResourceValidator;
-  discordCacheKv?: KVNamespace;
+  discordCache?: Cache<string>;
   steamWebApiKey?: string;
   webhookProxyLogPersistenceEnabled?: boolean;
   webhookProxyDeliveryQueue?: QueueProducer<unknown>;
@@ -223,11 +218,10 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
         isCurrentGuildMember: async (guildId, userId) =>
           (await fetchGuildMember(guildId, userId, options.discordBotToken)) !== null,
         isKillSwitchEnabled: () => options.serverLevelsEnabled === false,
+        emitTelemetry: logServerLevelTelemetry,
       })
     : null;
-  const evidenceViewCooldownCache = createJsonKvCache<{ expiresAtMs: number }>(
-    options.discordCacheKv,
-  );
+  const evidenceViewCooldownCache = createJsonCache<{ expiresAtMs: number }>(options.discordCache);
   const brandingResolver = createGuildBrandingResolver(options.whiteLabelBotStore);
   const discordMessages = {
     createChannelMessage: (channelId: string, body: Parameters<typeof createChannelMessage>[1]) =>
@@ -415,10 +409,10 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
       : undefined;
   let suggestionService: SuggestionService;
   const operationalIncidentService = new OperationalIncidentService(
-    options.stores.operationalIncidents ?? createMemoryOperationalIncidentStore(),
+    options.stores.operationalIncidents,
   );
   suggestionService = new SuggestionService(
-    options.stores.suggestions ?? createDisabledSuggestionStore(),
+    options.stores.suggestions,
     createDiscordSuggestionProjection({
       token: options.discordBotToken,
       componentIdSigner: options.componentIdSigner,
@@ -442,28 +436,21 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
     (event) =>
       postSuggestionAuditEvent(event, options.stores.guildAuditLog, options.discordBotToken),
   );
-  const eventStore = options.stores.events;
-  const eventTeamDeliveryService =
-    eventStore?.listDueEventTeamDeliveries &&
-    eventStore?.claimEventTeamDelivery &&
-    eventStore?.updateEventTeamDelivery
-      ? new EventTeamDeliveryService({
-          store: eventStore as EventTeamDeliveryStore,
-          discord: {
-            sendUserDm: (userId, body) =>
-              createUserDmMessage(userId, body, options.discordBotToken),
-            editChannelMessage: (channelId, messageId, body) =>
-              editChannelMessage(channelId, messageId, body, options.discordBotToken),
-          },
-          observeMetrics: (metrics) => {
-            console.info({
-              event: "haf.metric",
-              metric: "event_team_delivery",
-              ...metrics,
-            });
-          },
-        })
-      : undefined;
+  const eventTeamDeliveryService = new EventTeamDeliveryService({
+    store: options.stores.events,
+    discord: {
+      sendUserDm: (userId, body) => createUserDmMessage(userId, body, options.discordBotToken),
+      editChannelMessage: (channelId, messageId, body) =>
+        editChannelMessage(channelId, messageId, body, options.discordBotToken),
+    },
+    observeMetrics: (metrics) => {
+      console.info({
+        event: "haf.metric",
+        metric: "event_team_delivery",
+        ...metrics,
+      });
+    },
+  });
 
   return {
     serverLevelProcessor: serverLevelLinkProcessor ?? undefined,
@@ -507,7 +494,7 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
         addGuildMemberRole(guildId, userId, roleId, options.discordBotToken),
       (guildId, userId, roleId) =>
         removeGuildMemberRole(guildId, userId, roleId, options.discordBotToken),
-      options.stores.blocklist as Partial<GuildNotificationChannelStore>,
+      options.stores.blocklist,
       (channelId, body) =>
         createChannelMessage(channelId, body, options.discordBotToken).then(() => undefined),
       (userId, body) =>
@@ -846,52 +833,6 @@ export function createServiceFactory(options: ServiceFactoryOptions): ServiceFac
         }
       : {}),
   };
-}
-
-function createDisabledSuggestionStore(): SuggestionStore {
-  const unavailable = async () => {
-    throw new Error("Suggestions store is unavailable.");
-  };
-  return new Proxy({} as SuggestionStore, {
-    get(_target, property) {
-      if (
-        property === "readConfig" ||
-        property === "readSuggestion" ||
-        property === "readSuggestionByThread" ||
-        property === "readLatestSuggestionByAuthor" ||
-        property === "readConsideredReplyById" ||
-        property === "readConsideredReply" ||
-        property === "readConsideredReplyByMessage" ||
-        property === "readPendingSubmission"
-      )
-        return async () => null;
-      if (
-        property === "listDigestConfigs" ||
-        property === "listActiveSuggestions" ||
-        property === "listSuggestions" ||
-        property === "listRevisions" ||
-        property === "listStatusEvents" ||
-        property === "listConsideredReplies" ||
-        property === "listVotes" ||
-        property === "listReplyFlagMemberIds"
-      )
-        return async () => [];
-      if (
-        property === "countActiveSuggestionsByAuthor" ||
-        property === "deactivateVotesForMember" ||
-        property === "countReplyFlags"
-      )
-        return async () => 0;
-      if (
-        property === "updateSuggestion" ||
-        property === "updateConsideredReply" ||
-        property === "reserveDigestRun"
-      )
-        return async () => false;
-      if (property === "recountVotes") return async () => ({ support: 0, oppose: 0 });
-      return unavailable;
-    },
-  });
 }
 
 const BAN_CASE_NEW_TAG_NAME = "NEW";

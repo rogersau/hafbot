@@ -61,7 +61,7 @@ interface AdminWebhookDestination {
 
 interface AdminWebhookConfig extends Omit<
   WebhookProxyConfig,
-  "destinations" | "destinationsV2" | "banLookupNotificationUrl" | "banLookupCredentialId"
+  "destinations" | "banLookupCredentialId"
 > {
   destinations: AdminWebhookDestination[];
   banLookupCredential: MaskedWebhookCredentialDto | null;
@@ -839,12 +839,12 @@ function WebhookConfigForm({
             name: draft.name,
             enabled: draft.enabled,
             banLookupEnabled: draft.banLookupEnabled,
-            banLookupNotificationUrl: null,
+            banLookupCredentialId: null,
             banLookupAppIds: draft.banLookupAppIds,
             destinations: draft.destinations.map((destination) => ({
               id: destination.id,
               label: destination.label,
-              url: "https://discord.com",
+              credentialId: "preview",
             })),
             defaultDestinationIds: draft.defaultDestinationIds,
             routingRules: draft.routingRules,

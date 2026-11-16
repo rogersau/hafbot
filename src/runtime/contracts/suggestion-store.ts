@@ -63,7 +63,7 @@ export interface SuggestionStore {
     deliveredMessageId: string,
     nowMs: number,
   ): Promise<void>;
-  consumeActionRateLimit?(
+  consumeActionRateLimit(
     guildId: string,
     actorUserId: string,
     action: string,

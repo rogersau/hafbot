@@ -1,4 +1,5 @@
-import type { BillingCatalogEntry, FounderAdmission } from "./types";
+import { currentBillingPrices } from "./catalog";
+import type { BillingCatalogEntry } from "./types";
 
 export interface LandingPrice {
   plan: BillingCatalogEntry["plan"];
@@ -11,7 +12,6 @@ export interface LandingPrice {
 
 export interface LandingPriceCatalog {
   read(): Promise<readonly LandingPrice[] | null>;
-  readFounderAdmission?(): Promise<FounderAdmission>;
 }
 
 export interface StripeDisplayPrice {
@@ -42,51 +42,26 @@ export function createLandingPriceCatalog(options: {
   staleForMs?: number;
   cache?: Map<string, CachedLandingPrices>;
   onError?: (message: string, error: unknown) => void;
-  countFounderPlaces?: () => Promise<number>;
 }): LandingPriceCatalog {
   const now = options.now ?? Date.now;
   const freshForMs = options.freshForMs ?? 15 * 60 * 1_000;
   const staleForMs = options.staleForMs ?? 24 * 60 * 60 * 1_000;
   const cache = options.cache ?? sharedCache;
   const onError = options.onError ?? console.error;
-  const catalogKey = [...options.catalog.values()]
+  const catalogKey = currentBillingPrices(options.catalog)
     .sort((left, right) => left.priceId.localeCompare(right.priceId))
-    .map(
-      (entry) =>
-        `${entry.priceId}:${entry.productId}:${entry.plan}:${entry.frequency}:${entry.cohort}`,
-    )
+    .map((entry) => `${entry.priceId}:${entry.productId}:${entry.plan}:${entry.frequency}`)
     .join("|");
 
-  async function admission(): Promise<FounderAdmission> {
-    const historicalCount = Math.max(
-      0,
-      await (options.countFounderPlaces?.() ?? Promise.resolve(50)),
-    );
-    return {
-      historicalCount,
-      publicCount: Math.min(historicalCount, 50),
-      limit: 50,
-      open: historicalCount < 50,
-    };
-  }
-
   return {
-    readFounderAdmission: admission,
     async read() {
-      const founderAdmission = await admission();
-      const cohort = founderAdmission.open ? "founder" : "standard";
-      const selectedCatalog = new Map(
-        [...options.catalog].filter(
-          ([, entry]) => entry.cohort === cohort && entry.legacy !== true,
-        ),
-      );
-      const cacheKey = `${catalogKey}:${cohort}`;
+      const cacheKey = `${catalogKey}:current`;
       const cached = cache.get(cacheKey);
       const ageMs = cached ? now() - cached.readAtMs : Number.POSITIVE_INFINITY;
       if (cached && ageMs <= freshForMs) return cached.prices;
 
       try {
-        const prices = await readCompleteCatalog(selectedCatalog, options.stripe);
+        const prices = await readCompleteCatalog(options.catalog, options.stripe);
         cache.set(cacheKey, { readAtMs: now(), prices });
         return prices;
       } catch (error) {
@@ -102,7 +77,7 @@ async function readCompleteCatalog(
   catalog: ReadonlyMap<string, BillingCatalogEntry>,
   stripe: StripeDisplayPriceReader,
 ): Promise<readonly LandingPrice[]> {
-  const entries = [...catalog.values()];
+  const entries = currentBillingPrices(catalog);
   const values = await Promise.all(
     entries.map(async (entry): Promise<LandingPrice> => {
       const price = await stripe.readPrice(entry.priceId);

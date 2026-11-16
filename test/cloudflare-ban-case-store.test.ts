@@ -40,8 +40,9 @@ const baseBanCase: Omit<BanCase, "guildId" | "caseId"> = {
 };
 
 test("ban case store reads null config initially", async () => {
-  const { createCloudflareBanCaseStore } = await import("../src/runtime/cloudflare-ban-case-store");
-  const store = createCloudflareBanCaseStore(new SqliteD1Database() as unknown as D1Database);
+  const { createSqliteBanCaseStore } =
+    await import("./support/sqlite/runtime/sqlite-ban-case-store");
+  const store = createSqliteBanCaseStore(new SqliteD1Database() as unknown as D1Database);
 
   assert.equal(await store.readConfig("guild-1"), null);
   assert.equal(await store.readBanCaseSourceByPublicId("pub-1"), null);
@@ -50,8 +51,9 @@ test("ban case store reads null config initially", async () => {
 });
 
 test("ban case store round-trips config and sources", async () => {
-  const { createCloudflareBanCaseStore } = await import("../src/runtime/cloudflare-ban-case-store");
-  const store = createCloudflareBanCaseStore(new SqliteD1Database() as unknown as D1Database);
+  const { createSqliteBanCaseStore } =
+    await import("./support/sqlite/runtime/sqlite-ban-case-store");
+  const store = createSqliteBanCaseStore(new SqliteD1Database() as unknown as D1Database);
 
   await store.upsertConfig({ ...baseConfig, guildId: "guild-1", updatedAtMs: 100 });
   await store.upsertBanCaseSource({
@@ -74,8 +76,9 @@ test("ban case store round-trips config and sources", async () => {
 });
 
 test("ban case store does not leak sources or config between guilds", async () => {
-  const { createCloudflareBanCaseStore } = await import("../src/runtime/cloudflare-ban-case-store");
-  const store = createCloudflareBanCaseStore(new SqliteD1Database() as unknown as D1Database);
+  const { createSqliteBanCaseStore } =
+    await import("./support/sqlite/runtime/sqlite-ban-case-store");
+  const store = createSqliteBanCaseStore(new SqliteD1Database() as unknown as D1Database);
 
   await store.upsertBanCaseSource({
     ...baseSource,
@@ -89,8 +92,9 @@ test("ban case store does not leak sources or config between guilds", async () =
 });
 
 test("ban case store enforces unique subject per guild", async () => {
-  const { createCloudflareBanCaseStore } = await import("../src/runtime/cloudflare-ban-case-store");
-  const store = createCloudflareBanCaseStore(new SqliteD1Database() as unknown as D1Database);
+  const { createSqliteBanCaseStore } =
+    await import("./support/sqlite/runtime/sqlite-ban-case-store");
+  const store = createSqliteBanCaseStore(new SqliteD1Database() as unknown as D1Database);
 
   await store.createBanCase({ ...baseBanCase, guildId: "guild-1", caseId: "case-1" });
 
@@ -108,8 +112,9 @@ test("ban case store enforces unique subject per guild", async () => {
 });
 
 test("ban case store reads a case by subject and id", async () => {
-  const { createCloudflareBanCaseStore } = await import("../src/runtime/cloudflare-ban-case-store");
-  const store = createCloudflareBanCaseStore(new SqliteD1Database() as unknown as D1Database);
+  const { createSqliteBanCaseStore } =
+    await import("./support/sqlite/runtime/sqlite-ban-case-store");
+  const store = createSqliteBanCaseStore(new SqliteD1Database() as unknown as D1Database);
 
   await store.createBanCase({ ...baseBanCase, guildId: "guild-1", caseId: "case-1" });
 
@@ -122,8 +127,9 @@ test("ban case store reads a case by subject and id", async () => {
 });
 
 test("ban case store updates status and thread", async () => {
-  const { createCloudflareBanCaseStore } = await import("../src/runtime/cloudflare-ban-case-store");
-  const store = createCloudflareBanCaseStore(new SqliteD1Database() as unknown as D1Database);
+  const { createSqliteBanCaseStore } =
+    await import("./support/sqlite/runtime/sqlite-ban-case-store");
+  const store = createSqliteBanCaseStore(new SqliteD1Database() as unknown as D1Database);
 
   await store.createBanCase({ ...baseBanCase, guildId: "guild-1", caseId: "case-1" });
 
@@ -142,8 +148,9 @@ test("ban case store updates status and thread", async () => {
 });
 
 test("ban case store deletes a source", async () => {
-  const { createCloudflareBanCaseStore } = await import("../src/runtime/cloudflare-ban-case-store");
-  const store = createCloudflareBanCaseStore(new SqliteD1Database() as unknown as D1Database);
+  const { createSqliteBanCaseStore } =
+    await import("./support/sqlite/runtime/sqlite-ban-case-store");
+  const store = createSqliteBanCaseStore(new SqliteD1Database() as unknown as D1Database);
 
   await store.upsertBanCaseSource({
     ...baseSource,

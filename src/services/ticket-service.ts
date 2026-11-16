@@ -67,6 +67,8 @@ export class TicketService {
           this.ticketStore.createTicketInstance(instance),
         deleteTicketInstance: (body: { guildId: string; channelId: string }) =>
           this.ticketStore.deleteTicketInstance(body),
+        updateTicketOpeningMessageId: (body) => this.ticketStore.updateTicketOpeningMessageId(body),
+        listMemberTicketHistory: (body) => this.ticketStore.listMemberTicketHistory(body),
       },
       {
         createChannel: this.createChannel,

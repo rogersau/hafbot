@@ -125,10 +125,6 @@ const DASHBOARD_MUTATIONS: Readonly<Record<string, DashboardMutation>> = {
     feature: "player_link",
     action: "configuration_saved",
   },
-  "POST /admin/api/steam-link/config": {
-    feature: "player_link",
-    action: "configuration_saved",
-  },
   "POST /admin/api/server-levels/config": {
     feature: "server_levels",
     action: "configuration_saved",
@@ -278,16 +274,13 @@ function dashboardMutation(
   body: Record<string, unknown>,
 ): DashboardMutation | undefined {
   if (route.method === "POST" && route.path === "/admin/api/feature-resource-setup/execute") {
-    const feature = analyticsFeatureForPath(route.path, body);
+    const feature = analyticsFeatureForSurface(body);
     return feature ? { feature, action: "resource_setup_completed" } : undefined;
   }
   return DASHBOARD_MUTATIONS[`${route.method} ${route.path}`];
 }
 
-function analyticsFeatureForPath(
-  path: string,
-  body?: Record<string, unknown>,
-): ProductFeature | undefined {
+function analyticsFeatureForSurface(body: Record<string, unknown>): ProductFeature | undefined {
   const surfaceKey = typeof body?.surfaceKey === "string" ? body.surfaceKey : undefined;
   if (
     surfaceKey === "reaction_rules" ||
@@ -299,12 +292,6 @@ function analyticsFeatureForPath(
   ) {
     return surfaceKey;
   }
-  if (path.includes("blocklist") || path.includes("reaction-limit")) return "reaction_rules";
-  if (path.includes("ticket")) return "tickets";
-  if (path.includes("/lfg")) return "lfg";
-  if (path.includes("member-verification")) return "member_verification";
-  if (path.includes("platform-link") || path.includes("steam-link")) return "player_link";
-  if (path.includes("server-levels")) return "server_levels";
   return undefined;
 }
 
@@ -323,7 +310,7 @@ function reportDashboardSetupStarted(
   ) {
     return;
   }
-  const feature = analyticsFeatureForPath(route.path, body);
+  const feature = analyticsFeatureForSurface(body);
   if (!feature) return;
   const delivery = options.productAnalytics
     .report({

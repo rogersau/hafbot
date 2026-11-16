@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import worker from "../src/index";
-import type { Env } from "../src/env";
+import worker from "./support/application";
+import type { Env } from "./support/test-env";
 
 test("worker.fetch keeps a warmed valid webhook outside request-scoped invalid admission", async () => {
   const publicId = "worker_cache_webhook_1234";

@@ -7,14 +7,14 @@ import test from "node:test";
 import type { SetupResource } from "../src/feature-setup";
 import { ClanFeatureSetupService } from "../src/services/clan-feature-setup";
 import { FeatureSetupRunner } from "../src/services/feature-setup-runner";
-import { createCloudflareClanStore } from "../src/runtime/cloudflare-clan-store";
-import { createCloudflareFeatureSetupStore } from "../src/runtime/cloudflare-feature-setup-store";
+import { createSqliteClanStore } from "./support/sqlite/runtime/sqlite-clan-store";
+import { createSqliteFeatureSetupStore } from "./support/sqlite/runtime/sqlite-feature-setup-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("Clan Feature Resource Setup mixes Create and Reuse and keeps the feature disabled", async () => {
   const database = new SqliteD1Database() as unknown as D1Database;
-  const clans = createCloudflareClanStore(database);
-  const setupStore = createCloudflareFeatureSetupStore(database);
+  const clans = createSqliteClanStore(database);
+  const setupStore = createSqliteFeatureSetupStore(database);
   const resources = new Map<string, SetupResource>([
     ["existing-panel", { id: "existing-panel", name: "clans", kind: "text_channel" }],
     ["existing-reviewer", { id: "existing-reviewer", name: "Staff", kind: "role" }],

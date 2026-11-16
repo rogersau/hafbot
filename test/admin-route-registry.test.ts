@@ -1,3 +1,4 @@
+import { composeTestServices } from "./support/compose-services";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -62,8 +63,10 @@ function createDispatchOptions(
 }
 
 test("createAdminRoutes joins each feature module's route array into a flat list", () => {
+  const stores = createStubStores();
   const routes = createAdminRoutes({
-    stores: createStubStores(),
+    stores,
+    services: composeTestServices(stores),
     adminAccess: allowAllAdminAccess,
     discordBotToken: "test",
   });
@@ -265,7 +268,7 @@ test("production admin handler construction requires stores, a token, and an aut
         stores: createStubStores(),
         discordBotToken: "",
         adminAccess: allowAllAdminAccess,
-      }),
+      } as never),
     /Discord bot token is required/,
   );
   assert.throws(
@@ -518,9 +521,12 @@ test("dispatcher parses the route body schema and returns 400 on parse failure",
   });
   const response = await dispatchAdminRoute([route], request, createDispatchOptions());
   assert.equal(response?.status, 400);
-  const payload = (await response?.json()) as { error: string; issues: Array<{ path: string }> };
+  const payload = (await response?.json()) as {
+    error: string;
+    fieldIssues: Array<{ path: string }>;
+  };
   assert.equal(payload.error, "Invalid request body");
-  assert.ok(payload.issues.length > 0);
+  assert.ok(payload.fieldIssues.length > 0);
 });
 
 test("dispatcher parses the route query schema and returns 400 on parse failure", async () => {
@@ -535,9 +541,12 @@ test("dispatcher parses the route query schema and returns 400 on parse failure"
   const request = new Request("https://example.com/admin/api/example");
   const response = await dispatchAdminRoute([route], request, createDispatchOptions());
   assert.equal(response?.status, 400);
-  const payload = (await response?.json()) as { error: string; issues: Array<{ path: string }> };
+  const payload = (await response?.json()) as {
+    error: string;
+    fieldIssues: Array<{ path: string }>;
+  };
   assert.equal(payload.error, "Invalid request query");
-  assert.equal(payload.issues[0]?.path, "guildId");
+  assert.equal(payload.fieldIssues[0]?.path, "guildId");
 });
 
 test("dispatcher passes the parsed body to the route handler", async () => {

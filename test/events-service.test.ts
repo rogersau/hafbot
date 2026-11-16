@@ -28,6 +28,9 @@ import type {
   EventLifecycleTransitionCommitInput,
   EventTeamDisbandCommitInput,
   EventTeamMutationCommitInput,
+  EventTeamRateLimitAction,
+  EventTeamRateLimitResult,
+  EventTeamRateLimitScope,
 } from "../src/runtime/contracts/event-store";
 import { GuildResourceValidationError } from "../src/discord/guild-resource-validator";
 import {
@@ -131,6 +134,184 @@ test("Event Team creation enforces adjustable per-event abuse limits", async () 
     }),
     (error: unknown) => error instanceof EventTeamRateLimitError && error.action === "team_create",
   );
+});
+
+test("EventsService delegates Event Team abuse limits to the store", async () => {
+  const store = createStore();
+  const service = new EventsService(store, createDiscordStub());
+  const event = createTeamEvent();
+  await store.upsertEvent(event);
+  await service.organizerSignup({
+    guildId: event.guildId,
+    eventId: event.id,
+    userId: "captain-1",
+    groupId: "open",
+  });
+  let rateLimitCalls = 0;
+  store.consumeEventTeamRateLimit = async () => {
+    rateLimitCalls += 1;
+    return { allowed: false, remaining: 0, retryAfterMs: 4_321 };
+  };
+
+  await assert.rejects(
+    service.createEventTeam({
+      guildId: event.guildId,
+      eventId: event.id,
+      userId: "captain-1",
+      groupId: "open",
+      name: "First Team",
+    }),
+    (error: unknown) => error instanceof EventTeamRateLimitError && error.retryAfterMs === 4_321,
+  );
+  assert.equal(rateLimitCalls, 1);
+  assert.deepEqual(store.eventTeams, []);
+});
+
+test("EventsService propagates an atomic Team commit failure without fallback writes", async () => {
+  const store = createStore();
+  const service = new EventsService(store, createDiscordStub());
+  const event = createTeamEvent();
+  await store.upsertEvent(event);
+  await service.organizerSignup({
+    guildId: event.guildId,
+    eventId: event.id,
+    userId: "captain-1",
+    groupId: "open",
+  });
+  let fallbackWrites = 0;
+  store.commitEventTeamMutation = async () => {
+    throw new Error("atomic Team commit failed");
+  };
+  store.createEventTeamWithCaptain = async () => {
+    fallbackWrites += 1;
+  };
+  store.addEventTeamMembership = async () => {
+    fallbackWrites += 1;
+  };
+  store.appendEventTeamAudit = async () => {
+    fallbackWrites += 1;
+  };
+  store.enqueueEventTeamDelivery = async (record) => {
+    fallbackWrites += 1;
+    return record;
+  };
+
+  await assert.rejects(
+    service.createEventTeam({
+      guildId: event.guildId,
+      eventId: event.id,
+      userId: "captain-1",
+      groupId: "open",
+      name: "First Team",
+    }),
+    /atomic Team commit failed/,
+  );
+  assert.equal(fallbackWrites, 0);
+  assert.deepEqual(store.eventTeams, []);
+  assert.deepEqual(store.eventTeamMemberships, []);
+  assert.deepEqual(store.eventTeamAudits, []);
+  assert.deepEqual(store.eventTeamDeliveries, []);
+});
+
+test("EventsService propagates an atomic proposal acceptance failure without fallback writes", async () => {
+  const store = createStore();
+  const service = new EventsService(store, createDiscordStub());
+  const event = createTeamEvent({ requiredTeamSize: 3 });
+  await store.upsertEvent(event);
+  await service.organizerSignup({
+    guildId: event.guildId,
+    eventId: event.id,
+    userId: "captain-1",
+    groupId: "open",
+  });
+  const team = await service.createEventTeam({
+    guildId: event.guildId,
+    eventId: event.id,
+    userId: "captain-1",
+    groupId: "open",
+    name: "First Team",
+  });
+  const proposal = await service.inviteEventTeamMember({
+    guildId: event.guildId,
+    eventId: event.id,
+    teamId: team.id,
+    captainUserId: "captain-1",
+    userId: "user-2",
+  });
+  const auditCount = store.eventTeamAudits.length;
+  const deliveryCount = store.eventTeamDeliveries.length;
+  let fallbackWrites = 0;
+  store.acceptEventTeamProposalAtomic = async () => {
+    throw new Error("atomic proposal acceptance failed");
+  };
+  store.updateEventTeamProposal = async () => {
+    fallbackWrites += 1;
+  };
+  store.upsertSignup = async () => {
+    fallbackWrites += 1;
+  };
+  store.addEventTeamMembership = async () => {
+    fallbackWrites += 1;
+  };
+  store.appendEventTeamAudit = async () => {
+    fallbackWrites += 1;
+  };
+  store.enqueueEventTeamDelivery = async (record) => {
+    fallbackWrites += 1;
+    return record;
+  };
+
+  await assert.rejects(
+    service.acceptEventTeamInvitation({
+      guildId: event.guildId,
+      eventId: event.id,
+      proposalId: proposal.id,
+      userId: "user-2",
+    }),
+    /atomic proposal acceptance failed/,
+  );
+  assert.equal(fallbackWrites, 0);
+  assert.equal(
+    (await store.readEventTeamProposal(event.guildId, event.id, proposal.id))?.status,
+    "pending",
+  );
+  assert.deepEqual(await store.listUserSignups(event.guildId, event.id, "user-2"), []);
+  assert.equal(
+    (await store.listActiveEventTeamMemberships(event.guildId, event.id)).some(
+      (membership) => membership.userId === "user-2",
+    ),
+    false,
+  );
+  assert.equal(store.eventTeamAudits.length, auditCount);
+  assert.equal(store.eventTeamDeliveries.length, deliveryCount);
+});
+
+test("EventsService propagates an atomic lifecycle failure without partial history or snapshots", async () => {
+  const store = createStore();
+  const service = new EventsService(store, createDiscordStub());
+  const event = createTeamEvent({ status: "scheduled", startsAtMs: 100 });
+  await store.upsertEvent(event);
+  await store.organizerSeedTeam();
+  let fallbackWrites = 0;
+  store.commitEventLifecycleTransition = async () => {
+    throw new Error("atomic lifecycle transition failed");
+  };
+  store.upsertEvent = async () => {
+    fallbackWrites += 1;
+  };
+  store.appendEventLifecycleHistory = async () => {
+    fallbackWrites += 1;
+  };
+  store.captureEventTeamRosterSnapshot = async (snapshot) => {
+    fallbackWrites += 1;
+    return snapshot;
+  };
+
+  await assert.rejects(service.processDueLifecycle(100), /atomic lifecycle transition failed/);
+  assert.equal(fallbackWrites, 0);
+  assert.equal((await store.readEvent(event.guildId, event.id))?.status, "scheduled");
+  assert.deepEqual(store.lifecycleHistory, []);
+  assert.deepEqual(store.rosterSnapshots, []);
 });
 
 test("EventsService rejects a team Event whose roster size is outside 2 to 50", async () => {
@@ -1630,6 +1811,10 @@ class EventStoreStub {
   atomicLifecycleCommits = 0;
   dueReminders: Array<{ event: EventRecord; reminder: EventReminder }> = [];
   consumedReminderIds: string[] = [];
+  private readonly eventTeamRateLimits = new Map<
+    string,
+    { windowStartedAtMs: number; attemptCount: number }
+  >();
 
   async organizerSeedTeam(): Promise<void> {
     this.eventTeams.push({
@@ -1815,6 +2000,40 @@ class EventStoreStub {
     this.rosterSnapshots.push(...input.snapshots);
   }
 
+  async acceptEventTeamProposalAtomic(input: {
+    proposal: EventTeamProposal;
+    membership: EventTeamMembership;
+    signup?: EventSignup;
+    cancelProposalIds: string[];
+    audit?: EventTeamAuditRecord;
+    deliveries?: EventTeamDeliveryOutboxRecord[];
+  }): Promise<void> {
+    const existing = this.eventTeamProposals.find(
+      (item) =>
+        item.guildId === input.proposal.guildId &&
+        item.eventId === input.proposal.eventId &&
+        item.id === input.proposal.id,
+    );
+    if (!existing || existing.status !== "pending")
+      throw new Error("Event Team proposal is no longer pending.");
+    await this.updateEventTeamProposal(input.proposal);
+    if (input.signup) await this.upsertSignup(input.signup);
+    await this.addEventTeamMembership(input.membership);
+    for (const proposalId of input.cancelProposalIds) {
+      const proposal = this.eventTeamProposals.find((item) => item.id === proposalId);
+      if (proposal) {
+        await this.updateEventTeamProposal({
+          ...proposal,
+          status: "cancelled",
+          updatedAtMs: input.proposal.updatedAtMs,
+          resolvedAtMs: input.proposal.updatedAtMs,
+        });
+      }
+    }
+    if (input.audit) this.eventTeamAudits.push(input.audit);
+    this.eventTeamDeliveries.push(...(input.deliveries ?? []));
+  }
+
   async readEventTeamStateVersion(): Promise<number> {
     return 0;
   }
@@ -1956,6 +2175,206 @@ class EventStoreStub {
         : item,
     );
   }
+
+  async appendEventTeamAudit(record: EventTeamAuditRecord): Promise<void> {
+    this.eventTeamAudits.push(record);
+  }
+
+  async listEventTeamAudit(input: {
+    guildId: string;
+    eventId: string;
+    limit?: number;
+  }): Promise<EventTeamAuditRecord[]> {
+    return this.eventTeamAudits
+      .filter((item) => item.guildId === input.guildId && item.eventId === input.eventId)
+      .slice(0, input.limit ?? Number.MAX_SAFE_INTEGER);
+  }
+
+  async readEventTeamRosterSnapshot(
+    guildId: string,
+    eventId: string,
+    teamId: string,
+  ): Promise<EventTeamRosterSnapshot | null> {
+    return (
+      this.rosterSnapshots.find(
+        (item) => item.guildId === guildId && item.eventId === eventId && item.teamId === teamId,
+      ) ?? null
+    );
+  }
+
+  async listEventTeamRosterSnapshots(
+    guildId: string,
+    eventId: string,
+  ): Promise<EventTeamRosterSnapshot[]> {
+    return this.rosterSnapshots.filter(
+      (item) => item.guildId === guildId && item.eventId === eventId,
+    );
+  }
+
+  async enqueueEventTeamDelivery(
+    record: EventTeamDeliveryOutboxRecord,
+  ): Promise<EventTeamDeliveryOutboxRecord> {
+    this.eventTeamDeliveries.push(record);
+    return record;
+  }
+
+  async listEventTeamDeliveries(input: {
+    guildId: string;
+    eventId: string;
+    status?: EventTeamDeliveryOutboxRecord["status"];
+    limit?: number;
+  }): Promise<EventTeamDeliveryOutboxRecord[]> {
+    return this.eventTeamDeliveries
+      .filter(
+        (item) =>
+          item.guildId === input.guildId &&
+          item.eventId === input.eventId &&
+          (!input.status || item.status === input.status),
+      )
+      .slice(0, input.limit ?? Number.MAX_SAFE_INTEGER);
+  }
+
+  async listDueEventTeamDeliveries(input: {
+    guildId?: string;
+    eventId?: string;
+    nowMs: number;
+    limit?: number;
+  }): Promise<EventTeamDeliveryOutboxRecord[]> {
+    return this.eventTeamDeliveries
+      .filter(
+        (item) =>
+          (!input.guildId || item.guildId === input.guildId) &&
+          (!input.eventId || item.eventId === input.eventId) &&
+          item.status === "pending" &&
+          item.nextAttemptAtMs <= input.nowMs,
+      )
+      .slice(0, input.limit ?? Number.MAX_SAFE_INTEGER);
+  }
+
+  async claimEventTeamDelivery(input: {
+    record: EventTeamDeliveryOutboxRecord;
+    nowMs: number;
+    leaseMs: number;
+  }): Promise<EventTeamDeliveryOutboxRecord | null> {
+    const record = this.eventTeamDeliveries.find((item) => item.id === input.record.id);
+    if (
+      !record ||
+      record.status !== "pending" ||
+      record.nextAttemptAtMs > input.nowMs ||
+      record.updatedAtMs !== input.record.updatedAtMs
+    ) {
+      return null;
+    }
+    const claimed: EventTeamDeliveryOutboxRecord = {
+      ...record,
+      status: "processing",
+      updatedAtMs: input.nowMs,
+    };
+    this.eventTeamDeliveries = this.eventTeamDeliveries.map((item) =>
+      item.id === claimed.id ? claimed : item,
+    );
+    return claimed;
+  }
+
+  async updateEventTeamDelivery(
+    record: EventTeamDeliveryOutboxRecord,
+    expected?: EventTeamDeliveryOutboxRecord,
+  ): Promise<void> {
+    const index = this.eventTeamDeliveries.findIndex((item) => item.id === record.id);
+    if (index < 0) return;
+    if (expected && this.eventTeamDeliveries[index]!.updatedAtMs !== expected.updatedAtMs) return;
+    this.eventTeamDeliveries[index] = record;
+  }
+
+  async listEventLifecycleHistory(
+    guildId: string,
+    eventId: string,
+  ): Promise<EventLifecycleHistoryRecord[]> {
+    return this.lifecycleHistory.filter(
+      (item) => item.guildId === guildId && item.eventId === eventId,
+    );
+  }
+
+  async pruneEventLifecycleHistory(nowMs: number): Promise<number> {
+    const expired = this.lifecycleHistory.filter(
+      (item) => item.retentionExpiresAtMs !== null && item.retentionExpiresAtMs <= nowMs,
+    ).length;
+    this.lifecycleHistory = this.lifecycleHistory.filter(
+      (item) => item.retentionExpiresAtMs === null || item.retentionExpiresAtMs > nowMs,
+    );
+    return expired;
+  }
+
+  async deleteEventPermanently(input: { guildId: string; eventId: string }): Promise<void> {
+    const matches = (item: { guildId: string; eventId: string }) =>
+      item.guildId === input.guildId && item.eventId === input.eventId;
+    this.events = this.events.filter(
+      (item) => item.guildId !== input.guildId || item.id !== input.eventId,
+    );
+    this.signups = this.signups.filter((item) => !matches(item));
+    this.eventTeams = this.eventTeams.filter((item) => !matches(item));
+    this.eventTeamMemberships = this.eventTeamMemberships.filter((item) => !matches(item));
+    this.eventTeamProposals = this.eventTeamProposals.filter((item) => !matches(item));
+    this.eventTeamInvitationBlocks = this.eventTeamInvitationBlocks.filter(
+      (item) => !matches(item),
+    );
+    this.rosterSnapshots = this.rosterSnapshots.filter((item) => !matches(item));
+    this.lifecycleHistory = this.lifecycleHistory.filter((item) => !matches(item));
+    this.eventTeamAudits = this.eventTeamAudits.filter((item) => !matches(item));
+    this.eventTeamDeliveries = this.eventTeamDeliveries.filter((item) => !matches(item));
+  }
+
+  async commitEventTeamBulkFormation(): Promise<unknown> {
+    return undefined;
+  }
+
+  async consumeEventTeamRateLimit(input: {
+    guildId: string;
+    eventId: string;
+    action: EventTeamRateLimitAction;
+    scopeType: EventTeamRateLimitScope;
+    scopeId: string;
+    limit: number;
+    windowMs: number;
+    nowMs: number;
+  }): Promise<EventTeamRateLimitResult> {
+    const key = `${input.guildId}:${input.eventId}:${input.action}:${input.scopeType}:${input.scopeId}`;
+    const previous = this.eventTeamRateLimits.get(key);
+    const current =
+      !previous || input.nowMs - previous.windowStartedAtMs >= input.windowMs
+        ? { windowStartedAtMs: input.nowMs, attemptCount: 1 }
+        : {
+            ...previous,
+            attemptCount: Math.min(input.limit + 1, previous.attemptCount + 1),
+          };
+    this.eventTeamRateLimits.set(key, current);
+    return {
+      allowed: current.attemptCount <= input.limit,
+      remaining: Math.max(0, input.limit - current.attemptCount),
+      retryAfterMs: Math.max(0, current.windowStartedAtMs + input.windowMs - input.nowMs),
+    };
+  }
+}
+
+function createTeamEvent(overrides: Partial<EventRecord> = {}): EventRecord {
+  return createEvent({
+    status: "scheduled",
+    participationMode: "team",
+    requiredTeamSize: 2,
+    groups: [
+      {
+        id: "open",
+        label: "Open",
+        emoji: null,
+        capacity: 20,
+        waitlistEnabled: true,
+        allowedRoleIds: [],
+        blockedRoleIds: [],
+        grantRoleId: null,
+      },
+    ],
+    ...overrides,
+  });
 }
 
 function createEvent(overrides: Partial<EventRecord> = {}): EventRecord {

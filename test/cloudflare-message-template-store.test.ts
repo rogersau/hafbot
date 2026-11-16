@@ -8,10 +8,10 @@ import type { MessageTemplate, TicketTemplateReply } from "../src/types";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("Message Template store persists ordered embeds and Ticket eligibility", async () => {
-  const { createCloudflareMessageTemplateStore } =
-    await import("../src/runtime/cloudflare-message-template-store");
+  const { createSqliteMessageTemplateStore } =
+    await import("./support/sqlite/runtime/sqlite-message-template-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareMessageTemplateStore(database as unknown as D1Database);
+  const store = createSqliteMessageTemplateStore(database as unknown as D1Database);
   const template: MessageTemplate = {
     id: "template-1",
     guildId: "guild-1",
@@ -31,9 +31,9 @@ test("Message Template store persists ordered embeds and Ticket eligibility", as
 });
 
 test("Ticket store claims one confirmed Template Reply and retains accountability metadata", async () => {
-  const { createCloudflareTicketStore } = await import("../src/runtime/cloudflare-ticket-store");
+  const { createSqliteTicketStore } = await import("./support/sqlite/runtime/sqlite-ticket-store");
   const database = new SqliteD1Database();
-  const store = createCloudflareTicketStore(database as unknown as D1Database);
+  const store = createSqliteTicketStore(database as unknown as D1Database);
   const reply: TicketTemplateReply = {
     interactionId: "interaction-1",
     guildId: "guild-1",

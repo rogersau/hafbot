@@ -121,6 +121,38 @@ test("TimedRoleService rejects stale or unmanageable suspended roles before conf
   assert.equal(persisted, 0);
 });
 
+test("TimedRoleService configuration setters always persist through the rule store", async () => {
+  const fixture = createProductionRuntimeStores();
+  timedRoleFixtures.add(fixture);
+  const service = new TimedRoleService(
+    fixture.stores.timedRoles,
+    "bot-token",
+    createPermissiveGuildResourceValidator(),
+  );
+  const newMemberRules = [{ roleId: "role-new", durationInput: "2h" }];
+  const manualRules = [{ roleId: "role-manual", durationInput: "3h" }];
+
+  await service.updateNewMemberTimedRoleConfig({ guildId: "guild-1", roles: newMemberRules });
+  await service.updateManualAssignmentTimedRoleConfig({ guildId: "guild-1", roles: manualRules });
+
+  assert.deepEqual(
+    await fixture.stores.timedRoles.readTimedRoleConfigRules("guild-1", "new-member"),
+    newMemberRules,
+  );
+  assert.deepEqual(
+    await fixture.stores.timedRoles.readTimedRoleConfigRules("guild-1", "manual-assignment"),
+    manualRules,
+  );
+  assert.deepEqual(await service.getNewMemberTimedRoleConfig("guild-1"), {
+    guildId: "guild-1",
+    roles: newMemberRules,
+  });
+  assert.deepEqual(await service.getManualAssignmentTimedRoleConfig("guild-1"), {
+    guildId: "guild-1",
+    roles: manualRules,
+  });
+});
+
 test("TimedRoleService rejects a foreign assignment role before Discord or persistence", async () => {
   let persisted = 0;
   let discordCalls = 0;
@@ -1333,8 +1365,8 @@ test("TimedRoleService.assignConfiguredNewMemberRole assigns the configured role
   };
 
   const store = createTimedRoleStore({
-    async readNewMemberTimedRoleConfig(guildId: string) {
-      return guildId === config.guildId ? config : { guildId, roles: [] };
+    async readTimedRoleConfigRules(guildId, configType) {
+      return guildId === config.guildId && configType === "new-member" ? config.roles : [];
     },
     async upsertTimedRole(role: TimedRoleAssignment) {
       upsertedRoles.push(role);
@@ -1391,17 +1423,14 @@ test("TimedRoleService.assignConfiguredNewMemberRole assigns the configured role
 test("TimedRoleService.assignConfiguredNewMemberRole applies configured role suspension", async () => {
   const mutations: string[] = [];
   const store = createTimedRoleStore({
-    async readNewMemberTimedRoleConfig() {
-      return {
-        guildId: "guild-1",
-        roles: [
-          {
-            roleId: "timed-role",
-            durationInput: "1h",
-            suspendedRoleIds: ["access-role"],
-          },
-        ],
-      };
+    async readTimedRoleConfigRules() {
+      return [
+        {
+          roleId: "timed-role",
+          durationInput: "1h",
+          suspendedRoleIds: ["access-role"],
+        },
+      ];
     },
   });
   const service = new TimedRoleService(
@@ -1461,8 +1490,8 @@ test("TimedRoleService.assignConfiguredNewMemberRole assigns every configured ne
   };
 
   const store = createTimedRoleStore({
-    async readNewMemberTimedRoleConfig(guildId: string) {
-      return guildId === config.guildId ? config : { guildId, roles: [] };
+    async readTimedRoleConfigRules(guildId, configType) {
+      return guildId === config.guildId && configType === "new-member" ? config.roles : [];
     },
     async upsertTimedRole(role: TimedRoleAssignment) {
       upsertedRoles.push(role);
@@ -1624,8 +1653,8 @@ test("TimedRoleService.expireDueTimedRoles cleans up when the member has left th
 
 test("TimedRoleService.assignConfiguredNewMemberRole skips when no join role is configured", async () => {
   const store = createTimedRoleStore({
-    async readNewMemberTimedRoleConfig(guildId: string) {
-      return { guildId, roles: [] };
+    async readTimedRoleConfigRules() {
+      return [];
     },
     async upsertTimedRole() {
       assert.fail("should not persist an assignment without a configured role");
@@ -1661,8 +1690,8 @@ test("TimedRoleService.createManualAssignmentTimedRole creates assignments for c
     ],
   };
   const store = createTimedRoleStore({
-    async readManualAssignmentTimedRoleConfig(guildId: string) {
-      return guildId === config.guildId ? config : { guildId, roles: [] };
+    async readTimedRoleConfigRules(guildId, configType) {
+      return guildId === config.guildId && configType === "manual-assignment" ? config.roles : [];
     },
     async upsertTimedRole(role: TimedRoleAssignment) {
       upsertedRoles.push(role);
@@ -1732,12 +1761,6 @@ test("TimedRoleService resumes manual assignment DM and audit after persistence"
     },
   };
   const store = createTimedRoleStore({
-    async readManualAssignmentTimedRoleConfig(guildId) {
-      return {
-        guildId,
-        roles: [{ roleId: "role-1", durationInput: "1h", dmMessage: "Assigned" }],
-      };
-    },
     async readTimedRoleConfigRules(_guildId, configType) {
       return configType === "manual-assignment"
         ? [{ roleId: "role-1", durationInput: "1h", dmMessage: "Assigned" }]
@@ -1811,8 +1834,8 @@ test("TimedRoleService.createManualAssignmentTimedRole skips active rules and as
     ],
   };
   const store = createTimedRoleStore({
-    async readManualAssignmentTimedRoleConfig(guildId: string) {
-      return guildId === config.guildId ? config : { guildId, roles: [] };
+    async readTimedRoleConfigRules(guildId, configType) {
+      return guildId === config.guildId && configType === "manual-assignment" ? config.roles : [];
     },
     async upsertTimedRole(role: TimedRoleAssignment) {
       upsertedRoles.push(role);
@@ -2066,14 +2089,10 @@ test("disabled Timed Role rules keep their configuration and existing assignment
     expiresAtMs: Date.now() + 3600000,
   };
   try {
-    await fixture.stores.timedRoles.upsertNewMemberTimedRoleConfig?.({
-      guildId: "guild-1",
-      roles: [rule],
-    });
-    await fixture.stores.timedRoles.upsertManualAssignmentTimedRoleConfig?.({
-      guildId: "guild-1",
-      roles: [rule],
-    });
+    await fixture.stores.timedRoles.upsertTimedRoleConfigRules("guild-1", "new-member", [rule]);
+    await fixture.stores.timedRoles.upsertTimedRoleConfigRules("guild-1", "manual-assignment", [
+      rule,
+    ]);
     await fixture.stores.timedRoles.upsertTimedRole(active);
     const service = new TimedRoleService(
       fixture.stores.timedRoles,

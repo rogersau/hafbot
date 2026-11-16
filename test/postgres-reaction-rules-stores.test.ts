@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import test from "node:test";
 
 import { createPostgresAppConfigStore } from "../src/runtime/postgres/postgres-app-config-store";
@@ -8,14 +7,10 @@ import {
   createPostgresDatabaseCapabilityFromEnvironment,
   type PostgresDatabaseCapability,
 } from "../src/runtime/postgres/postgres-capability";
-import {
-  applyPostgresMigrations,
-  readPostgresMigrations,
-} from "../src/runtime/postgres/postgres-migrations";
+import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { createPostgresProductAnalyticsPreferenceStore } from "../src/runtime/postgres/postgres-product-analytics-preference-store";
 import { createPostgresReactionLimitStore } from "../src/runtime/postgres/postgres-reaction-limit-store";
-import { createPostgresD1CompatibilityDatabase } from "../src/runtime/postgres/postgres-d1-compat";
-import { createCloudflareReactionRoleStore } from "../src/runtime/cloudflare-reaction-role-store";
+import { createPostgresReactionRoleStore } from "../src/runtime/postgres/postgres-reaction-role-store";
 import type { ReactionLimitConfig } from "../src/types";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
@@ -32,7 +27,7 @@ test(
       PG_POOL_MAX: "8",
     });
     try {
-      await resetAndMigrate(database);
+      await resetDatabase(database);
       await verifyBlocklistStore(database);
       await verifyProductAnalyticsPreferences(database);
       await verifyReactionLimits(database);
@@ -204,37 +199,37 @@ async function verifyReactionLimits(database: PostgresDatabaseCapability): Promi
   assert.deepEqual(await store.readBreachCounters(config.guildId), []);
 }
 
-async function resetAndMigrate(database: PostgresDatabaseCapability): Promise<void> {
+async function resetDatabase(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-  const migrations = await readPostgresMigrations(resolve("migrations/postgres"));
-  const status = await applyPostgresMigrations(database, migrations);
-  assert.deepEqual(status.pending, []);
+  await initializePostgresSchema(database);
 }
 
 async function verifyReactionRolePanels(database: PostgresDatabaseCapability): Promise<void> {
   await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-  const migrations = await readPostgresMigrations(resolve("migrations/postgres"));
-  await applyPostgresMigrations(
-    database,
-    migrations.filter(({ name }) => name < "0022_advanced-role-menus.sql"),
-  );
-  const optionsJson = JSON.stringify([{ emoji: "🟢", roleId: "300", label: "DayZ" }]);
-  // The original image's write shape remains valid before and after the expansion.
-  await database.execute(
-    `INSERT INTO reaction_role_panels
-    (guild_id,id,bot_user_id,channel_id,message_id,title,description,options_json,published_options_json,activated_at_ms,enabled,updated_at_ms)
-    VALUES ('100','legacy','900','200','500','Games','Choose a game',$1,$1,1,1,1)`,
-    [optionsJson],
-  );
-  await applyPostgresMigrations(database, migrations);
-  const store = createCloudflareReactionRoleStore(createPostgresD1CompatibilityDatabase(database));
-  const legacy = await store.readPanel("100");
-  assert.equal(legacy?.messageId, "500");
-  assert.equal(legacy?.mode, "multiple");
-  assert.deepEqual(legacy?.requiredRoleIds, []);
+  await initializePostgresSchema(database);
+  const options = [{ emoji: "🟢", roleId: "300", label: "DayZ" }];
+  const store = createPostgresReactionRoleStore(database);
   assert.equal(await store.claimLease("100", "current", 100), true);
+  const main = {
+    guildId: "100",
+    id: "main",
+    botUserId: "900",
+    channelId: "200",
+    messageId: "500",
+    title: "Games",
+    description: "Choose a game",
+    options,
+    publishedOptions: options,
+    activatedAtMs: 1,
+    enabled: true,
+    updatedAtMs: 1,
+    mode: "multiple" as const,
+    requiredRoleIds: [],
+    blockedRoleIds: [],
+  };
+  assert.equal(await store.savePanel(main, { token: "current", nowMs: 100 }), true);
   const extra = {
-    ...legacy!,
+    ...main,
     id: "regions",
     messageId: "501",
     title: "Regions",
@@ -256,11 +251,7 @@ async function verifyReactionRolePanels(database: PostgresDatabaseCapability): P
   assert.equal(await store.claimLease("100", "next", 200), true);
   assert.equal(await store.deletePanel("100", { token: "next", nowMs: 200 }, "regions"), true);
   await store.releaseLease("100", "next");
-  assert.equal((await store.readPanel("100"))?.id, "legacy");
-  await database.execute(
-    "UPDATE reaction_role_panels SET title = 'Old image update' WHERE guild_id = '100'",
-  );
-  assert.equal((await store.readPanel("100"))?.title, "Old image update");
+  assert.equal((await store.readPanel("100"))?.id, "main");
 }
 
 function assertSafeTestDatabase(value: string): void {

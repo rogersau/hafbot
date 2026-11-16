@@ -8,13 +8,14 @@ import {
   listCurrentServerLevelLeaderboard,
 } from "../src/runtime/application-command-handler";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
-import { createCloudflareServerLevelStore } from "../src/runtime/cloudflare-server-level-store";
+import { createSqliteServerLevelStore } from "./support/sqlite/runtime/sqlite-server-level-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
+import { applicationCommandServices } from "./support/handler-services";
 
 test("Server Levels leaderboard rechecks current Guild membership across stale pages", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareServerLevelStore(database.d1);
+  const store = createSqliteServerLevelStore(database.d1);
   try {
     for (let index = 0; index < 30; index += 1) {
       await appendTotal(store, `former-${String(index).padStart(2, "0")}`, 10_000 - index);
@@ -66,7 +67,11 @@ test("a retried support interaction appends its Server XP adjustment only once",
         ],
       },
     } as any;
-    const options = { hafAdminGuildId: "haf-admin-guild", hafAdminRoleId: "haf-admin-role" };
+    const options = {
+      hafAdminGuildId: "haf-admin-guild",
+      hafAdminRoleId: "haf-admin-role",
+      services: applicationCommandServices(),
+    };
 
     await handleApplicationCommand(
       interaction,
@@ -122,7 +127,11 @@ test("a restricted support interaction completes Server Levels personal-data era
       fixture.stores,
       "discord-token",
       ALL_FEATURES_ENABLED,
-      { hafAdminGuildId: "haf-admin-guild", hafAdminRoleId: "haf-admin-role" },
+      {
+        hafAdminGuildId: "haf-admin-guild",
+        hafAdminRoleId: "haf-admin-role",
+        services: applicationCommandServices(),
+      },
     );
 
     assert.equal(response.status, 200);
@@ -133,7 +142,7 @@ test("a restricted support interaction completes Server Levels personal-data era
 });
 
 async function appendTotal(
-  store: ReturnType<typeof createCloudflareServerLevelStore>,
+  store: ReturnType<typeof createSqliteServerLevelStore>,
   userId: string,
   xpUnits: number,
 ) {

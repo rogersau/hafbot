@@ -67,6 +67,11 @@ test("admin guild overview and guild-scoped feature routes are dashboard routes"
   );
 });
 
+test("removed Steam Link dashboard alias is not a dashboard route", () => {
+  assert.equal(isAdminDashboardPath("/admin/guild-1/steam-link"), false);
+  assert.equal(normalizeAdminDashboardPath("/admin/guild-1/steam-link"), "/admin");
+});
+
 test("reserved admin paths are not treated as guild dashboard routes", () => {
   assert.equal(isAdminDashboardPath("/admin/login"), false);
   assert.equal(isAdminDashboardPath("/admin/logout"), false);

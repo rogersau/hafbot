@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -25,7 +26,7 @@ const subscription = (
   ownerId: "owner",
   customerId: "customer",
   subscriptionId: plan === "free" ? null : "sub",
-  priceId: plan === "free" ? null : "price",
+  priceId: plan === "free" ? null : `${plan === "premium" ? "premium" : "plus"}-${frequency}`,
   productId: plan === "free" ? null : "product",
   plan,
   frequency,
@@ -52,28 +53,24 @@ const billing = (
       productId: "product",
       plan: "premium",
       frequency: "monthly",
-      cohort: "standard",
     },
     {
       priceId: "premium-yearly",
       productId: "product",
       plan: "premium",
       frequency: "yearly",
-      cohort: "standard",
     },
     {
       priceId: "plus-monthly",
       productId: "product",
       plan: "premium_plus",
       frequency: "monthly",
-      cohort: "standard",
     },
     {
       priceId: "plus-yearly",
       productId: "product",
       plan: "premium_plus",
       frequency: "yearly",
-      cohort: "standard",
     },
   ],
   prices: [
@@ -110,7 +107,6 @@ const billing = (
       formattedAmount: "$20.00",
     },
   ],
-  founderAdmission: null,
 });
 
 function createDom(search = ""): Env {
@@ -147,16 +143,12 @@ function response(value: unknown) {
   });
 }
 function errorResponse(message = "Billing unavailable") {
-  return new Response(
-    JSON.stringify({
-      error: message,
-      code: "internal_error",
-      correlationId: "corr-billing",
-      retryable: true,
-      action: "retry",
-    }),
-    { status: 500, headers: { "content-type": "application/json" } },
-  );
+  return adminErrorResponse(message, 500, {
+    code: "internal_error",
+    correlationId: "corr-billing",
+    retryable: true,
+    action: "retry",
+  });
 }
 function installFetch(handler: (input: string) => Promise<Response>): () => void {
   const previous = globalThis.fetch;
@@ -180,7 +172,7 @@ async function settle() {
   });
 }
 
-test("Billing explains unqualified Founder TEST subscriptions without offering a rejected plan change", async () => {
+test("Billing explains unavailable current prices without showing retired launch terms", async () => {
   const data = { ...billing("premium", "monthly"), catalog: [] };
   const restoreFetch = installFetch(async (input) => {
     if (String(input).endsWith("/billing")) return response(data);
@@ -191,10 +183,10 @@ test("Billing explains unqualified Founder TEST subscriptions without offering a
   try {
     await render(env);
     await settle();
-    assert.match(env.container.textContent ?? "", /pricing cohort has not been confirmed/);
-    assert.match(
+    assert.match(env.container.textContent ?? "", /Current plan prices are unavailable/);
+    assert.doesNotMatch(
       env.container.textContent ?? "",
-      /test subscriptions do not receive Founder status/,
+      /founder|places claimed|cannot be reclaimed/i,
     );
     assert.equal(env.container.querySelector('[aria-label="Billing frequency"]'), null);
     assert.ok(

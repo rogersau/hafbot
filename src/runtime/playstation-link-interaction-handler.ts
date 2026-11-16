@@ -1,8 +1,8 @@
 import { rethrowDiscordRateLimit } from "./interaction-rate-limit";
 import { createChannelMessage } from "../discord";
 import { buildEphemeralMessage } from "../discord-interactions";
-import type { DiscordInteraction } from "../runtime/app-types";
-import type { PlatformLink, PlatformLinkConfig } from "../runtime/contracts/platform-link-store";
+import type { DiscordInteraction } from "./app-types";
+import type { PlatformLink, PlatformLinkConfig } from "./contracts/platform-link-store";
 import {
   PlatformLinkFinalizationError,
   type PlatformLinkService,

@@ -23,16 +23,8 @@ const tests = getTestInventory()
   .map((file) => join(process.env.TEST_DIST_DIR ?? "dist-tests", file.replace(/\.ts$/, ".js")))
   .sort();
 if (tests.length === 0) throw new Error("No PostgreSQL contract tests were discovered.");
-const result = spawnSync(
-  process.execPath,
-  [
-    "--require",
-    "./test/support/cloudflare-workers-shim.cjs",
-    "--test",
-    "--test-concurrency=1",
-    ...tests,
-  ],
-  { stdio: "inherit" },
-);
+const result = spawnSync(process.execPath, ["--test", "--test-concurrency=1", ...tests], {
+  stdio: "inherit",
+});
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;

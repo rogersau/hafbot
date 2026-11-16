@@ -17,15 +17,15 @@ export const auditGatewayHandlers = [
     key: "managed-message-delete",
     eventTypes: ["MESSAGE_DELETE"],
     order: 50,
-    isEnabled: ({ env }) => Boolean(env.HAF_DB),
+
     async handle({ stores, botEnv }, envelope) {
       const data = envelope.data as DiscordMessageDelete | null;
       if (!data?.guild_id || !data.channel_id || !data.id) return;
       const handled = await handleManagedMessageCanonicalDelete(
         { guildId: data.guild_id, channelId: data.channel_id, messageId: data.id },
         {
-          store: stores!.managedMessage,
-          guildAuditLog: stores!.audit,
+          store: stores.managedMessage,
+          guildAuditLog: stores.audit,
           discordBotToken: botEnv.DISCORD_BOT_TOKEN,
         },
       );
@@ -36,7 +36,7 @@ export const auditGatewayHandlers = [
     key: "message-audit",
     eventTypes: ["MESSAGE_UPDATE", "MESSAGE_DELETE"],
     order: 60,
-    isEnabled: ({ env }) => Boolean(env.HAF_DB),
+
     async handle({ env, botEnv, operations, stores }, envelope) {
       const data = envelope.data as DiscordMessageUpdate | DiscordMessageDelete | null;
       if (!data?.guild_id || !data.channel_id) return;
@@ -57,7 +57,7 @@ export const auditGatewayHandlers = [
             author: data.author,
             memberRoleIds: data.member?.roles,
           },
-          stores!.audit,
+          stores.audit,
           botEnv.DISCORD_BOT_TOKEN,
           env.BOT_USER_ID,
           true,
@@ -70,11 +70,11 @@ export const auditGatewayHandlers = [
     key: "member-audit",
     eventTypes: ["GUILD_MEMBER_ADD", "GUILD_MEMBER_UPDATE", "GUILD_MEMBER_REMOVE"],
     order: 60,
-    isEnabled: ({ env }) => Boolean(env.HAF_DB),
+
     async handle({ botEnv, operations, stores }, envelope) {
       const data = envelope.data as DiscordGuildMemberAdd | DiscordGuildMemberUpdate | null;
       if (!data?.guild_id) return;
-      const store = stores!.audit;
+      const store = stores.audit;
       if (envelope.type === "GUILD_MEMBER_ADD") {
         await operations.run("member-add:audit-post", () =>
           postMemberAuditEvent(
@@ -165,7 +165,7 @@ export const auditGatewayHandlers = [
     key: "ban-audit",
     eventTypes: ["GUILD_BAN_ADD", "GUILD_BAN_REMOVE"],
     order: 60,
-    isEnabled: ({ env }) => Boolean(env.HAF_DB),
+
     async handle({ botEnv, operations, stores }, envelope) {
       const data = envelope.data as {
         guild_id?: string;
@@ -178,7 +178,7 @@ export const auditGatewayHandlers = [
         postMemberAuditEvent(
           eventId,
           { guildId: data.guild_id!, user: data.user },
-          stores!.audit,
+          stores.audit,
           botEnv.DISCORD_BOT_TOKEN,
           true,
           deriveGatewayOperationNonce(envelope.eventKey, handlerKey),
@@ -190,9 +190,9 @@ export const auditGatewayHandlers = [
     key: "structure-audit",
     eventTypes: ["INVITE_CREATE", "CHANNEL_CREATE", "CHANNEL_UPDATE", "CHANNEL_DELETE"],
     order: 60,
-    isEnabled: ({ env }) => Boolean(env.HAF_DB),
+
     async handle({ env, botEnv, operations, stores }, envelope) {
-      const store = stores!.audit;
+      const store = stores.audit;
       if (envelope.type === "INVITE_CREATE") {
         const data = envelope.data as {
           guild_id?: string;

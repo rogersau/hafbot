@@ -1,4 +1,3 @@
-import type { QueueBatch } from "../src/runtime/queue-types";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -10,9 +9,10 @@ import type {
   TicketLifecycle,
   TicketRecoveryEnvelope,
 } from "../src/services/tickets/ticket-lifecycle";
-import { deliverTicketRecoveryQueueBatch } from "../src/runtime/ticket-recovery-queue-consumer";
+import { deliverTicketRecovery } from "../src/runtime/ticket-recovery-queue-consumer";
+import { queueJobMetadata } from "./support/queue-delivery-fixture";
 
-test("ticket recovery queue retries incomplete work and acknowledges completion", async () => {
+test("ticket recovery queue retries incomplete work and completes later work", async () => {
   const envelope: TicketRecoveryEnvelope = {
     kind: "template-reply-completion",
     recovery: {
@@ -36,30 +36,52 @@ test("ticket recovery queue retries incomplete work and acknowledges completion"
     },
   } as unknown as TicketLifecycle;
 
-  const first = createMessageBatch(envelope);
-  await deliverTicketRecoveryQueueBatch(first.batch, lifecycle, {} as never, "token");
-  assert.equal(first.retries, 1);
-  assert.equal(first.acks, 0);
-
-  complete = true;
-  const second = createMessageBatch(envelope);
-  await deliverTicketRecoveryQueueBatch(second.batch, lifecycle, {} as never, "token");
-  assert.equal(second.retries, 0);
-  assert.equal(second.acks, 1);
-});
-
-test("ticket recovery queue terminates malformed messages", async () => {
-  const delivery = createMessageBatch({ kind: "close-cleanup", recovery: {} });
-
-  await deliverTicketRecoveryQueueBatch(
-    delivery.batch,
-    {} as TicketLifecycle,
+  const first = await deliverTicketRecovery(
+    envelope,
+    queueJobMetadata({ jobId: "first", queueName: "ticket-recovery" }),
+    lifecycle,
     {} as never,
     "token",
   );
+  assert.deepEqual(first, {
+    status: "retry",
+    reasonCode: "ticket_recovery_incomplete",
+    delaySeconds: 60,
+  });
 
-  assert.equal(delivery.acks, 1);
-  assert.equal(delivery.retries, 0);
+  complete = true;
+  const second = await deliverTicketRecovery(
+    envelope,
+    queueJobMetadata({ jobId: "second", queueName: "ticket-recovery" }),
+    lifecycle,
+    {} as never,
+    "token",
+  );
+  assert.deepEqual(second, { status: "complete" });
+});
+
+test("ticket recovery queue terminates malformed messages before touching services", async () => {
+  let calls = 0;
+  const outcome = await deliverTicketRecovery(
+    { kind: "close-cleanup", recovery: {} },
+    queueJobMetadata({ jobId: "malformed", queueName: "ticket-recovery" }),
+    {
+      async resumeOpenCleanup() {
+        calls++;
+        return { ok: true as const, ticket: {} as never };
+      },
+    } as unknown as TicketLifecycle,
+    {
+      async resumeRecovery() {
+        calls++;
+        return { ok: true as const, value: undefined };
+      },
+    },
+    "token",
+  );
+
+  assert.deepEqual(outcome, { status: "terminal", reasonCode: "invalid_ticket_recovery" });
+  assert.equal(calls, 0);
 });
 
 test("ticket recovery queue consumes trusted panel recovery", async () => {
@@ -73,11 +95,11 @@ test("ticket recovery queue consumes trusted panel recovery", async () => {
       messageId: "message-1",
     },
   };
-  const delivery = createMessageBatch(envelope);
   let received: unknown;
 
-  await deliverTicketRecoveryQueueBatch(
-    delivery.batch,
+  const outcome = await deliverTicketRecovery(
+    envelope,
+    queueJobMetadata({ jobId: "panel", queueName: "ticket-recovery" }),
     {} as TicketLifecycle,
     {
       async resumeRecovery(recovery) {
@@ -89,42 +111,5 @@ test("ticket recovery queue consumes trusted panel recovery", async () => {
   );
 
   assert.deepEqual(received, envelope.recovery);
-  assert.equal(delivery.acks, 1);
-  assert.equal(delivery.retries, 0);
+  assert.deepEqual(outcome, { status: "complete" });
 });
-
-function createMessageBatch(body: unknown): {
-  batch: QueueBatch<unknown>;
-  readonly acks: number;
-  readonly retries: number;
-} {
-  let acks = 0;
-  let retries = 0;
-  return {
-    batch: {
-      queue: "haf-bot-ticket-recovery",
-      messages: [
-        {
-          id: "recovery-1",
-          body,
-          attempts: 1,
-          timestamp: new Date(),
-          ack() {
-            acks += 1;
-          },
-          retry() {
-            retries += 1;
-          },
-        },
-      ],
-      ackAll() {},
-      retryAll() {},
-    } as QueueBatch<unknown>,
-    get acks() {
-      return acks;
-    },
-    get retries() {
-      return retries;
-    },
-  };
-}

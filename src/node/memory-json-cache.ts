@@ -1,4 +1,4 @@
-import type { JsonKvCache } from "../runtime/discord-json-cache";
+import type { Cache } from "../runtime/discord-json-cache";
 
 interface CacheEntry {
   json: string;
@@ -13,7 +13,7 @@ export interface MemoryJsonCacheOptions {
   now?: () => number;
 }
 
-export function createMemoryJsonCache<T>(options: MemoryJsonCacheOptions = {}): JsonKvCache<T> {
+export function createMemoryJsonCache<T>(options: MemoryJsonCacheOptions = {}): Cache<T> {
   const maxEntries = readPositiveInteger(options.maxEntries, 1_000, "maxEntries");
   const maxBytes = readPositiveInteger(options.maxBytes, 16 * 1024 * 1024, "maxBytes");
   const maxEntryBytes = readPositiveInteger(

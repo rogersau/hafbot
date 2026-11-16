@@ -9,10 +9,6 @@ const playerLinkQuerySchema = z.object({
   workspaceId: optionalWorkspaceId,
   platform: platformSchema.optional(),
 });
-const steamQuerySchema = z.object({
-  guildId: z.string().min(1).optional(),
-  workspaceId: optionalWorkspaceId,
-});
 
 const customLinkSchema = z.object({ label: z.string(), url: z.string() });
 const playerLinkConfigBodySchema = z.object({
@@ -33,28 +29,18 @@ const playerLinkConfigBodySchema = z.object({
   whoisFields: z.array(z.string()).optional(),
   customLinks: z.array(customLinkSchema).optional(),
 });
-const steamLinkConfigBodySchema = playerLinkConfigBodySchema
-  .omit({ platform: true, linkedRoleId: true })
-  .extend({ steamLinkedRoleId: z.string().nullable().optional(), gameAppIds: z.array(z.string()) });
+
 const playerLinkPublishBodySchema = z.object({
   guildId: z.string().min(1),
   workspaceId: optionalWorkspaceId,
   platform: platformSchema,
   panelChannelId: z.string().min(1),
 });
-const steamLinkPublishBodySchema = z.object({
-  guildId: z.string().min(1),
-  workspaceId: optionalWorkspaceId,
-  panelChannelId: z.string().min(1),
-});
+
 const playerLinkSyncRolesBodySchema = z.object({
   guildId: z.string().min(1),
   workspaceId: optionalWorkspaceId,
   platform: platformSchema,
-});
-const steamLinkSyncRolesBodySchema = z.object({
-  guildId: z.string().min(1),
-  workspaceId: optionalWorkspaceId,
 });
 
 const platformLinkConfigSchema = z.object({
@@ -95,11 +81,7 @@ const playerLinkResponseSchema = z.object({
   config: platformLinkConfigSchema.nullable(),
   links: z.array(platformLinkSchema),
 });
-const steamLinkResponseSchema = z.object({
-  guildId: z.string(),
-  config: platformLinkConfigSchema.nullable(),
-  links: z.array(platformLinkSchema),
-});
+
 const syncResponseSchema = z.object({
   ok: z.literal(true),
   total: z.number().int(),
@@ -125,7 +107,7 @@ const paidMetadata = {
   feature: "steamLink",
   entitlement: "premium-only-features",
 } as const;
-const compatibilityMetadata = {
+const playerLinkMetadata = {
   tags: ["Player Link"],
   feature: "steamLink",
   entitlement: undefined,
@@ -192,69 +174,8 @@ export const syncPlayerLinkRoles = defineAdminOperation({
   access: { scope: "guild", mode: "write" },
 });
 
-export const getSteamLink = defineAdminOperation({
-  ...compatibilityMetadata,
-  operationId: "steamLink.get",
-  method: "GET",
-  path: "/admin/api/steam-link",
-  summary: "Read Steam Link compatibility configuration",
-  query: steamQuerySchema,
-  success: {
-    status: 200,
-    schema: steamLinkResponseSchema,
-    description: "Steam Link configuration and linked accounts",
-  },
-  errors: readErrors,
-  access: { scope: "guild", mode: "read" },
-});
-export const saveSteamLink = defineAdminOperation({
-  ...compatibilityMetadata,
-  operationId: "steamLinkConfig.post",
-  method: "POST",
-  path: "/admin/api/steam-link/config",
-  summary: "Save Steam Link compatibility configuration",
-  body: steamLinkConfigBodySchema,
-  success: {
-    status: 200,
-    schema: z.object({ ok: z.literal(true) }),
-    description: "Steam Link configuration was saved",
-  },
-  errors: writeErrors,
-  access: { scope: "guild", mode: "write" },
-});
-export const publishSteamLink = defineAdminOperation({
-  ...compatibilityMetadata,
-  operationId: "steamLinkPublish.post",
-  method: "POST",
-  path: "/admin/api/steam-link/publish",
-  summary: "Publish a Steam Link compatibility panel",
-  body: steamLinkPublishBodySchema,
-  success: {
-    status: 200,
-    schema: z.object({ ok: z.literal(true), panelMessageId: z.string() }),
-    description: "The Steam Link panel message",
-  },
-  errors: writeErrors,
-  access: { scope: "guild", mode: "write" },
-});
-export const syncSteamLinkRoles = defineAdminOperation({
-  ...compatibilityMetadata,
-  operationId: "steamLinkSyncRoles.post",
-  method: "POST",
-  path: "/admin/api/steam-link/sync-roles",
-  summary: "Synchronize Steam Link roles",
-  body: steamLinkSyncRolesBodySchema,
-  success: {
-    status: 200,
-    schema: syncResponseSchema,
-    description: "Steam Link role synchronization counts",
-  },
-  errors: writeErrors,
-  access: { scope: "guild", mode: "write" },
-});
-
 export const setPlayerLinkEnabled = defineAdminOperation({
-  ...compatibilityMetadata,
+  ...playerLinkMetadata,
   operationId: "playerLinkEnabled.post",
   method: "POST",
   path: "/admin/api/player-link/enabled",
@@ -281,8 +202,4 @@ export const playerLinkContracts = {
   save: savePlayerLink,
   publish: publishPlayerLink,
   syncRoles: syncPlayerLinkRoles,
-  steamGet: getSteamLink,
-  steamSave: saveSteamLink,
-  steamPublish: publishSteamLink,
-  steamSyncRoles: syncSteamLinkRoles,
 } as const;

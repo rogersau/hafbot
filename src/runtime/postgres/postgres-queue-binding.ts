@@ -5,7 +5,7 @@ import type { PortableQueueName, PostgresJobQueue } from "./postgres-job-queue";
 const MAX_BATCH_SIZE = 100;
 const MAX_DELAY_SECONDS = 86_400;
 
-/** Cloudflare Queue-compatible producer backed by the portable PostgreSQL jobs table. */
+/** Durable producer backed by the PostgreSQL jobs table. */
 export function createPostgresQueueBinding<Body>(input: {
   database: PostgresDatabaseCapability;
   jobs: PostgresJobQueue;

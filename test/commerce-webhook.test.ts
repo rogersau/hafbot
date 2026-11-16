@@ -1,3 +1,4 @@
+import type { CommerceReconciliationMessage } from "../src/runtime/commerce/reconciliation";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -183,8 +184,8 @@ class MemoryStore implements CommerceWebhookStore {
     return { accepted, outboxPending: true, generation: 7 };
   }
 
-  async markOutboxSent(eventId: string): Promise<void> {
-    this.sent.push(eventId);
+  async markOutboxSent(message: CommerceReconciliationMessage): Promise<void> {
+    this.sent.push(message.eventId);
   }
 }
 

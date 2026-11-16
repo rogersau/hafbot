@@ -9,14 +9,14 @@ import { createPublicRoutes } from "../src/routes/public-routes";
 import { allowAllAdminAccess } from "./helpers/admin-api";
 import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
 import { createTicketAdminRoutes } from "../src/runtime/admin-routes/tickets";
-import { createCloudflareTicketTranscriptCapabilityStore } from "../src/runtime/cloudflare-ticket-transcript-capability-store";
+import { createSqliteTicketTranscriptCapabilityStore } from "./support/sqlite/runtime/sqlite-ticket-transcript-capability-store";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 import { TICKET_TRANSCRIPT_ACCESS_TOKEN_PLACEHOLDER } from "../src/tickets";
 
 test("Ticket Admin rotates a transcript link and invalidates its previous bearer token", async () => {
   const database = new SqliteD1Database();
-  const capabilities = createCloudflareTicketTranscriptCapabilityStore(database.d1);
+  const capabilities = createSqliteTicketTranscriptCapabilityStore(database.d1);
   const nowMs = Date.now();
   await capabilities.issue({
     objectId: "transcript-object-1",
@@ -96,7 +96,7 @@ test("Ticket Admin rotates a transcript link and invalidates its previous bearer
 
 test("Ticket Admin revokes a leaked transcript link", async () => {
   const database = new SqliteD1Database();
-  const capabilities = createCloudflareTicketTranscriptCapabilityStore(database.d1);
+  const capabilities = createSqliteTicketTranscriptCapabilityStore(database.d1);
   const nowMs = Date.now();
   await capabilities.issue({
     objectId: "transcript-object-1",

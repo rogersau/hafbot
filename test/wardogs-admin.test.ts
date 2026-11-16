@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createAdminApiHandler } from "./helpers/admin-api";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
-import { createCloudflareWardogsStore } from "../src/runtime/cloudflare-wardogs-store";
+import { createSqliteWardogsStore } from "./support/sqlite/runtime/sqlite-wardogs-store";
 import { WardogsService } from "../src/wardogs/service";
 import { createWebhookCredentialKeyRing } from "../src/security/webhook-credentials";
 
@@ -11,8 +11,7 @@ test("WARDOGS admin dispatch enforces Guild read/write access and never exposes 
   const authorization: { mode: string; guildId?: string | null }[] = [];
   try {
     const service = new WardogsService({
-      store: createCloudflareWardogsStore(fixture.database.d1),
-      runtime: "cloudflare",
+      store: createSqliteWardogsStore(fixture.database.d1),
       keyRing: () => createWebhookCredentialKeyRing({ keyV1: btoa("k".repeat(32)) }),
       transport: async () => {
         assert.fail("disabled setup cannot reach network");
@@ -103,8 +102,7 @@ test("WARDOGS readiness stays feature-owned and does not require a Discord permi
   const fixture = createProductionRuntimeStores();
   try {
     const service = new WardogsService({
-      store: createCloudflareWardogsStore(fixture.database.d1),
-      runtime: "cloudflare",
+      store: createSqliteWardogsStore(fixture.database.d1),
     });
     const handler = createAdminApiHandler({
       stores: fixture.stores,

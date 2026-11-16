@@ -1,23 +1,7 @@
+import { parseBotDefenseComponentId } from "../bot-defense-component-id";
 import { isRecord } from "../unknown-parse";
 import type { CreateChannelMessageInput } from "../discord/messages";
 import type { ComponentIdPurpose, ComponentIdSigner } from "./component-id-signer";
-
-// Ticket close confirmation controls were already issued as Guild-bound envelopes before
-// actor binding was added. Keep their exact no-claim envelopes on the existing
-// COMPONENT_ID_LEGACY_UNTIL migration path; remove this compatibility set once that
-// deployment window has elapsed everywhere.
-const LEGACY_GUILD_BOUND_PURPOSES = new Set<ComponentIdPurpose>([
-  "ticket-close-confirm",
-  "ticket-close-decline",
-]);
-
-// Bot Defense controls used to carry only Guild/member identity. Those signed envelopes remain
-// verifiable during the component-ID migration window, but the Bot Defense handler rejects the
-// payload shape instead of resolving whichever generation is currently open.
-const LEGACY_GENERATION_BOUND_PURPOSES = new Set<ComponentIdPurpose>([
-  "bot-defense-confirm",
-  "bot-defense-dismiss",
-]);
 
 const ACTOR_BOUND_PURPOSES = new Set<ComponentIdPurpose>([
   "ban-case-enforcement",
@@ -154,7 +138,6 @@ export async function verifySensitiveComponentId(
   context: { interactionGuildId?: string; actorUserId?: string },
 ): Promise<
   | { kind: "not-sensitive" }
-  | { kind: "legacy"; purpose: ComponentIdPurpose; customId?: string }
   | { kind: "valid"; purpose: ComponentIdPurpose; customId: string }
   | { kind: "invalid" }
 > {
@@ -162,41 +145,18 @@ export async function verifySensitiveComponentId(
   if (!inspection) {
     if (customId.startsWith("1")) return { kind: "invalid" };
     const purpose = sensitiveComponentPurpose(customId);
-    return purpose ? { kind: "legacy", purpose } : { kind: "not-sensitive" };
+    return purpose ? { kind: "invalid" } : { kind: "not-sensitive" };
   }
   const restoredCustomId = restoreSignedPayload(inspection.customId, inspection.purpose);
   const guildId = context.interactionGuildId ?? guildIdFromComponentId(restoredCustomId);
   if (!guildId) return { kind: "invalid" };
 
-  // Before ticket-close-confirm and ticket-close-decline became actor-bound, their signed
-  // envelopes had neither actor nor expiry claims. Re-verify that exact old envelope without
-  // claims so changing the purpose policy does not turn already-posted prompts into opaque
-  // signature failures. The interaction handler applies COMPONENT_ID_LEGACY_UNTIL to this
-  // result; new envelopes always take the actor-bound path below.
-  if (inspection.expiresAtSeconds === null && LEGACY_GUILD_BOUND_PURPOSES.has(inspection.purpose)) {
-    const legacyVerified = await signer.verify(customId, { guildId });
-    if (legacyVerified.ok) {
-      return {
-        kind: "legacy",
-        purpose: legacyVerified.purpose,
-        customId: restoredCustomId,
-      };
-    }
-  }
-
   if (
-    inspection.expiresAtSeconds === null &&
-    LEGACY_GENERATION_BOUND_PURPOSES.has(inspection.purpose) &&
-    isLegacyBotDefensePayload(restoredCustomId)
+    (inspection.purpose === "bot-defense-confirm" ||
+      inspection.purpose === "bot-defense-dismiss") &&
+    !parseBotDefenseComponentId(restoredCustomId)
   ) {
-    const legacyVerified = await signer.verify(customId, { guildId });
-    if (legacyVerified.ok) {
-      return {
-        kind: "legacy",
-        purpose: legacyVerified.purpose,
-        customId: restoredCustomId,
-      };
-    }
+    return { kind: "invalid" };
   }
 
   const actorUserId = isActorBoundSensitiveComponentId(inspection.purpose)
@@ -229,11 +189,6 @@ function guildIdFromComponentId(customId: string): string | undefined {
     return customId.slice("member_verification_verify:".length) || undefined;
   }
   return undefined;
-}
-
-function isLegacyBotDefensePayload(customId: string): boolean {
-  const parts = customId.split(":");
-  return parts[0] === "bot-defense" && parts.length === 4;
 }
 
 function compactSignedPayload(customId: string, purpose: ComponentIdPurpose): string {

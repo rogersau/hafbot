@@ -1,11 +1,12 @@
+import { gatewayEnvelope } from "./support/gateway-envelope";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
 import { createDiscordReactionRoleOperations } from "../src/discord/reaction-roles";
 import { ReactionRoleService } from "../src/services/reaction-role-service";
-import { processGatewayEventQueueMessages } from "../src/runtime/gateway-event-queue-consumer";
+import { processGatewayEventQueueMessages } from "./support/gateway-event-consumer";
 import { readDiscordE2eActors } from "../src/runtime/discord-e2e-actors";
-import type { Env } from "../src/env";
+import type { Env } from "./support/test-env";
 import { createDefaultMentionProtectionConfig } from "../src/services/mention-protection/message-handler";
 
 const GUILD = "100000000000000001";
@@ -79,12 +80,13 @@ test("Gateway message moderation uses tester views for creates and partial updat
     DISABLE_SUGGESTIONS: "true",
   } satisfies Env;
   const e2eEnv = { ...env, discordE2eActors: actors() };
-  const event = (sequence: number, data: unknown, type = "MESSAGE_CREATE") => ({
-    sessionId: "message-session",
-    sequence,
-    type,
-    data,
-  });
+  const event = (sequence: number, data: unknown, type = "MESSAGE_CREATE") =>
+    gatewayEnvelope({
+      sessionId: "message-session",
+      sequence,
+      type,
+      data,
+    });
   const logger = {
     error: (...args: unknown[]) => assert.fail(JSON.stringify(args)),
     info: () => {},
@@ -176,19 +178,20 @@ test("the Gateway grants and removes a tester bot's reaction role only in the E2
     DISABLE_BLOCKLIST: "true",
     DISABLE_SUGGESTIONS: "true",
   } satisfies Env;
-  const event = (sequence: number) => ({
-    sessionId: "e2e-session",
-    sequence,
-    type: selected ? "MESSAGE_REACTION_ADD" : "MESSAGE_REACTION_REMOVE",
-    data: {
-      guild_id: GUILD,
-      channel_id: "200",
-      message_id: "500",
-      user_id: TESTER,
-      member: { user: { id: TESTER, bot: true }, roles: [] },
-      emoji: { id: null, name: "🟢" },
-    },
-  });
+  const event = (sequence: number) =>
+    gatewayEnvelope({
+      sessionId: "e2e-session",
+      sequence,
+      type: selected ? "MESSAGE_REACTION_ADD" : "MESSAGE_REACTION_REMOVE",
+      data: {
+        guild_id: GUILD,
+        channel_id: "200",
+        message_id: "500",
+        user_id: TESTER,
+        member: { user: { id: TESTER, bot: true }, roles: [] },
+        emoji: { id: null, name: "🟢" },
+      },
+    });
   const logger = { error: (...args: unknown[]) => assert.fail(JSON.stringify(args)) };
   await processGatewayEventQueueMessages([event(1)], env, logger);
   assert.equal(roles.has("300"), false, "production must continue ignoring bot members");

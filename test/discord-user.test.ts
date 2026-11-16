@@ -1,3 +1,4 @@
+import type { Cache } from "../src/runtime/discord-json-cache";
 /// <reference types="node/assert" />
 /// <reference types="node/assert/strict" />
 
@@ -194,15 +195,15 @@ test("resolveInteractionDisplayName uses member first then interaction user fall
   );
 });
 
-function createMockKv(): KVNamespace {
+function createMockKv(): Cache<string> {
   const store = new Map<string, string>();
   return {
     get: (key: string) => Promise.resolve(store.get(key) ?? null),
-    put: (key: string, value: string, _options?: { expirationTtl?: number }) => {
+    put: (key: string, value: string, _options?: { ttlSeconds?: number }) => {
       store.set(key, value);
       return Promise.resolve();
     },
-  } as unknown as KVNamespace;
+  } as unknown as Cache<string>;
 }
 
 import { resolveDisplayNameCached } from "../src/runtime/discord-user";
@@ -222,7 +223,7 @@ test("resolveDisplayNameCached with user data -> returns display name and caches
 
 test("resolveDisplayNameCached all null + cached value -> returns stale cached value", async () => {
   const kv = createMockKv();
-  await kv.put("discord_user:12345", "CachedName", { expirationTtl: 3600 });
+  await kv.put("discord_user:12345", "CachedName", { ttlSeconds: 3600 });
   const result = await resolveDisplayNameCached(kv, {
     nick: null,
     global_name: null,

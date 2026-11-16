@@ -8,6 +8,7 @@ import test from "node:test";
 import { buildEphemeralMessage } from "../src/discord-interactions";
 import { handleApplicationCommand } from "../src/runtime/application-command-handler";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
+import { applicationCommandServices } from "./support/handler-services";
 
 test("/playercount remove attributes deletion to the command actor", async () => {
   const removals: Array<{ guildId: string; name: string; actorUserId: string | undefined }> = [];
@@ -37,14 +38,14 @@ test("/playercount remove attributes deletion to the command actor", async () =>
     "bot-token",
     ALL_FEATURES_ENABLED,
     {
-      services: {
+      services: applicationCommandServices({
         playerCountService: {
           async removeServer(guildId: string, name: string, actorUserId?: string) {
             removals.push({ guildId, name, actorUserId });
             return true;
           },
         } as any,
-      },
+      }),
     },
   );
 

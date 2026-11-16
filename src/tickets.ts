@@ -121,17 +121,6 @@ export function parseTicketPanelStorage(
 > {
   const parsed = JSON.parse(payload) as unknown;
 
-  if (Array.isArray(parsed)) {
-    return {
-      ticketTypes: parsed.map(normalizeStoredTicketType),
-      panelEmoji: null,
-      panelTitle: null,
-      panelDescription: null,
-      panelFooter: null,
-      panelColor: 0x57f287,
-    };
-  }
-
   if (isRecord(parsed) && Array.isArray(parsed.ticketTypes)) {
     return {
       ticketTypes: parsed.ticketTypes.map(normalizeStoredTicketType),
@@ -1436,9 +1425,7 @@ function truncateDiscordFieldValue(value: string): string {
 
 function normalizeStoredTicketType(value: unknown): TicketTypeConfig {
   const ticketType = value as TicketTypeConfig & {
-    autoReplyEnabled?: unknown;
     responseRules?: unknown;
-    anonymousEnabled?: unknown;
     anonymousSupportEnabled?: unknown;
     staffDiscussionThreadEnabled?: unknown;
     ticketHistoryPromptVisibility?: unknown;
@@ -1448,23 +1435,22 @@ function normalizeStoredTicketType(value: unknown): TicketTypeConfig {
     allowedCreatorRoleIds?: unknown;
     defaultTicketLinkPlatform?: unknown;
   };
-  const autoReplyMessage = asStoredNullableString(ticketType.autoReplyMessage);
-  const responseRules =
-    normalizeStoredTicketResponseRules(ticketType.responseRules) ??
-    synthesizeLegacyResponseRules(ticketType.autoReplyEnabled, autoReplyMessage);
+  const responseRules = normalizeStoredTicketResponseRules(ticketType.responseRules) ?? [];
 
   return {
-    ...ticketType,
+    ...(ticketType.enabled === false ? { enabled: false } : {}),
+    id: ticketType.id,
+    label: ticketType.label,
+    emoji: ticketType.emoji,
+    buttonStyle: ticketType.buttonStyle,
+    supportRoleId: ticketType.supportRoleId,
+    channelNamePrefix: ticketType.channelNamePrefix,
+    questions: ticketType.questions,
     allowedCreatorRoleIds: Array.isArray(ticketType.allowedCreatorRoleIds)
       ? ticketType.allowedCreatorRoleIds.filter(
           (roleId): roleId is string => typeof roleId === "string" && roleId.length > 0,
         )
       : [],
-    autoReplyEnabled:
-      typeof ticketType.autoReplyEnabled === "boolean"
-        ? ticketType.autoReplyEnabled
-        : autoReplyMessage !== null,
-    autoReplyMessage,
     responseRules,
     ...("defaultTicketLinkPlatform" in ticketType
       ? {
@@ -1473,20 +1459,8 @@ function normalizeStoredTicketType(value: unknown): TicketTypeConfig {
             : null,
         }
       : {}),
-    anonymousEnabled:
-      typeof ticketType.anonymousEnabled === "boolean" ? ticketType.anonymousEnabled : false,
-    anonymousSupportEnabled:
-      typeof ticketType.anonymousSupportEnabled === "boolean"
-        ? ticketType.anonymousSupportEnabled
-        : typeof ticketType.anonymousEnabled === "boolean"
-          ? ticketType.anonymousEnabled
-          : false,
-    staffDiscussionThreadEnabled:
-      typeof ticketType.staffDiscussionThreadEnabled === "boolean"
-        ? ticketType.staffDiscussionThreadEnabled
-        : typeof ticketType.anonymousEnabled === "boolean"
-          ? ticketType.anonymousEnabled
-          : false,
+    anonymousSupportEnabled: ticketType.anonymousSupportEnabled === true,
+    staffDiscussionThreadEnabled: ticketType.staffDiscussionThreadEnabled === true,
     ticketHistoryPromptVisibility:
       ticketType.ticketHistoryPromptVisibility === "staff-thread" ? "staff-thread" : "off",
     participantManagementEnabled:
@@ -1565,23 +1539,6 @@ function normalizeStoredTicketResponseCondition(value: unknown): TicketResponseC
 
 function isTicketLinkPlatform(value: unknown): value is TicketLinkPlatform {
   return value === "steam" || value === "xbox" || value === "playstation";
-}
-
-function synthesizeLegacyResponseRules(
-  autoReplyEnabled: unknown,
-  autoReplyMessage: string | null,
-): TicketResponseRule[] {
-  if (autoReplyEnabled === false || autoReplyMessage === null) {
-    return [];
-  }
-
-  return [
-    {
-      id: "legacy-auto-reply",
-      conditions: [],
-      message: autoReplyMessage,
-    },
-  ];
 }
 
 function asStoredNullableString(value: unknown): string | null {

@@ -1,3 +1,4 @@
+import { adminErrorResponse } from "./support/admin-error-response";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { act } from "react";
@@ -57,7 +58,7 @@ test("automation dashboard preserves unsaved settings when a concurrent edit rej
             categories: [],
             forumChannels: [],
           })
-        : Response.json({ error: "These settings changed. Refresh the page." }, { status: 409 });
+        : adminErrorResponse("These settings changed. Refresh the page.", 409);
     await render(
       <AdminAutomationPage
         selectedGuildId="100"

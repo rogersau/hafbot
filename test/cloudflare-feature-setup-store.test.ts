@@ -4,12 +4,12 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { createCloudflareFeatureSetupStore } from "../src/runtime/cloudflare-feature-setup-store";
+import { createSqliteFeatureSetupStore } from "./support/sqlite/runtime/sqlite-feature-setup-store";
 import type { SetupRun } from "../src/feature-setup";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("Cloudflare FeatureSetupStore persists runs and applied resolutions", async () => {
-  const store = createCloudflareFeatureSetupStore(new SqliteD1Database() as unknown as D1Database);
+  const store = createSqliteFeatureSetupStore(new SqliteD1Database() as unknown as D1Database);
   const run: SetupRun = {
     id: "run-1",
     guildId: "guild-1",

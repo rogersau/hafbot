@@ -3,7 +3,6 @@ import {
   isAdminDashboardPath,
   normalizeAdminDashboardPath,
 } from "../dashboard-routes";
-import type { PageDataPolicy } from "../types";
 
 const GUILD_SCOPED_ADMIN_PATHS = new Set(ADMIN_GUILD_DASHBOARD_PATHS);
 const NON_GUILD_DASHBOARD_PATHS = new Set(["/admin/billing", "/admin/profile"]);
@@ -121,33 +120,4 @@ export function getDiscordSignInCallbackUrl(initialSearch: string): string {
   if (normalizedPath !== url.pathname) return "/admin";
   if (!isAdminDashboardPath(normalizedPath)) return "/admin";
   return `${normalizedPath}${url.search}`;
-}
-
-export function getDashboardPageDataPolicy(path: string): PageDataPolicy {
-  const currentPath = normalizeAdminDashboardPath(path);
-
-  if (currentPath === "/admin") {
-    return {
-      loadOverview: true,
-      loadGuildDirectory: true,
-      monitorGateway: true,
-      refreshOverviewAfterGatewayStart: true,
-    };
-  }
-
-  if (currentPath === "/admin/troubleshooting" || currentPath.endsWith("/troubleshooting")) {
-    return {
-      loadOverview: false,
-      loadGuildDirectory: true,
-      monitorGateway: false,
-      refreshOverviewAfterGatewayStart: false,
-    };
-  }
-
-  return {
-    loadOverview: false,
-    loadGuildDirectory: true,
-    monitorGateway: false,
-    refreshOverviewAfterGatewayStart: false,
-  };
 }

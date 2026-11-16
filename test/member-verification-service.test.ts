@@ -81,9 +81,9 @@ function createEntitlementStore(
       ? Promise.resolve()
       : fixture.database.d1
           .prepare(
-            "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES (?, ?, ?, ?)",
+            "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES (?, ?, ?)",
           )
-          .bind("guild-1", tier, tier, 1)
+          .bind("guild-1", tier, 1)
           .run();
   return afterStoreSeed(fixture.stores.guildEntitlements, ready);
 }
@@ -162,7 +162,7 @@ function createService(
   const production = createProductionRuntimeStores();
   memberVerificationFixtures.add(production);
   production.database.execRaw(
-    "INSERT INTO guild_entitlements (guild_id, tier, plan, updated_at_ms) VALUES ('guild-1', 'premium', 'premium', 1)",
+    "INSERT INTO guild_entitlements (guild_id, plan, updated_at_ms) VALUES ('guild-1', 'premium', 1)",
   );
   const dmCalls: Array<{ userId: string; body: CreateChannelMessageInput }> = [];
   const channelMessages: Array<{ channelId: string; body: CreateChannelMessageInput }> = [];
@@ -1703,7 +1703,9 @@ test("MemberVerificationService.handleVerifyButton with steam-link method return
   })) as { data: { content: string } };
 
   assert.equal(roleCalls.length, 0);
-  assert.ok(response.data.content.includes("https://example.com/auth/steam?state=steam-state-1"));
+  assert.ok(
+    response.data.content.includes("https://example.com/auth/steam/start?state=steam-state-1"),
+  );
 
   const requiredEvent = auditEvents.find(
     (e) => e.eventId === "member-verification.steam-link-required",

@@ -1,12 +1,11 @@
 import type { PlatformLinkConfig } from "./contracts/platform-link-store";
-import type { SteamLinkConfig } from "./contracts/steam-link-store";
 import type { CreateChannelMessageInput } from "../discord";
 import { DISCORD_BUTTON_COMPONENT, DISCORD_MESSAGE_COMPONENT_ROW } from "../discord/constants";
 
 export type PrimaryLinkPlatform = "steam" | "xbox" | "playstation";
 
 type LinkPanelConfig = Pick<
-  PlatformLinkConfig | SteamLinkConfig,
+  PlatformLinkConfig,
   "panelTitle" | "panelDescription" | "panelButtonLabel" | "panelButtonStyle" | "panelColor"
 >;
 

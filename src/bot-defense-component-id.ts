@@ -1,19 +1,11 @@
 export type BotDefenseModerationAction = "confirm" | "dismiss";
 
-export type ParsedBotDefenseComponentId =
-  | {
-      kind: "generation";
-      action: BotDefenseModerationAction;
-      guildId: string;
-      userId: string;
-      createdAtMs: number;
-    }
-  | {
-      kind: "legacy";
-      action: BotDefenseModerationAction;
-      guildId: string;
-      userId: string;
-    };
+export interface ParsedBotDefenseComponentId {
+  action: BotDefenseModerationAction;
+  guildId: string;
+  userId: string;
+  createdAtMs: number;
+}
 
 export function buildBotDefenseComponentId(
   action: BotDefenseModerationAction,
@@ -39,9 +31,6 @@ export function parseBotDefenseComponentId(
   const userId = parts[3];
   if (!action || !guildId || !userId) return null;
 
-  if (parts.length === 4) {
-    return { kind: "legacy", action, guildId, userId };
-  }
   if (parts.length !== 5) return null;
 
   const generationText = parts[4];
@@ -50,7 +39,7 @@ export function parseBotDefenseComponentId(
   if (!Number.isSafeInteger(createdAtMs) || createdAtMs < 0) return null;
   if (String(createdAtMs) !== generationText) return null;
 
-  return { kind: "generation", action, guildId, userId, createdAtMs };
+  return { action, guildId, userId, createdAtMs };
 }
 
 function parseAction(value: string | undefined): BotDefenseModerationAction | null {

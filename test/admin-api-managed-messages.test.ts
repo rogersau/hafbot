@@ -7,14 +7,14 @@ import test from "node:test";
 
 import { createAdminApiHandler } from "./helpers/admin-api";
 import type { CreateChannelMessageInput } from "../src/discord/messages";
-import { createCloudflareManagedMessageStore } from "../src/runtime/cloudflare-managed-message-store";
+import { createSqliteManagedMessageStore } from "./support/sqlite/runtime/sqlite-managed-message-store";
 import { ManagedMessageService } from "../src/services/managed-message-service";
 import { ManagedMediaService, type PublicManagedMediaStore } from "../src/managed-media";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
 test("Managed Message admin API exposes guild-scoped list, Save, and Delete operations", async () => {
   const database = new SqliteD1Database();
-  const store = createCloudflareManagedMessageStore(database as unknown as D1Database);
+  const store = createSqliteManagedMessageStore(database as unknown as D1Database);
   const discordCalls: string[] = [];
   const discordBodies: CreateChannelMessageInput[] = [];
   const service = new ManagedMessageService({
@@ -250,7 +250,7 @@ test("Managed Message admin API exposes guild-scoped list, Save, and Delete oper
 test("Managed Message admin API rejects resources outside the authorized Guild", async () => {
   const database = new SqliteD1Database();
   const service = new ManagedMessageService({
-    store: createCloudflareManagedMessageStore(database as unknown as D1Database),
+    store: createSqliteManagedMessageStore(database as unknown as D1Database),
     guildEntitlements: {
       async readGuildEntitlement(guildId) {
         return { guildId, tier: "free", updatedAtMs: 0 };
@@ -304,7 +304,7 @@ test("Managed Message admin API rejects resources outside the authorized Guild",
 
 test("Managed Message media upload compensates the blob when ownership registration fails", async () => {
   const database = new SqliteD1Database();
-  const rawStore = createCloudflareManagedMessageStore(database as unknown as D1Database);
+  const rawStore = createSqliteManagedMessageStore(database as unknown as D1Database);
   const deleted: string[] = [];
   const blobs: PublicManagedMediaStore = {
     async putImage() {},
