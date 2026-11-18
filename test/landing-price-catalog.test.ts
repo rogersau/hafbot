@@ -9,6 +9,14 @@ import { createBillingCatalog } from "../src/runtime/billing/catalog";
 import { createLandingPriceCatalog } from "../src/runtime/billing/landing-catalog";
 
 const billingCatalog = createBillingCatalog({
+  historicalPricesJson: JSON.stringify([
+    {
+      priceId: "price_historical",
+      productId: "prod_plus",
+      plan: "premium_plus",
+      frequency: "yearly",
+    },
+  ]),
   premiumMonthlyPriceId: "price_pm",
   premiumMonthlyProductId: "prod_premium",
   premiumYearlyPriceId: "price_py",
