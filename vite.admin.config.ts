@@ -86,9 +86,19 @@ export default defineConfig({
     outDir: "dist-admin",
     emptyOutDir: true,
     manifest: true,
-    rollupOptions: {
+    rolldownOptions: {
       input: { admin: "src/admin/main.tsx" },
       output: {
+        codeSplitting: {
+          // Keep the shared dialog wrappers and Radix primitives in one route chunk.
+          groups: [
+            {
+              name: "admin-dialog",
+              test: /(?:\/src\/admin\/components\/ui\/(?:confirm-dialog|dialog)\.tsx$|\/node_modules\/@radix-ui\/react-(?:alert-)?dialog\/)/,
+              includeDependenciesRecursively: false,
+            },
+          ],
+        },
         entryFileNames: "admin/assets/[name].js",
         chunkFileNames: "admin/assets/[name].js",
         assetFileNames: (assetInfo) => {
