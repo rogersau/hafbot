@@ -5,6 +5,8 @@ import { buildEphemeralMessage } from "../discord-interactions";
 import type { DiscordInteraction, RuntimeAppOptions } from "./app-types";
 import { ALL_FEATURES_ENABLED } from "./features";
 import { handleApplicationCommand } from "./application-command-handler";
+import { handleWardogsCommunityCommand } from "./wardogs-community-command";
+import { WARDOGS_LINK_STEAM_BUTTON, WARDOGS_SYNC_STATS_BUTTON } from "../wardogs/link-panel";
 import {
   handleMessageComponentInteraction,
   handleTicketReplyAutocompleteInteraction,
@@ -137,6 +139,7 @@ export async function handleInteractionRequest(
       {
         hafAdminGuildId: options.hafAdminGuildId,
         communityTools: options.communityTools,
+        wardogsCommunity: options.wardogsCommunity,
         reputationServiceForGuild: options.reputationServiceForGuild,
         hafAdminRoleId: options.hafAdminRoleId,
         eraseAttendanceObservationMember: options.attendanceObservations
@@ -267,6 +270,43 @@ export async function handleInteractionRequest(
 
     if (features.events && isEventComponentInteraction(interaction)) {
       return handleEventsComponentInteraction(interaction, services);
+    }
+
+    if (customId === WARDOGS_LINK_STEAM_BUTTON || customId === WARDOGS_SYNC_STATS_BUTTON) {
+      if (
+        features.wardogsCommunity === false ||
+        !features.steamLink ||
+        !options.wardogsCommunity ||
+        !options.communityTools ||
+        !guildId
+      ) {
+        return Response.json(buildEphemeralMessage("WARDOGS linking is unavailable."));
+      }
+      const { panel } = await options.communityTools.readWardogsSettings(guildId);
+      if (
+        !panel ||
+        panel.messageId !== interaction.message?.id ||
+        panel.channelId !== interaction.channel_id
+      ) {
+        return Response.json(buildEphemeralMessage("Use this server’s latest WARDOGS link panel."));
+      }
+      if (customId === WARDOGS_LINK_STEAM_BUTTON) {
+        return handleSteamLinkButtonInteraction(
+          interaction,
+          services.platformLinkService,
+          new URL(request.url).origin,
+        );
+      }
+      return handleWardogsCommunityCommand(
+        { commandName: "wardogs", subcommandName: "sync", steamId: null },
+        {
+          ...options.wardogsCommunity,
+          guildId,
+          actorUserId: getInteractionUserId(interaction) ?? undefined,
+          platformLink: options.stores.platformLink,
+          steamLinkEnabled: true,
+        },
+      );
     }
 
     if (features.steamLink && isSteamLinkButtonInteraction(interaction)) {

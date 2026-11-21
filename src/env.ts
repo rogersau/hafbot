@@ -58,6 +58,7 @@ export interface Env {
   DISABLE_BOT_DEFENSE?: string;
   DISABLE_MENTION_PROTECTION?: string;
   DISABLE_SERVER_LEVELS?: string;
+  DISABLE_WARDOGS_COMMUNITY?: string;
 
   BILLING_SYNC_QUEUE?: QueueProducer<unknown>;
   BILLING_DELIVERY_QUEUE?: QueueProducer<unknown>;
@@ -100,6 +101,9 @@ export interface Env {
   WARDOGS_MUTATIONS_ENABLED?: string;
   WARDOGS_NETWORK_ENABLED?: string;
   WARDOGS_NETWORK_POLICY?: string;
+  WARDOGS_SERVER_LIST_API_KEY?: string;
+  WARDOGS_TRACKER_CONNECT_CLIENT_ID?: string;
+  WARDOGS_TRACKER_CONNECT_KEY?: string;
   SERVER_LEVELS_QUEUE?: QueueProducer<import("./server-levels/ingress").ServerLevelIngressMessage>;
   discordCache?: Cache<string>;
 

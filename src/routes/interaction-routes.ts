@@ -35,6 +35,7 @@ export interface InteractionRouteOptions {
   ticketTranscriptCapabilities?: TicketTranscriptCapabilityAccess;
   evidenceVaultBlobs?: EvidenceVaultBlobStore;
   attendanceObservations?: RuntimeAppOptions["attendanceObservations"];
+  wardogsCommunity?: RuntimeAppOptions["wardogsCommunity"];
   services: InteractionRouteServices;
   features?: FeatureFlags;
   workspaceStore?: WorkspaceStore;

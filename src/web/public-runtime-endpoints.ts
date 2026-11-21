@@ -169,6 +169,7 @@ export function createPublicRuntimeEndpoints(
   const interactionRoutes = createInteractionRoutes({
     selfHostedSite: options.selfHostedSite,
     communityTools: options.communityTools,
+    wardogsCommunity: options.wardogsCommunity,
     reputationServiceForGuild: options.reputationServiceForGuild,
     discordPublicKey: options.discordPublicKey,
     discordBotToken: options.discordBotToken,
@@ -215,6 +216,8 @@ export function createPublicRuntimeEndpoints(
     memberVerificationMethodNotAllowed: respond(memberVerificationRoutes?.methodNotAllowed),
     steamLinkStart: respond(steamLinkRoutes?.start),
     steamLinkCallback: respond(steamLinkRoutes?.callback),
+    wardogsTrackerStart: respond(options.wardogsCommunity?.connect?.start),
+    wardogsTrackerCallback: respond(options.wardogsCommunity?.connect?.callback),
     xboxLinkStart: respond(xboxLinkRoutes?.start),
     xboxLinkCallback: respond(xboxLinkRoutes?.callback),
   };

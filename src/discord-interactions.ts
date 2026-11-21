@@ -15,6 +15,7 @@ export function hasGuildAdminPermission(permissions: string): boolean {
 import { ALL_SLASH_COMMAND_DEFINITIONS } from "./discord-commands";
 import { resolveResolvedDisplayName } from "./runtime/discord-user";
 import type { EvidenceVaultSourceMessage } from "./evidence-vault";
+import { isRecord } from "./unknown-parse";
 
 export type CommandInvocation =
   | { commandName: "help" }
@@ -148,6 +149,15 @@ export type CommandInvocation =
   | { commandName: "serverlevel"; subcommandName: "profile"; userId: string | null }
   | { commandName: "serverlevel"; subcommandName: "leaderboard" }
   | {
+      commandName: "wardogs";
+      subcommandName: "stats";
+      userId: string | null;
+      steamId: string | null;
+    }
+  | { commandName: "wardogs"; subcommandName: "sync"; steamId: string | null }
+  | { commandName: "wardogs"; subcommandName: "gold" }
+  | { commandName: "wardogs"; subcommandName: "gold-daily"; channelId: string | null; off: boolean }
+  | {
       commandName: "evidence-vault";
       subcommandName: "search";
       userInput: string | null;
@@ -244,6 +254,29 @@ export function extractCommandInvocation(invocation: any): CommandInvocation | n
     (o: any) => o.name === sub.name && o.type === sub.type,
   );
   if (!subDef) return null;
+
+  if (data.name === "wardogs") {
+    if (sub.name === "gold") return { commandName: "wardogs", subcommandName: "gold" };
+    const subOptions = Array.isArray(sub.options) ? sub.options.filter(isRecord) : [];
+    if (sub.name === "gold-daily") {
+      return {
+        commandName: "wardogs",
+        subcommandName: "gold-daily",
+        channelId: getStringOptionValue(subOptions, "channel"),
+        off: subOptions.some(
+          (option: Record<string, unknown>) => option.name === "off" && option.value === true,
+        ),
+      };
+    }
+    const steamId = getStringOptionValue(subOptions, "steamid");
+    if (sub.name === "sync") return { commandName: "wardogs", subcommandName: "sync", steamId };
+    return {
+      commandName: "wardogs",
+      subcommandName: "stats",
+      steamId,
+      userId: getStringOptionValue(subOptions, "user"),
+    };
+  }
 
   if (data.name === "serverlevel") {
     if (sub.name === "leaderboard") {

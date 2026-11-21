@@ -45,6 +45,7 @@ import type { WardogsService } from "../../wardogs/service";
 
 export interface GuildOverviewAdminRoutesOptions {
   communityTools?: import("../../community-tools/service").CommunityToolsService;
+  wardogsCommunity?: import("../app-types").RuntimeAppOptions["wardogsCommunity"];
   reputationServiceForGuild?: (
     guildId: string,
   ) => Promise<import("../../reputation/service").ReputationService>;
@@ -56,7 +57,7 @@ export interface GuildOverviewAdminRoutesOptions {
 export interface GuildOverviewSummaryInput {
   communityTools?: Partial<
     Record<
-      "automation" | "chat-moderation" | "content-feeds" | "reputation",
+      "automation" | "chat-moderation" | "content-feeds" | "reputation" | "wardogs-community",
       { enabled: boolean; configured: boolean }
     >
   >;
@@ -134,6 +135,7 @@ const GUILD_OVERVIEW_CARD_ORDER: string[] = [
   "bot-defense",
   "member-verification",
   "player-count",
+  "wardogs-community",
   "wardogs",
   "webhooks",
   "ban-cases",
@@ -201,6 +203,7 @@ const GUILD_OVERVIEW_CARD_DEFINITIONS: GuildOverviewCardDefinition[] = [
       ["chat-moderation", "Chat Moderation"],
       ["content-feeds", "Content Feeds"],
       ["reputation", "Reputation"],
+      ["wardogs-community", "WARDOGS community"],
     ] as const
   ).map(([id, label]): GuildOverviewCardDefinition => ({
     id,
@@ -997,6 +1000,14 @@ export function createGuildOverviewAdminRoutes(
             enabled: automation.config.enabled,
             configured: automation.revision > 0,
           };
+          if ("schedules" in automation.config) {
+            communityTools["wardogs-community"] = {
+              enabled: Boolean(options.wardogsCommunity),
+              configured: Boolean(
+                automation.config.wardogsGoldChannelId || automation.config.wardogsLinkPanel,
+              ),
+            };
+          }
           communityTools["chat-moderation"] = {
             enabled: moderation.config.enabled,
             configured: moderation.revision > 0,

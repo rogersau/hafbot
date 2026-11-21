@@ -287,6 +287,8 @@ test("read-only maintenance keeps health and reads available while rejecting mut
     "/auth/steam/callback",
     "/auth/xbox/start",
     "/auth/xbox/callback",
+    "/auth/wardogs/start",
+    "/auth/wardogs/callback",
     "/commerce/return",
     "/commerce/support/return",
   ]) {

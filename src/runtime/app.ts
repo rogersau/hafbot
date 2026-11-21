@@ -385,6 +385,7 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
     serverLevelProcessingAvailable: options.serverLevelProcessingAvailable,
     banAppealServiceForGuild: options.banAppealServiceForGuild,
     communityTools: options.communityTools,
+    wardogsCommunity: options.wardogsCommunity,
     reputationServiceForGuild: options.reputationServiceForGuild,
     componentIdSigner: options.componentIdSigner,
     configurationRevisionSigningSecret: options.configurationRevisionSigningSecret,

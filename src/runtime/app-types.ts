@@ -236,6 +236,10 @@ export interface RuntimeAppOptions {
     typeof import("./attendance-observation-runtime").createAttendanceObservationRuntime
   >;
   wardogs?: WardogsService;
+  wardogsCommunity?: {
+    data: import("../wardogs/community-data").WardogsCommunityData;
+    connect?: import("../wardogs/tracker-connect").WardogsTrackerConnect;
+  };
   banEnforcementStore?: EnforcementStore;
   banIncidentStore?: BanIncidentStore;
   banCasesEnabled?: boolean;

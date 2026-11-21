@@ -49,6 +49,8 @@ const entries: FeatureResourceCatalogEntry[] = [
   channel("player_link", "panel_channel", "Player Link panel channel", "link-account"),
   channel("player_link", "log_channel", "Player Link log channel", "player-link-log", true),
   role("player_link", "linked_role", "Linked player role", "Linked Player"),
+  channel("wardogs_community", "gold_channel", "WARDOGS Gold Exchange channel", "wardogs-gold"),
+  channel("wardogs_community", "panel_channel", "WARDOGS link panel channel", "link-wardogs"),
   voice("player_count", "status_voice_channel", "Player Count voice channel", "Players (0)"),
   channel("player_count", "alert_channel", "Player Count alert channel", "server-alerts", true),
   forum("suggestions", "forum_channel", "Suggestion Forum", "suggestions", false),

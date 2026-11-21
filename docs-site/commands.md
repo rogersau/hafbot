@@ -146,6 +146,26 @@ Server Levels is a paid beta. Commands publish aggregate progression only; atten
 
 Only members who are currently in the Discord server appear. A targeted profile also requires the target to be a current member.
 
+## WARDOGS
+
+Replies are visible only to the member who ran the command. WARDOGS Tracker supplies public
+career snapshots. WARDOGS Server List supplies the game-wide Gold Exchange price.
+
+| Command               | Parameters                   | Result                                                                                                            |
+| --------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `/wardogs stats`      | Optional `user` or `steamid` | Shows a public progression snapshot and its sync time. With neither option, uses your verified Steam Player Link. |
+| `/wardogs sync`       | Optional `steamid`           | Opens an opt-in sync with WARDOGS Tracker. Close WARDOGS before signing in through Steam.                         |
+| `/wardogs gold`       | None                         | Shows the latest cash price per gold bar and up to seven UTC days of price history.                               |
+| `/wardogs gold-daily` | Optional `channel` or `off`  | Sets the channel for daily updates, turns updates off, or shows the current setup. Requires HAF admin access.     |
+
+Run `/wardogs gold-daily channel:#gold` to enable the daily post. It appears after the feed reports
+that UTC day's price and includes the latest rate, the change since the previous day when available,
+and the same price history as `/wardogs gold`. Run `/wardogs gold-daily off:true` to stop posts.
+The operator must configure the price feed and run the scheduler for daily posts.
+
+For an account with multiple Steam links, use `steamid` to select the account. Members control which
+stats appear publicly through their WARDOGS Tracker profile settings.
+
 ## Player Link
 
 Member-facing `request` commands post a link button in the current channel. Lookup, manual-link, count, setup, panel, and role-sync commands are staff tools.

@@ -79,8 +79,9 @@ test("route page modules are dynamic entries outside the initial graph", async (
   const report = JSON.parse(await readFile("artifacts/admin-bundle-report.json", "utf8"));
   const routePages = Object.values(report.routePageModules);
 
-  assert.equal(routePages.length, 31);
+  assert.equal(routePages.length, 32);
   assert.ok(report.routes["route.reactionRoles"]);
+  assert.ok(report.routes["route.wardogsCommunity"]);
   assert.ok(routePages.every((page) => page.dynamicallyImported));
   assert.ok(routePages.every((page) => !page.inInitialGraph));
   assert.ok(

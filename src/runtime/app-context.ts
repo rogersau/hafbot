@@ -98,6 +98,7 @@ export interface RuntimeAppContext {
   serverLevelIngressHandler?: (request: Request) => Promise<Response | null>;
   attendanceObservations?: ReturnType<typeof createAttendanceObservationRuntime>;
   wardogs: WardogsService;
+  wardogsCommunity?: RuntimeAppOptions["wardogsCommunity"];
   banEnforcementStore?: EnforcementStore;
   banIncidentStore?: BanIncidentStore;
   banCasesEnabled?: boolean;

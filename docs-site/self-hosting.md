@@ -256,6 +256,23 @@ a restricted pilot. AI image classification and transcript summaries require a c
 Steam, Xbox, Turnstile and game-server integrations require their own credentials and configuration.
 The source license does not grant access to any hosted API, provider account or subscription.
 
+### WARDOGS community commands
+
+The public progression lookup uses the keyless [WARDOGS Tracker Stats API](https://wardogstracker.gg/developers/stats).
+Member lookups use verified Steam Player Links. Direct SteamID64 lookups also work.
+
+- Set `WARDOGS_SERVER_LIST_API_KEY` to a server key from [WARDOGS Server List](https://wardogserverlist.com/api)
+  for `/wardogs gold` and daily gold posts. Run the scheduler with `HAF_SCHEDULER_ENABLED=true`,
+  then select a Discord text channel under **Integrations → WARDOGS community** or use
+  `/wardogs gold-daily channel:#gold`. HAF Bot needs View Channel and Send Messages there. The
+  scheduler waits for the current UTC day's rate.
+- For the built-in `/wardogs sync` flow, register `https://your-host/auth/wardogs/callback` with
+  [Tracker Connect](https://wardogstracker.gg/developers/connect). Use the HTTPS origin from
+  `BETTER_AUTH_URL` and set `WARDOGS_TRACKER_CONNECT_CLIENT_ID` and `WARDOGS_TRACKER_CONNECT_KEY`.
+  The command links to the Tracker website when Connect is unavailable.
+- Enable and save **Steam Player Link** for the server before publishing its **WARDOGS link panel**.
+- Set `DISABLE_WARDOGS_COMMUNITY=true` to disable these commands.
+
 Sentry and product analytics are optional. Leave `SENTRY_DSN`, `POSTHOG_HOST`,
 `POSTHOG_PROJECT_TOKEN` and `PRODUCT_ANALYTICS_PSEUDONYM_KEY` unset unless you choose to use them.
 Review the built-in terms, privacy text, support links and canonical URLs before inviting users:

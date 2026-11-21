@@ -83,6 +83,8 @@ import { Route as ApiBillingStripeWebhookRouteImport } from './routes/api.billin
 import { Route as ApiCommerceStripeWebhookRouteImport } from './routes/api.commerce.stripe-webhook'
 import { Route as AuthSteamCallbackRouteImport } from './routes/auth.steam.callback'
 import { Route as AuthSteamStartRouteImport } from './routes/auth.steam.start'
+import { Route as AuthWardogsCallbackRouteImport } from './routes/auth.wardogs.callback'
+import { Route as AuthWardogsStartRouteImport } from './routes/auth.wardogs.start'
 import { Route as AuthXboxCallbackRouteImport } from './routes/auth.xbox.callback'
 import { Route as AuthXboxStartRouteImport } from './routes/auth.xbox.start'
 import { Route as CommerceOffersOfferingIdRouteImport } from './routes/commerce.offers.$offeringId'
@@ -121,6 +123,7 @@ import { Route as AdminDashboardGuildIdTicketsRouteImport } from './routes/admin
 import { Route as AdminDashboardGuildIdTimedRolesRouteImport } from './routes/admin/_dashboard/$guildId/timed-roles'
 import { Route as AdminDashboardGuildIdTroubleshootingRouteImport } from './routes/admin/_dashboard/$guildId/troubleshooting'
 import { Route as AdminDashboardGuildIdWardogsRouteImport } from './routes/admin/_dashboard/$guildId/wardogs'
+import { Route as AdminDashboardGuildIdWardogsCommunityRouteImport } from './routes/admin/_dashboard/$guildId/wardogs-community'
 import { Route as AdminDashboardGuildIdWebhooksRouteImport } from './routes/admin/_dashboard/$guildId/webhooks'
 import { Route as AdminApiBanAppealsConfigRouteImport } from './routes/admin/api/ban-appeals/config'
 import { Route as AdminApiBanAppealsDetailRouteImport } from './routes/admin/api/ban-appeals/detail'
@@ -220,6 +223,7 @@ import { Route as AdminApiTimedRolesManualAssignmentConfigRouteImport } from './
 import { Route as AdminApiTimedRolesNewMemberConfigRouteImport } from './routes/admin/api/timed-roles/new-member-config'
 import { Route as AdminApiTimedRolesResourcesRouteImport } from './routes/admin/api/timed-roles/resources'
 import { Route as AdminApiWardogsChangeRouteImport } from './routes/admin/api/wardogs/change'
+import { Route as AdminApiWardogsCommunityRouteImport } from './routes/admin/api/wardogs/community'
 import { Route as AdminApiWardogsObservationsRouteImport } from './routes/admin/api/wardogs/observations'
 import { Route as AdminApiWardogsTargetsRouteImport } from './routes/admin/api/wardogs/targets'
 import { Route as AdminApiWardogsTestRouteImport } from './routes/admin/api/wardogs/test'
@@ -289,6 +293,7 @@ import { Route as AdminApiTicketsPanelRevisionsRouteImport } from './routes/admi
 import { Route as AdminApiTicketsPanelUnpublishRouteImport } from './routes/admin/api/tickets/panel/unpublish'
 import { Route as AdminApiTicketsTranscriptRevokeRouteImport } from './routes/admin/api/tickets/transcript/revoke'
 import { Route as AdminApiTicketsTranscriptRotateRouteImport } from './routes/admin/api/tickets/transcript/rotate'
+import { Route as AdminApiWardogsCommunityPlayerRouteImport } from './routes/admin/api/wardogs/community/player'
 import { Route as AdminApiWardogsObservationsReadinessRouteImport } from './routes/admin/api/wardogs/observations/readiness'
 import { Route as AdminApiWardogsObservationsStartRouteImport } from './routes/admin/api/wardogs/observations/start'
 import { Route as AdminApiWardogsObservationsStopRouteImport } from './routes/admin/api/wardogs/observations/stop'
@@ -718,6 +723,16 @@ const AuthSteamStartRoute = AuthSteamStartRouteImport.update({
   path: '/auth/steam/start',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthWardogsCallbackRoute = AuthWardogsCallbackRouteImport.update({
+  id: '/auth/wardogs/callback',
+  path: '/auth/wardogs/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthWardogsStartRoute = AuthWardogsStartRouteImport.update({
+  id: '/auth/wardogs/start',
+  path: '/auth/wardogs/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthXboxCallbackRoute = AuthXboxCallbackRouteImport.update({
   id: '/auth/xbox/callback',
   path: '/auth/xbox/callback',
@@ -938,6 +953,12 @@ const AdminDashboardGuildIdWardogsRoute =
   AdminDashboardGuildIdWardogsRouteImport.update({
     id: '/wardogs',
     path: '/wardogs',
+    getParentRoute: () => AdminDashboardGuildIdRoute,
+  } as any)
+const AdminDashboardGuildIdWardogsCommunityRoute =
+  AdminDashboardGuildIdWardogsCommunityRouteImport.update({
+    id: '/wardogs-community',
+    path: '/wardogs-community',
     getParentRoute: () => AdminDashboardGuildIdRoute,
   } as any)
 const AdminDashboardGuildIdWebhooksRoute =
@@ -1512,6 +1533,12 @@ const AdminApiWardogsChangeRoute = AdminApiWardogsChangeRouteImport.update({
   path: '/change',
   getParentRoute: () => AdminApiWardogsRoute,
 } as any)
+const AdminApiWardogsCommunityRoute =
+  AdminApiWardogsCommunityRouteImport.update({
+    id: '/community',
+    path: '/community',
+    getParentRoute: () => AdminApiWardogsRoute,
+  } as any)
 const AdminApiWardogsObservationsRoute =
   AdminApiWardogsObservationsRouteImport.update({
     id: '/observations',
@@ -1923,6 +1950,12 @@ const AdminApiTicketsTranscriptRotateRoute =
     path: '/api/tickets/transcript/rotate',
     getParentRoute: () => AdminRoute,
   } as any)
+const AdminApiWardogsCommunityPlayerRoute =
+  AdminApiWardogsCommunityPlayerRouteImport.update({
+    id: '/player',
+    path: '/player',
+    getParentRoute: () => AdminApiWardogsCommunityRoute,
+  } as any)
 const AdminApiWardogsObservationsReadinessRoute =
   AdminApiWardogsObservationsReadinessRouteImport.update({
     id: '/readiness',
@@ -2110,6 +2143,8 @@ export interface FileRoutesByFullPath {
   '/api/commerce/stripe-webhook': typeof ApiCommerceStripeWebhookRoute
   '/auth/steam/callback': typeof AuthSteamCallbackRoute
   '/auth/steam/start': typeof AuthSteamStartRoute
+  '/auth/wardogs/callback': typeof AuthWardogsCallbackRoute
+  '/auth/wardogs/start': typeof AuthWardogsStartRoute
   '/auth/xbox/callback': typeof AuthXboxCallbackRoute
   '/auth/xbox/start': typeof AuthXboxStartRoute
   '/commerce/offers/$offeringId': typeof CommerceOffersOfferingIdRoute
@@ -2149,6 +2184,7 @@ export interface FileRoutesByFullPath {
   '/admin/$guildId/timed-roles': typeof AdminDashboardGuildIdTimedRolesRoute
   '/admin/$guildId/troubleshooting': typeof AdminDashboardGuildIdTroubleshootingRoute
   '/admin/$guildId/wardogs': typeof AdminDashboardGuildIdWardogsRoute
+  '/admin/$guildId/wardogs-community': typeof AdminDashboardGuildIdWardogsCommunityRoute
   '/admin/$guildId/webhooks': typeof AdminDashboardGuildIdWebhooksRoute
   '/admin/api/ban-appeals/config': typeof AdminApiBanAppealsConfigRoute
   '/admin/api/ban-appeals/detail': typeof AdminApiBanAppealsDetailRoute
@@ -2248,6 +2284,7 @@ export interface FileRoutesByFullPath {
   '/admin/api/timed-roles/new-member-config': typeof AdminApiTimedRolesNewMemberConfigRoute
   '/admin/api/timed-roles/resources': typeof AdminApiTimedRolesResourcesRoute
   '/admin/api/wardogs/change': typeof AdminApiWardogsChangeRoute
+  '/admin/api/wardogs/community': typeof AdminApiWardogsCommunityRouteWithChildren
   '/admin/api/wardogs/observations': typeof AdminApiWardogsObservationsRouteWithChildren
   '/admin/api/wardogs/targets': typeof AdminApiWardogsTargetsRoute
   '/admin/api/wardogs/test': typeof AdminApiWardogsTestRoute
@@ -2318,6 +2355,7 @@ export interface FileRoutesByFullPath {
   '/admin/api/tickets/panel/unpublish': typeof AdminApiTicketsPanelUnpublishRoute
   '/admin/api/tickets/transcript/revoke': typeof AdminApiTicketsTranscriptRevokeRoute
   '/admin/api/tickets/transcript/rotate': typeof AdminApiTicketsTranscriptRotateRoute
+  '/admin/api/wardogs/community/player': typeof AdminApiWardogsCommunityPlayerRoute
   '/admin/api/wardogs/observations/readiness': typeof AdminApiWardogsObservationsReadinessRoute
   '/admin/api/wardogs/observations/start': typeof AdminApiWardogsObservationsStartRoute
   '/admin/api/wardogs/observations/stop': typeof AdminApiWardogsObservationsStopRoute
@@ -2414,6 +2452,8 @@ export interface FileRoutesByTo {
   '/api/commerce/stripe-webhook': typeof ApiCommerceStripeWebhookRoute
   '/auth/steam/callback': typeof AuthSteamCallbackRoute
   '/auth/steam/start': typeof AuthSteamStartRoute
+  '/auth/wardogs/callback': typeof AuthWardogsCallbackRoute
+  '/auth/wardogs/start': typeof AuthWardogsStartRoute
   '/auth/xbox/callback': typeof AuthXboxCallbackRoute
   '/auth/xbox/start': typeof AuthXboxStartRoute
   '/commerce/offers/$offeringId': typeof CommerceOffersOfferingIdRoute
@@ -2452,6 +2492,7 @@ export interface FileRoutesByTo {
   '/admin/$guildId/timed-roles': typeof AdminDashboardGuildIdTimedRolesRoute
   '/admin/$guildId/troubleshooting': typeof AdminDashboardGuildIdTroubleshootingRoute
   '/admin/$guildId/wardogs': typeof AdminDashboardGuildIdWardogsRoute
+  '/admin/$guildId/wardogs-community': typeof AdminDashboardGuildIdWardogsCommunityRoute
   '/admin/$guildId/webhooks': typeof AdminDashboardGuildIdWebhooksRoute
   '/admin/api/ban-appeals/config': typeof AdminApiBanAppealsConfigRoute
   '/admin/api/ban-appeals/detail': typeof AdminApiBanAppealsDetailRoute
@@ -2551,6 +2592,7 @@ export interface FileRoutesByTo {
   '/admin/api/timed-roles/new-member-config': typeof AdminApiTimedRolesNewMemberConfigRoute
   '/admin/api/timed-roles/resources': typeof AdminApiTimedRolesResourcesRoute
   '/admin/api/wardogs/change': typeof AdminApiWardogsChangeRoute
+  '/admin/api/wardogs/community': typeof AdminApiWardogsCommunityRouteWithChildren
   '/admin/api/wardogs/observations': typeof AdminApiWardogsObservationsRouteWithChildren
   '/admin/api/wardogs/targets': typeof AdminApiWardogsTargetsRoute
   '/admin/api/wardogs/test': typeof AdminApiWardogsTestRoute
@@ -2621,6 +2663,7 @@ export interface FileRoutesByTo {
   '/admin/api/tickets/panel/unpublish': typeof AdminApiTicketsPanelUnpublishRoute
   '/admin/api/tickets/transcript/revoke': typeof AdminApiTicketsTranscriptRevokeRoute
   '/admin/api/tickets/transcript/rotate': typeof AdminApiTicketsTranscriptRotateRoute
+  '/admin/api/wardogs/community/player': typeof AdminApiWardogsCommunityPlayerRoute
   '/admin/api/wardogs/observations/readiness': typeof AdminApiWardogsObservationsReadinessRoute
   '/admin/api/wardogs/observations/start': typeof AdminApiWardogsObservationsStartRoute
   '/admin/api/wardogs/observations/stop': typeof AdminApiWardogsObservationsStopRoute
@@ -2720,6 +2763,8 @@ export interface FileRoutesById {
   '/api/commerce/stripe-webhook': typeof ApiCommerceStripeWebhookRoute
   '/auth/steam/callback': typeof AuthSteamCallbackRoute
   '/auth/steam/start': typeof AuthSteamStartRoute
+  '/auth/wardogs/callback': typeof AuthWardogsCallbackRoute
+  '/auth/wardogs/start': typeof AuthWardogsStartRoute
   '/auth/xbox/callback': typeof AuthXboxCallbackRoute
   '/auth/xbox/start': typeof AuthXboxStartRoute
   '/commerce/offers/$offeringId': typeof CommerceOffersOfferingIdRoute
@@ -2759,6 +2804,7 @@ export interface FileRoutesById {
   '/admin/_dashboard/$guildId/timed-roles': typeof AdminDashboardGuildIdTimedRolesRoute
   '/admin/_dashboard/$guildId/troubleshooting': typeof AdminDashboardGuildIdTroubleshootingRoute
   '/admin/_dashboard/$guildId/wardogs': typeof AdminDashboardGuildIdWardogsRoute
+  '/admin/_dashboard/$guildId/wardogs-community': typeof AdminDashboardGuildIdWardogsCommunityRoute
   '/admin/_dashboard/$guildId/webhooks': typeof AdminDashboardGuildIdWebhooksRoute
   '/admin/api/ban-appeals/config': typeof AdminApiBanAppealsConfigRoute
   '/admin/api/ban-appeals/detail': typeof AdminApiBanAppealsDetailRoute
@@ -2858,6 +2904,7 @@ export interface FileRoutesById {
   '/admin/api/timed-roles/new-member-config': typeof AdminApiTimedRolesNewMemberConfigRoute
   '/admin/api/timed-roles/resources': typeof AdminApiTimedRolesResourcesRoute
   '/admin/api/wardogs/change': typeof AdminApiWardogsChangeRoute
+  '/admin/api/wardogs/community': typeof AdminApiWardogsCommunityRouteWithChildren
   '/admin/api/wardogs/observations': typeof AdminApiWardogsObservationsRouteWithChildren
   '/admin/api/wardogs/targets': typeof AdminApiWardogsTargetsRoute
   '/admin/api/wardogs/test': typeof AdminApiWardogsTestRoute
@@ -2928,6 +2975,7 @@ export interface FileRoutesById {
   '/admin/api/tickets/panel/unpublish': typeof AdminApiTicketsPanelUnpublishRoute
   '/admin/api/tickets/transcript/revoke': typeof AdminApiTicketsTranscriptRevokeRoute
   '/admin/api/tickets/transcript/rotate': typeof AdminApiTicketsTranscriptRotateRoute
+  '/admin/api/wardogs/community/player': typeof AdminApiWardogsCommunityPlayerRoute
   '/admin/api/wardogs/observations/readiness': typeof AdminApiWardogsObservationsReadinessRoute
   '/admin/api/wardogs/observations/start': typeof AdminApiWardogsObservationsStartRoute
   '/admin/api/wardogs/observations/stop': typeof AdminApiWardogsObservationsStopRoute
@@ -3027,6 +3075,8 @@ export interface FileRouteTypes {
     | '/api/commerce/stripe-webhook'
     | '/auth/steam/callback'
     | '/auth/steam/start'
+    | '/auth/wardogs/callback'
+    | '/auth/wardogs/start'
     | '/auth/xbox/callback'
     | '/auth/xbox/start'
     | '/commerce/offers/$offeringId'
@@ -3066,6 +3116,7 @@ export interface FileRouteTypes {
     | '/admin/$guildId/timed-roles'
     | '/admin/$guildId/troubleshooting'
     | '/admin/$guildId/wardogs'
+    | '/admin/$guildId/wardogs-community'
     | '/admin/$guildId/webhooks'
     | '/admin/api/ban-appeals/config'
     | '/admin/api/ban-appeals/detail'
@@ -3165,6 +3216,7 @@ export interface FileRouteTypes {
     | '/admin/api/timed-roles/new-member-config'
     | '/admin/api/timed-roles/resources'
     | '/admin/api/wardogs/change'
+    | '/admin/api/wardogs/community'
     | '/admin/api/wardogs/observations'
     | '/admin/api/wardogs/targets'
     | '/admin/api/wardogs/test'
@@ -3235,6 +3287,7 @@ export interface FileRouteTypes {
     | '/admin/api/tickets/panel/unpublish'
     | '/admin/api/tickets/transcript/revoke'
     | '/admin/api/tickets/transcript/rotate'
+    | '/admin/api/wardogs/community/player'
     | '/admin/api/wardogs/observations/readiness'
     | '/admin/api/wardogs/observations/start'
     | '/admin/api/wardogs/observations/stop'
@@ -3331,6 +3384,8 @@ export interface FileRouteTypes {
     | '/api/commerce/stripe-webhook'
     | '/auth/steam/callback'
     | '/auth/steam/start'
+    | '/auth/wardogs/callback'
+    | '/auth/wardogs/start'
     | '/auth/xbox/callback'
     | '/auth/xbox/start'
     | '/commerce/offers/$offeringId'
@@ -3369,6 +3424,7 @@ export interface FileRouteTypes {
     | '/admin/$guildId/timed-roles'
     | '/admin/$guildId/troubleshooting'
     | '/admin/$guildId/wardogs'
+    | '/admin/$guildId/wardogs-community'
     | '/admin/$guildId/webhooks'
     | '/admin/api/ban-appeals/config'
     | '/admin/api/ban-appeals/detail'
@@ -3468,6 +3524,7 @@ export interface FileRouteTypes {
     | '/admin/api/timed-roles/new-member-config'
     | '/admin/api/timed-roles/resources'
     | '/admin/api/wardogs/change'
+    | '/admin/api/wardogs/community'
     | '/admin/api/wardogs/observations'
     | '/admin/api/wardogs/targets'
     | '/admin/api/wardogs/test'
@@ -3538,6 +3595,7 @@ export interface FileRouteTypes {
     | '/admin/api/tickets/panel/unpublish'
     | '/admin/api/tickets/transcript/revoke'
     | '/admin/api/tickets/transcript/rotate'
+    | '/admin/api/wardogs/community/player'
     | '/admin/api/wardogs/observations/readiness'
     | '/admin/api/wardogs/observations/start'
     | '/admin/api/wardogs/observations/stop'
@@ -3636,6 +3694,8 @@ export interface FileRouteTypes {
     | '/api/commerce/stripe-webhook'
     | '/auth/steam/callback'
     | '/auth/steam/start'
+    | '/auth/wardogs/callback'
+    | '/auth/wardogs/start'
     | '/auth/xbox/callback'
     | '/auth/xbox/start'
     | '/commerce/offers/$offeringId'
@@ -3675,6 +3735,7 @@ export interface FileRouteTypes {
     | '/admin/_dashboard/$guildId/timed-roles'
     | '/admin/_dashboard/$guildId/troubleshooting'
     | '/admin/_dashboard/$guildId/wardogs'
+    | '/admin/_dashboard/$guildId/wardogs-community'
     | '/admin/_dashboard/$guildId/webhooks'
     | '/admin/api/ban-appeals/config'
     | '/admin/api/ban-appeals/detail'
@@ -3774,6 +3835,7 @@ export interface FileRouteTypes {
     | '/admin/api/timed-roles/new-member-config'
     | '/admin/api/timed-roles/resources'
     | '/admin/api/wardogs/change'
+    | '/admin/api/wardogs/community'
     | '/admin/api/wardogs/observations'
     | '/admin/api/wardogs/targets'
     | '/admin/api/wardogs/test'
@@ -3844,6 +3906,7 @@ export interface FileRouteTypes {
     | '/admin/api/tickets/panel/unpublish'
     | '/admin/api/tickets/transcript/revoke'
     | '/admin/api/tickets/transcript/rotate'
+    | '/admin/api/wardogs/community/player'
     | '/admin/api/wardogs/observations/readiness'
     | '/admin/api/wardogs/observations/start'
     | '/admin/api/wardogs/observations/stop'
@@ -3894,6 +3957,8 @@ export interface RootRouteChildren {
   ApiCommerceStripeWebhookRoute: typeof ApiCommerceStripeWebhookRoute
   AuthSteamCallbackRoute: typeof AuthSteamCallbackRoute
   AuthSteamStartRoute: typeof AuthSteamStartRoute
+  AuthWardogsCallbackRoute: typeof AuthWardogsCallbackRoute
+  AuthWardogsStartRoute: typeof AuthWardogsStartRoute
   AuthXboxCallbackRoute: typeof AuthXboxCallbackRoute
   AuthXboxStartRoute: typeof AuthXboxStartRoute
   CommerceOffersOfferingIdRoute: typeof CommerceOffersOfferingIdRoute
@@ -4469,6 +4534,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthSteamStartRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/wardogs/callback': {
+      id: '/auth/wardogs/callback'
+      path: '/auth/wardogs/callback'
+      fullPath: '/auth/wardogs/callback'
+      preLoaderRoute: typeof AuthWardogsCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/wardogs/start': {
+      id: '/auth/wardogs/start'
+      path: '/auth/wardogs/start'
+      fullPath: '/auth/wardogs/start'
+      preLoaderRoute: typeof AuthWardogsStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/xbox/callback': {
       id: '/auth/xbox/callback'
       path: '/auth/xbox/callback'
@@ -4733,6 +4812,13 @@ declare module '@tanstack/react-router' {
       path: '/wardogs'
       fullPath: '/admin/$guildId/wardogs'
       preLoaderRoute: typeof AdminDashboardGuildIdWardogsRouteImport
+      parentRoute: typeof AdminDashboardGuildIdRoute
+    }
+    '/admin/_dashboard/$guildId/wardogs-community': {
+      id: '/admin/_dashboard/$guildId/wardogs-community'
+      path: '/wardogs-community'
+      fullPath: '/admin/$guildId/wardogs-community'
+      preLoaderRoute: typeof AdminDashboardGuildIdWardogsCommunityRouteImport
       parentRoute: typeof AdminDashboardGuildIdRoute
     }
     '/admin/_dashboard/$guildId/webhooks': {
@@ -5428,6 +5514,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminApiWardogsChangeRouteImport
       parentRoute: typeof AdminApiWardogsRoute
     }
+    '/admin/api/wardogs/community': {
+      id: '/admin/api/wardogs/community'
+      path: '/community'
+      fullPath: '/admin/api/wardogs/community'
+      preLoaderRoute: typeof AdminApiWardogsCommunityRouteImport
+      parentRoute: typeof AdminApiWardogsRoute
+    }
     '/admin/api/wardogs/observations': {
       id: '/admin/api/wardogs/observations'
       path: '/observations'
@@ -5911,6 +6004,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminApiTicketsTranscriptRotateRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/api/wardogs/community/player': {
+      id: '/admin/api/wardogs/community/player'
+      path: '/player'
+      fullPath: '/admin/api/wardogs/community/player'
+      preLoaderRoute: typeof AdminApiWardogsCommunityPlayerRouteImport
+      parentRoute: typeof AdminApiWardogsCommunityRoute
+    }
     '/admin/api/wardogs/observations/readiness': {
       id: '/admin/api/wardogs/observations/readiness'
       path: '/readiness'
@@ -6070,6 +6170,7 @@ interface AdminDashboardGuildIdRouteChildren {
   AdminDashboardGuildIdTimedRolesRoute: typeof AdminDashboardGuildIdTimedRolesRoute
   AdminDashboardGuildIdTroubleshootingRoute: typeof AdminDashboardGuildIdTroubleshootingRoute
   AdminDashboardGuildIdWardogsRoute: typeof AdminDashboardGuildIdWardogsRoute
+  AdminDashboardGuildIdWardogsCommunityRoute: typeof AdminDashboardGuildIdWardogsCommunityRoute
   AdminDashboardGuildIdWebhooksRoute: typeof AdminDashboardGuildIdWebhooksRoute
   AdminDashboardGuildIdIndexRoute: typeof AdminDashboardGuildIdIndexRoute
 }
@@ -6115,6 +6216,8 @@ const AdminDashboardGuildIdRouteChildren: AdminDashboardGuildIdRouteChildren = {
   AdminDashboardGuildIdTroubleshootingRoute:
     AdminDashboardGuildIdTroubleshootingRoute,
   AdminDashboardGuildIdWardogsRoute: AdminDashboardGuildIdWardogsRoute,
+  AdminDashboardGuildIdWardogsCommunityRoute:
+    AdminDashboardGuildIdWardogsCommunityRoute,
   AdminDashboardGuildIdWebhooksRoute: AdminDashboardGuildIdWebhooksRoute,
   AdminDashboardGuildIdIndexRoute: AdminDashboardGuildIdIndexRoute,
 }
@@ -6855,6 +6958,20 @@ const AdminApiTimedRolesRouteChildren: AdminApiTimedRolesRouteChildren = {
 const AdminApiTimedRolesRouteWithChildren =
   AdminApiTimedRolesRoute._addFileChildren(AdminApiTimedRolesRouteChildren)
 
+interface AdminApiWardogsCommunityRouteChildren {
+  AdminApiWardogsCommunityPlayerRoute: typeof AdminApiWardogsCommunityPlayerRoute
+}
+
+const AdminApiWardogsCommunityRouteChildren: AdminApiWardogsCommunityRouteChildren =
+  {
+    AdminApiWardogsCommunityPlayerRoute: AdminApiWardogsCommunityPlayerRoute,
+  }
+
+const AdminApiWardogsCommunityRouteWithChildren =
+  AdminApiWardogsCommunityRoute._addFileChildren(
+    AdminApiWardogsCommunityRouteChildren,
+  )
+
 interface AdminApiWardogsObservationsRouteChildren {
   AdminApiWardogsObservationsReadinessRoute: typeof AdminApiWardogsObservationsReadinessRoute
   AdminApiWardogsObservationsStartRoute: typeof AdminApiWardogsObservationsStartRoute
@@ -6877,6 +6994,7 @@ const AdminApiWardogsObservationsRouteWithChildren =
 
 interface AdminApiWardogsRouteChildren {
   AdminApiWardogsChangeRoute: typeof AdminApiWardogsChangeRoute
+  AdminApiWardogsCommunityRoute: typeof AdminApiWardogsCommunityRouteWithChildren
   AdminApiWardogsObservationsRoute: typeof AdminApiWardogsObservationsRouteWithChildren
   AdminApiWardogsTargetsRoute: typeof AdminApiWardogsTargetsRoute
   AdminApiWardogsTestRoute: typeof AdminApiWardogsTestRoute
@@ -6885,6 +7003,7 @@ interface AdminApiWardogsRouteChildren {
 
 const AdminApiWardogsRouteChildren: AdminApiWardogsRouteChildren = {
   AdminApiWardogsChangeRoute: AdminApiWardogsChangeRoute,
+  AdminApiWardogsCommunityRoute: AdminApiWardogsCommunityRouteWithChildren,
   AdminApiWardogsObservationsRoute:
     AdminApiWardogsObservationsRouteWithChildren,
   AdminApiWardogsTargetsRoute: AdminApiWardogsTargetsRoute,
@@ -7230,6 +7349,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCommerceStripeWebhookRoute: ApiCommerceStripeWebhookRoute,
   AuthSteamCallbackRoute: AuthSteamCallbackRoute,
   AuthSteamStartRoute: AuthSteamStartRoute,
+  AuthWardogsCallbackRoute: AuthWardogsCallbackRoute,
+  AuthWardogsStartRoute: AuthWardogsStartRoute,
   AuthXboxCallbackRoute: AuthXboxCallbackRoute,
   AuthXboxStartRoute: AuthXboxStartRoute,
   CommerceOffersOfferingIdRoute: CommerceOffersOfferingIdRoute,

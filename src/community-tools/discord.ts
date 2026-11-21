@@ -5,6 +5,7 @@ import { applyGuildMemberTimeout, fetchGuildMember } from "../discord/members";
 import {
   createChannelMessage,
   deleteChannelMessage,
+  editChannelMessage,
   listChannelMessages,
 } from "../discord/messages";
 import {
@@ -85,6 +86,23 @@ export function createCommunityDiscord(
     resources,
     member,
     validateChannel,
+    async publishPanel({ channelId, previous, body, nonce }) {
+      await validateChannel(channelId);
+      if (previous?.channelId === channelId && previous.botUserId === botUserId) {
+        try {
+          const message = await editChannelMessage(channelId, previous.messageId, body, token);
+          return { messageId: message.id, botUserId };
+        } catch (error) {
+          if (!(error instanceof DiscordApiError) || error.status !== 404) throw error;
+        }
+      }
+      const message = await createChannelMessage(
+        channelId,
+        { ...body, nonce, enforce_nonce: true },
+        token,
+      );
+      return { messageId: message.id, botUserId };
+    },
     async send(channelId, content, roleIds, nonce) {
       await validateChannel(channelId);
       const roles = Array.from(new Set(roleIds));
