@@ -8,7 +8,7 @@ import type {
   MarketplacePost,
 } from "../../types";
 import { DEFAULT_MARKETPLACE_NOTICE_EMBED } from "../../marketplace-config";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { FormField, SectionHeader, SettingsBlock } from "./admin-form-layout";
 import { AdminBottomActionBar, areAdminActionSnapshotsEqual } from "./admin-bottom-action-bar";
 import { ChannelSelect } from "./guild-resource-select";
@@ -27,7 +27,7 @@ import { useConfirmDialog } from "./ui/confirm-dialog";
 import { ResponsiveTable, type ResponsiveTableColumn } from "./ui/responsive-table";
 import { PageFeedback } from "./page-feedback";
 import { useToast } from "./toast";
-import { refreshAdminRouteData } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { UnsavedChangesIndicator } from "./unsaved-changes-indicator";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { useGuildResources } from "../hooks/use-guild-resources";
@@ -87,19 +87,25 @@ export function AdminMarketplacePage({
 }) {
   const trimmedGuildId = selectedGuildId.trim();
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Marketplace"
+      description="Configure the marketplace noticeboard, server choices, and post management."
+      readinessFeature="marketplace"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-workflow space-y-6">
-      <AdminPageHeader
-        title="Marketplace"
-        description="Configure the marketplace noticeboard, server choices, and post management."
-        readinessFeature="marketplace"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="marketplace" />
       ) : (
         <MarketplaceEditor
+          renderHeader={renderHeader}
           selectedWorkspaceId={selectedWorkspaceId}
           selectedGuildId={trimmedGuildId}
           initialData={initialData}
@@ -111,11 +117,13 @@ export function AdminMarketplacePage({
 }
 
 function MarketplaceEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: MarketplaceLoaderData | null;
@@ -132,6 +140,7 @@ function MarketplaceEditor({
   const [closingPostId, setClosingPostId] = useState<string | null>(null);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { dialog: confirmDialog, confirm } = useConfirmDialog();
   const { resources } = useGuildResources(selectedWorkspaceId, selectedGuildId);
 
@@ -290,9 +299,12 @@ function MarketplaceEditor({
 
   if (!resource) {
     return (
-      <p className="text-sm text-muted-foreground">
-        {api.loading ? "Loading marketplace…" : "Marketplace not loaded."}
-      </p>
+      <>
+        {renderHeader()}
+        <p className="text-sm text-muted-foreground">
+          {api.loading ? "Loading marketplace…" : "Marketplace not loaded."}
+        </p>
+      </>
     );
   }
 
@@ -353,7 +365,7 @@ function MarketplaceEditor({
     setResource({ ...current, config: { ...current.config, additionalChoices: choices } });
   }
 
-  return (
+  const content = (
     <div className="space-y-5">
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardChanges} />
       {confirmDialog}
@@ -903,6 +915,13 @@ function MarketplaceEditor({
         </p>
       ) : null}
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }
 

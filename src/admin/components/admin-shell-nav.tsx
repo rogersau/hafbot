@@ -1,12 +1,13 @@
 import {
-  useEffect,
   useState,
   type AnchorHTMLAttributes,
+  type ComponentProps,
   type MouseEventHandler,
   type ReactNode,
   type JSX,
 } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { AdminSessionProvider, useAdminSession, useAdminSessionState } from "../lib/admin-session";
 
 import {
   ADMIN_DASHBOARD_ROUTES,
@@ -51,7 +52,12 @@ import {
   WrenchIcon,
 } from "./ui/icons";
 import type { GuildEntitlementTier } from "../../types";
-import { isRecord } from "../../unknown-parse";
+import {
+  ADMIN_NAV_SECTION_STORAGE_KEY,
+  DEFAULT_ADMIN_NAV_SECTION_PREFERENCES,
+  writeAdminNavSectionPreferences,
+  type AdminNavSectionLabel,
+} from "../lib/admin-nav-section-preferences";
 
 const ROUTE_ICONS: Partial<
   Record<AdminDashboardPath, (props: { className?: string }) => JSX.Element>
@@ -99,31 +105,7 @@ const PLAYER_LINK_TABS = [
   { platform: "xbox", label: "Xbox Link" },
   { platform: "playstation", label: "PlayStation Link" },
 ] as const;
-const ADMIN_NAV_SECTION_LABELS = [
-  "Overview",
-  "Moderation",
-  "Community Management",
-  "Access Control",
-  "Integrations",
-  "Configuration",
-] as const;
-type AdminNavSectionLabel = (typeof ADMIN_NAV_SECTION_LABELS)[number];
-type AdminNavSectionPreferences = Record<AdminNavSectionLabel, boolean>;
-
-export const ADMIN_NAV_SECTION_STORAGE_KEY = "discord-automation:admin-nav-sections";
-const DEFAULT_ADMIN_NAV_SECTION_PREFERENCES: AdminNavSectionPreferences = {
-  Overview: true,
-  Moderation: false,
-  "Community Management": false,
-  "Access Control": false,
-  Integrations: false,
-  Configuration: false,
-};
-// CUSTOMER_NAV_GROUPS items are either route objects ({ path, label }) rendered
-// as flat SidebarRouteLinks, or one of two string sentinels ("Reaction Rules",
-// "Player Link") rendered as expandable SidebarGroups with their own sub-links.
-// Because the sentinels are handled inline below, they intentionally have no
-// { path } entry and never reach SidebarRouteLink.
+export { ADMIN_NAV_SECTION_STORAGE_KEY };
 function dashboardRoute(path: AdminDashboardPath) {
   return ADMIN_DASHBOARD_ROUTES.find((route) => route.path === path)!;
 }
@@ -189,7 +171,15 @@ const CUSTOMER_NAV_GROUPS = [
   },
 ] as const;
 
-export function AdminShellNav({
+export function AdminShellNav(props: ComponentProps<typeof AdminShellNavigation>) {
+  return (
+    <AdminSessionProvider>
+      <AdminShellNavigation {...props} />
+    </AdminSessionProvider>
+  );
+}
+
+function AdminShellNavigation({
   currentPath,
   currentSearch,
   selectedGuildId,
@@ -210,14 +200,9 @@ export function AdminShellNav({
 }) {
   const [reactionRulesExpanded, setReactionRulesExpanded] = useState(false);
   const [playerLinkExpanded, setPlayerLinkExpanded] = useState(false);
-  const [sectionPreferences, setSectionPreferences] = useState<AdminNavSectionPreferences>(
-    DEFAULT_ADMIN_NAV_SECTION_PREFERENCES,
-  );
-  // eslint-disable-next-line custom/no-use-effect -- localStorage is only available after hydration.
-  useEffect(() => {
-    const stored = readAdminNavSectionPreferences();
-    if (stored) setSectionPreferences(stored);
-  }, []);
+  const session = useAdminSession();
+  const savedSections = useAdminSessionState((state) => state.navSectionPreferences);
+  const sectionPreferences = savedSections ?? DEFAULT_ADMIN_NAV_SECTION_PREFERENCES;
   const reactionRulesActive = isRouteActive(currentPath, "/admin/blocklist", selectedGuildId);
   const activeReactionRulesTab = getReactionRulesTabFromSearch(currentSearch);
   const playerLinkActive = isRouteActive(currentPath, "/admin/player-link", selectedGuildId);
@@ -250,11 +235,11 @@ export function AdminShellNav({
               active={active}
               disclosureDisabled={collapsed || active}
               onToggle={() => {
-                const next = {
-                  ...sectionPreferences,
-                  [group.label]: !sectionPreferences[group.label],
-                };
-                setSectionPreferences(next);
+                const previous =
+                  session.store.state.navSectionPreferences ??
+                  DEFAULT_ADMIN_NAV_SECTION_PREFERENCES;
+                const next = { ...previous, [group.label]: !previous[group.label] };
+                session.update({ navSectionPreferences: next });
                 writeAdminNavSectionPreferences(next);
               }}
             >
@@ -422,34 +407,6 @@ function slugifyNavSectionLabel(label: AdminNavSectionLabel) {
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, "-")
     .replace(/^-|[-]$/g, "");
-}
-
-function readAdminNavSectionPreferences(): AdminNavSectionPreferences | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(ADMIN_NAV_SECTION_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed)) return null;
-    const value = parsed;
-
-    if (Object.keys(value).length !== ADMIN_NAV_SECTION_LABELS.length) return null;
-    if (!ADMIN_NAV_SECTION_LABELS.every((label) => typeof value[label] === "boolean")) return null;
-    return Object.fromEntries(
-      ADMIN_NAV_SECTION_LABELS.map((label) => [label, value[label]]),
-    ) as AdminNavSectionPreferences;
-  } catch {
-    return null;
-  }
-}
-
-function writeAdminNavSectionPreferences(preferences: AdminNavSectionPreferences) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(ADMIN_NAV_SECTION_STORAGE_KEY, JSON.stringify(preferences));
-  } catch {
-    // persistence is a nice-to-have
-  }
 }
 
 function getActiveNavSection(

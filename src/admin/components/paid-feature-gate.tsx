@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { useAdminRead } from "../hooks/use-admin-read";
 
 import { encodeGuildIdForSearch } from "../lib/dashboard-urls";
 import { Badge } from "./ui/badge";
@@ -36,30 +37,14 @@ export function PaidFeatureGate({
   guildId: string;
   children: ReactNode;
 }) {
-  const [context, setContext] = useState<AccessContext | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void import("../generated/admin-client/billing")
-      .then(({ billingClient }) => billingClient.get({}))
-      .then(async (billing) => {
-        const paid = billing.subscription && billing.subscription.plan !== "free";
-        const assignments = paid
-          ? await import("../generated/admin-client/billing")
-              .then(({ billingClient }) => billingClient.assignments({}))
-              .catch(() => null)
-          : null;
-        if (!cancelled) setContext({ billing, assignments });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setContext({ billing: { subscription: null, prices: [] }, assignments: null });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data, error } = useAdminRead<AccessContext>("paid-feature-access", async () => {
+    const { billingClient } = await import("../generated/admin-client/billing");
+    const billing = await billingClient.get({});
+    const paid = billing.subscription && billing.subscription.plan !== "free";
+    const assignments = paid ? await billingClient.assignments({}).catch(() => null) : null;
+    return { billing, assignments };
+  });
+  const context = error ? { billing: { subscription: null, prices: [] }, assignments: null } : data;
 
   const action = resolveGateAction(context, guildId);
 

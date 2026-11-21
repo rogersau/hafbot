@@ -1,3 +1,4 @@
+import { createCommerceSupportRoutes } from "./helpers/runtime-endpoint-requests";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -6,7 +7,6 @@ import {
   type CommerceSupportStore,
 } from "../src/commerce/support-payments";
 import {
-  createCommerceSupportRoutes,
   signCommerceSupportState,
   verifyCommerceSupportState,
 } from "../src/routes/commerce-support-routes";

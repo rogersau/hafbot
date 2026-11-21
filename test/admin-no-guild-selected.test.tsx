@@ -14,6 +14,7 @@ import { renderToString } from "react-dom/server";
 import { NoGuildSelected } from "../src/admin/components/no-guild-selected";
 import { AdminGuildSettingsPage } from "../src/admin/components/admin-guild-settings-page";
 import { ToastProvider } from "../src/admin/components/toast";
+import { getAdminRouteState } from "../src/admin/lib/admin-route-state";
 import type { AdminRouterContext } from "../src/admin/routes/context";
 import { AdminRouteContextProvider } from "../src/admin/routes/page-context";
 function renderEmptyState(search = "", description?: string) {
@@ -25,9 +26,8 @@ function renderEmptyState(search = "", description?: string) {
   });
   const routeTree = rootRoute.addChildren([adminRoute]);
   const context = {
-    currentPath: "/admin",
+    ...getAdminRouteState({ pathname: "/admin", search }),
     currentSearch: search,
-    selectedWorkspaceId: "workspace-1",
   } as AdminRouterContext;
   const router = createRouter({
     routeTree,

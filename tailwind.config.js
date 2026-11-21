@@ -45,7 +45,7 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        display: ["Oxanium", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Oxanium Variable", "ui-sans-serif", "system-ui", "sans-serif"],
       },
     },
   },

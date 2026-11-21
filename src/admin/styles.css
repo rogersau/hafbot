@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@fontsource-variable/oxanium";
 @config "../../tailwind.config.js";
 
 @layer base {
@@ -165,7 +166,7 @@
 }
 .admin-product-brand strong {
   font:
-    700 13px Oxanium,
+    700 13px "Oxanium Variable",
     ui-sans-serif,
     sans-serif;
 }
@@ -177,7 +178,7 @@
 .admin-product-brand small {
   color: var(--ops-muted);
   font:
-    600 8px Oxanium,
+    600 8px "Oxanium Variable",
     ui-sans-serif,
     sans-serif;
   letter-spacing: 0.06em;
@@ -197,7 +198,7 @@
   display: block;
   color: var(--ops-text);
   font:
-    italic 800 14px Oxanium,
+    italic 800 14px "Oxanium Variable",
     ui-sans-serif,
     sans-serif;
   letter-spacing: 0.06em;
@@ -211,7 +212,7 @@
   margin-top: 2px;
   color: var(--ops-muted);
   font:
-    600 8px Oxanium,
+    600 8px "Oxanium Variable",
     ui-monospace,
     monospace;
   letter-spacing: 0.08em;
@@ -282,7 +283,7 @@
   display: block;
   color: var(--ops-muted);
   font:
-    600 8px Oxanium,
+    600 8px "Oxanium Variable",
     ui-sans-serif,
     sans-serif;
   letter-spacing: 0.11em;
@@ -371,7 +372,7 @@
   margin-bottom: 6px;
   color: var(--ops-accent);
   font:
-    700 9px Oxanium,
+    700 9px "Oxanium Variable",
     ui-monospace,
     monospace;
   letter-spacing: 0.16em;
@@ -381,7 +382,7 @@
   margin: 0;
   color: var(--ops-text);
   font:
-    italic 800 clamp(2rem, 3vw, 2.65rem) / 0.98 Oxanium,
+    italic 800 clamp(2rem, 3vw, 2.65rem) / 0.98 "Oxanium Variable",
     ui-sans-serif,
     sans-serif;
   letter-spacing: 0.01em;
@@ -592,7 +593,7 @@
 .admin-badge {
   border-radius: 3px;
   font:
-    700 9px Oxanium,
+    700 9px "Oxanium Variable",
     ui-monospace,
     monospace;
   letter-spacing: 0.055em;
@@ -606,7 +607,7 @@
   min-height: 38px;
   border-right: 1px solid transparent;
   border-left: 1px solid transparent;
-  font-family: Oxanium, ui-sans-serif, sans-serif;
+  font-family: "Oxanium Variable", ui-sans-serif, sans-serif;
   letter-spacing: 0.035em;
   text-transform: uppercase;
 }
@@ -670,7 +671,7 @@
 .admin-command-group [cmdk-group-heading] {
   color: var(--ops-accent);
   font:
-    700 9px Oxanium,
+    700 9px "Oxanium Variable",
     ui-monospace,
     monospace;
   letter-spacing: 0.11em;
@@ -731,7 +732,7 @@ html.light .admin-paid-feature-gate {
 }
 .admin-toast {
   border-radius: 3px;
-  font-family: Oxanium, ui-sans-serif, sans-serif;
+  font-family: "Oxanium Variable", ui-sans-serif, sans-serif;
   box-shadow:
     0 18px 55px rgba(0, 0, 0, 0.55),
     0 0 18px rgba(114, 137, 251, 0.12);
@@ -813,7 +814,7 @@ html.light .admin-paid-feature-gate {
 .admin-ops-page-header > div > span {
   color: var(--ops-accent);
   font:
-    700 9px Oxanium,
+    700 9px "Oxanium Variable",
     ui-sans-serif,
     sans-serif;
   letter-spacing: 0.12em;
@@ -822,7 +823,7 @@ html.light .admin-paid-feature-gate {
 .admin-ops-page-header h1 {
   margin: 10px 0 0;
   font:
-    700 clamp(28px, 3vw, 42px)/1.06 Oxanium,
+    700 clamp(28px, 3vw, 42px)/1.06 "Oxanium Variable",
     ui-sans-serif,
     sans-serif;
   letter-spacing: -0.04em;
@@ -841,7 +842,7 @@ html.light .admin-paid-feature-gate {
   padding: 6px 10px;
   color: var(--ops-muted);
   font:
-    600 9px Oxanium,
+    600 9px "Oxanium Variable",
     sans-serif;
   text-transform: uppercase;
 }
@@ -864,7 +865,7 @@ html.light .admin-paid-feature-gate {
   display: block;
   color: var(--ops-muted);
   font:
-    600 8px Oxanium,
+    600 8px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -873,7 +874,7 @@ html.light .admin-paid-feature-gate {
   display: block;
   margin-top: 7px;
   font:
-    700 17px Oxanium,
+    700 17px "Oxanium Variable",
     sans-serif;
 }
 .admin-ops-progress span {
@@ -884,7 +885,7 @@ html.light .admin-paid-feature-gate {
 .admin-ops-progress span b {
   color: var(--ops-accent);
   font:
-    600 10px Oxanium,
+    600 10px "Oxanium Variable",
     sans-serif;
 }
 .admin-ops-progress > i {
@@ -919,7 +920,7 @@ html.light .admin-paid-feature-gate {
   display: block;
   color: var(--ops-accent);
   font:
-    600 8px Oxanium,
+    600 8px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -928,7 +929,7 @@ html.light .admin-paid-feature-gate {
   display: block;
   margin-top: 5px;
   font:
-    600 12px Oxanium,
+    600 12px "Oxanium Variable",
     sans-serif;
 }
 .admin-ops-recommendation p {
@@ -943,7 +944,7 @@ html.light .admin-paid-feature-gate {
   color: hsl(var(--accent-foreground));
   background: hsl(var(--accent));
   font:
-    700 9px Oxanium,
+    700 9px "Oxanium Variable",
     sans-serif;
   text-decoration: none;
 }
@@ -984,7 +985,7 @@ html.light .admin-paid-feature-gate {
 .admin-status-column-heading h2 {
   margin: 0;
   font:
-    700 12px Oxanium,
+    700 12px "Oxanium Variable",
     sans-serif;
 }
 .admin-status-column-heading p {
@@ -995,7 +996,7 @@ html.light .admin-paid-feature-gate {
 .admin-status-column-heading b {
   color: var(--ops-muted);
   font:
-    600 10px Oxanium,
+    600 10px "Oxanium Variable",
     sans-serif;
 }
 .admin-status-list {
@@ -1031,7 +1032,7 @@ html.light .admin-paid-feature-gate {
 .admin-ops-feature-row h3 {
   margin: 0;
   font:
-    600 10px Oxanium,
+    600 10px "Oxanium Variable",
     sans-serif;
 }
 .admin-ops-feature-row > div > span {
@@ -1042,7 +1043,7 @@ html.light .admin-paid-feature-gate {
 .admin-ops-feature-row > a {
   color: var(--ops-accent);
   font:
-    600 9px Oxanium,
+    600 9px "Oxanium Variable",
     sans-serif;
   text-decoration: none;
   white-space: nowrap;
@@ -1060,7 +1061,7 @@ html.light .admin-paid-feature-gate {
   padding: 4px 7px;
   color: var(--ops-muted);
   font:
-    600 8px Oxanium,
+    600 8px "Oxanium Variable",
     sans-serif;
   white-space: nowrap;
 }
@@ -1270,7 +1271,7 @@ html.light .admin-paid-feature-gate {
   overflow: hidden;
   padding: 0 8px 0 12px;
   font:
-    600 10px Oxanium,
+    600 10px "Oxanium Variable",
     ui-monospace,
     monospace;
   letter-spacing: 0.055em;
@@ -1317,7 +1318,7 @@ html.light .admin-paid-feature-gate {
   margin-right: 8px;
   color: color-mix(in srgb, var(--ops-muted) 78%, transparent);
   font:
-    700 7px Oxanium,
+    700 7px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.08em;
 }
@@ -1368,7 +1369,7 @@ html.light .admin-paid-feature-gate {
   color: var(--ops-muted);
   background: var(--ops-sidebar);
   font:
-    600 9px Oxanium,
+    600 9px "Oxanium Variable",
     ui-monospace,
     monospace;
   letter-spacing: 0.035em;
@@ -1426,7 +1427,7 @@ html.light .admin-paid-feature-gate {
   display: block;
   color: var(--ops-accent);
   font:
-    700 8px Oxanium,
+    700 8px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -1434,7 +1435,7 @@ html.light .admin-paid-feature-gate {
 .admin-attention-heading h2 {
   margin: 4px 0 0;
   font:
-    700 15px Oxanium,
+    700 15px "Oxanium Variable",
     sans-serif;
   text-transform: uppercase;
 }
@@ -1446,7 +1447,7 @@ html.light .admin-paid-feature-gate {
   border: 1px solid color-mix(in srgb, #b88c48 60%, var(--ops-border));
   color: #d5a960;
   font:
-    700 11px Oxanium,
+    700 11px "Oxanium Variable",
     sans-serif;
 }
 .admin-attention-list {
@@ -1485,7 +1486,7 @@ html.light .admin-paid-feature-gate {
 .admin-attention-row h3 {
   margin: 0;
   font:
-    700 11px Oxanium,
+    700 11px "Oxanium Variable",
     sans-serif;
 }
 .admin-attention-row p {
@@ -1501,7 +1502,7 @@ html.light .admin-paid-feature-gate {
   padding: 4px 7px;
   color: #d5a960;
   font:
-    700 8px Oxanium,
+    700 8px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.035em;
   white-space: nowrap;
@@ -1514,7 +1515,7 @@ html.light .admin-paid-feature-gate {
 .admin-attention-row > a {
   color: var(--ops-accent);
   font:
-    700 9px Oxanium,
+    700 9px "Oxanium Variable",
     sans-serif;
   text-decoration: none;
   white-space: nowrap;
@@ -1542,7 +1543,7 @@ html.light .admin-paid-feature-gate {
 .admin-healthy-state strong {
   display: block;
   font:
-    700 11px Oxanium,
+    700 11px "Oxanium Variable",
     sans-serif;
 }
 .admin-healthy-state p {

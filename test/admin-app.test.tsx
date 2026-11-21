@@ -5,15 +5,17 @@ import { adminErrorResponse } from "./support/admin-error-response";
 import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
-import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { renderToString } from "react-dom/server";
 import { JSDOM } from "jsdom";
 
 import "./support/admin-page-test-loader";
 
-import App, { combineDashboardErrors, getDiscordSignInCallbackUrl } from "../src/admin/App";
-import * as AdminAppModule from "../src/admin/App";
-import { getAdminLoginLocation } from "../src/runtime/admin-shell";
+import App, { authenticatedAdmin, renderAdminRouteFixture, routeTree } from "./support/admin-app";
+import * as dashboardUrls from "../src/admin/lib/dashboard-urls";
+import { getDiscordSignInCallbackUrl } from "../src/admin/lib/dashboard-urls";
+import { combineDashboardErrors, describeError as describeAdminError } from "../src/admin/lib/api";
+import { getAdminLoginLocation } from "../src/runtime/admin-redirects";
 import { AdminBottomActionBar } from "../src/admin/components/admin-bottom-action-bar";
 import { AdminGuildSettingsPage } from "../src/admin/components/admin-guild-settings-page";
 import {
@@ -29,9 +31,9 @@ import {
 
 import {
   areTicketPanelConfigsEqual,
-  ClosedTicketsSection,
   validateTicketPanelBeforeSubmit,
 } from "../src/admin/components/admin-tickets-page";
+import { ClosedTicketsSection } from "../src/admin/components/closed-tickets-section";
 import { TicketPanelEditor } from "../src/admin/components/ticket-panel-editor";
 import { readJsonOrThrow } from "../src/admin/lib/api";
 import {
@@ -40,9 +42,7 @@ import {
   getDefaultAdminRedirectTarget,
 } from "../src/admin/lib/admin-route-state";
 import { renderTimedRoleDmPreview } from "../src/admin/components/admin-timed-roles-page";
-import type { AdminPageMetadata, AdminRouterContext } from "../src/admin/routes/context";
-import { AdminRouteContextProvider } from "../src/admin/routes/page-context";
-import { routeTree } from "../src/admin/routes/route-tree";
+import type { AdminRouterContext } from "../src/admin/routes/context";
 import type { EntitlementInfo } from "../src/admin/hooks/use-entitlement";
 import type {
   LoadedAdminRouteData,
@@ -259,7 +259,7 @@ test("Tickets page passes route-context entitlement to the page component", () =
     routeTree,
     defaultPreload: "intent",
     history: createMemoryHistory({ initialEntries: ["/admin/guild-1/tickets"] }),
-    context,
+    context: { admin: authenticatedAdmin },
   });
   router.stores.setMatches(
     router.matchRoutes(router.state.location).map((match) => ({
@@ -268,11 +268,7 @@ test("Tickets page passes route-context entitlement to the page component", () =
     })),
   );
 
-  const html = renderToString(
-    <AdminRouteContextProvider value={context}>
-      <RouterProvider router={router} context={context} />
-    </AdminRouteContextProvider>,
-  );
+  const html = renderAdminRouteFixture(router, context);
 
   assert.match(html, /Configure how your guild handles support tickets\./);
   assert.doesNotMatch(html, /Tickets requires a paid plan\./);
@@ -292,7 +288,7 @@ test("Player Link falls back to Steam when PlayStation is disabled", () => {
     history: createMemoryHistory({
       initialEntries: ["/admin/guild-1/player-link?platform=playstation"],
     }),
-    context,
+    context: { admin: authenticatedAdmin },
   });
   router.stores.setMatches(
     router.matchRoutes(router.state.location).map((match) => ({
@@ -301,11 +297,7 @@ test("Player Link falls back to Steam when PlayStation is disabled", () => {
     })),
   );
 
-  const html = renderToString(
-    <AdminRouteContextProvider value={context}>
-      <RouterProvider router={router} context={context} />
-    </AdminRouteContextProvider>,
-  );
+  const html = renderAdminRouteFixture(router, context);
 
   assert.match(html, /Link your Steam account/);
   assert.doesNotMatch(html, /Link your PlayStation account/);
@@ -481,7 +473,7 @@ test("Bot Defense clearly explains automatic honeypot deletion", () => {
   assert.match(html, /2 selected honeypot channels/);
 });
 
-test("admin shell resets topbar metadata when navigating away from Tickets", () => {
+test("the Overview shell has the Overview title and controls", () => {
   const html = renderToString(<App initialAuthenticated initialPath="/admin/guild-1" />);
 
   assert.doesNotMatch(html, /Configure how your guild handles support tickets\./);
@@ -509,7 +501,7 @@ test("admin shell shows page loading feedback while a route transition is pendin
     routeTree,
     defaultPreload: "intent",
     history: createMemoryHistory({ initialEntries: ["/admin/guild-1"] }),
-    context: routerContext,
+    context: { admin: authenticatedAdmin },
   });
 
   router.stores.setMatches(
@@ -520,11 +512,7 @@ test("admin shell shows page loading feedback while a route transition is pendin
       ),
   );
 
-  const html = renderToString(
-    <AdminRouteContextProvider value={routerContext}>
-      <RouterProvider router={router} context={routerContext} />
-    </AdminRouteContextProvider>,
-  );
+  const html = renderAdminRouteFixture(router, routerContext);
 
   assert.match(html, /role="progressbar"/);
   assert.match(html, /aria-label="Loading page"/);
@@ -788,7 +776,7 @@ test("Overview page renders tier badge and cards from loader data", () => {
     routeTree,
     defaultPreload: "intent",
     history: createMemoryHistory({ initialEntries: ["/admin/guild-1"] }),
-    context,
+    context: { admin: authenticatedAdmin },
   });
   router.stores.setMatches(
     router.matchRoutes(router.state.location).map((match) => ({
@@ -798,11 +786,7 @@ test("Overview page renders tier badge and cards from loader data", () => {
     })),
   );
 
-  const html = renderToString(
-    <AdminRouteContextProvider value={context}>
-      <RouterProvider router={router} context={context} />
-    </AdminRouteContextProvider>,
-  );
+  const html = renderAdminRouteFixture(router, context);
 
   assert.match(html, />Premium</);
   assert.match(html, />Reaction Rules</);
@@ -825,22 +809,17 @@ test("authenticated admin dashboard keeps navigation labels for future workflow 
 });
 
 test("admin route shell reads the live app context for loaded guilds", () => {
-  const staleRouterContext = createTestAdminRouterContext({ guildDirectory: null });
   const liveAppContext = createTestAdminRouterContext({ guildDirectory });
   const router = createRouter({
     routeTree,
     defaultPreload: "intent",
     history: createMemoryHistory({ initialEntries: ["/admin"] }),
-    context: staleRouterContext,
+    context: { admin: authenticatedAdmin },
   });
 
   router.stores.setMatches(router.matchRoutes(router.state.location));
 
-  const html = renderToString(
-    <AdminRouteContextProvider value={liveAppContext}>
-      <RouterProvider router={router} context={staleRouterContext} />
-    </AdminRouteContextProvider>,
-  );
+  const html = renderAdminRouteFixture(router, liveAppContext);
 
   assert.match(html, /select a guild/);
   assert.doesNotMatch(html, /Loading guilds/);
@@ -899,14 +878,10 @@ function renderAdminIndex(context: AdminRouterContext) {
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: ["/admin?workspaceId=workspace-1"] }),
-    context,
+    context: { admin: authenticatedAdmin },
   });
   router.stores.setMatches(router.matchRoutes(router.state.location));
-  return renderToString(
-    <AdminRouteContextProvider value={context}>
-      <RouterProvider router={router} context={context} />
-    </AdminRouteContextProvider>,
-  );
+  return renderAdminRouteFixture(router, context);
 }
 
 test("authenticated admin dashboard renders the Evidence Vault setup page", () => {
@@ -1025,7 +1000,7 @@ test("Troubleshooting page renders diagnostics from raw loader data", () => {
     history: createMemoryHistory({
       initialEntries: ["/admin/guild-1/troubleshooting"],
     }),
-    context,
+    context: { admin: authenticatedAdmin },
   });
   router.stores.setMatches(
     router.matchRoutes(router.state.location).map((match) => ({
@@ -1035,11 +1010,7 @@ test("Troubleshooting page renders diagnostics from raw loader data", () => {
     })),
   );
 
-  const html = renderToString(
-    <AdminRouteContextProvider value={context}>
-      <RouterProvider router={router} context={context} />
-    </AdminRouteContextProvider>,
-  );
+  const html = renderAdminRouteFixture(router, context);
 
   assert.match(html, /Discord diagnostics/i);
   assert.match(html, /Not configured/);
@@ -1165,7 +1136,7 @@ test("timed role DM preview renders supported placeholders", () => {
 });
 
 test("getSelectedGuildIdFromPath reads the guild from the dashboard path", () => {
-  const helper = (AdminAppModule as Record<string, unknown>).getSelectedGuildIdFromPath;
+  const helper = (dashboardUrls as Record<string, unknown>).getSelectedGuildIdFromPath;
 
   assert.equal(typeof helper, "function");
   const getSelectedGuildIdFromPath = helper as (path: string) => string;
@@ -1178,7 +1149,7 @@ test("getSelectedGuildIdFromPath reads the guild from the dashboard path", () =>
 });
 
 test("getSelectedWorkspaceIdFromSearch reads the workspace from the URL query", () => {
-  const helper = (AdminAppModule as Record<string, unknown>).getSelectedWorkspaceIdFromSearch;
+  const helper = (dashboardUrls as Record<string, unknown>).getSelectedWorkspaceIdFromSearch;
 
   assert.equal(typeof helper, "function");
   const getSelectedWorkspaceIdFromSearch = helper as (search: string) => string;
@@ -1312,7 +1283,7 @@ test("buildReactionRulesTabHref uses route search for tab state", () => {
 });
 
 test("buildAdminDashboardHref keeps the selected guild in sidebar navigation links", () => {
-  const helper = (AdminAppModule as Record<string, unknown>).buildAdminDashboardHref;
+  const helper = (dashboardUrls as Record<string, unknown>).buildAdminDashboardHref;
 
   assert.equal(typeof helper, "function");
   const buildAdminDashboardHref = helper as (
@@ -1343,26 +1314,6 @@ test("buildAdminDashboardHref keeps the selected guild in sidebar navigation lin
   );
 });
 
-test("buildGuildScopedViewInstanceKey changes when dashboard refresh version changes", () => {
-  const helper = (AdminAppModule as Record<string, unknown>).buildGuildScopedViewInstanceKey;
-
-  assert.equal(typeof helper, "function");
-  const buildGuildScopedViewInstanceKey = helper as (
-    workspaceId: string,
-    guildId: string,
-    refreshVersion: number,
-  ) => string;
-
-  assert.equal(
-    buildGuildScopedViewInstanceKey("workspace-1", "guild-1", 0),
-    "workspace-1:guild-1:0",
-  );
-  assert.equal(
-    buildGuildScopedViewInstanceKey("workspace-1", "guild-1", 1),
-    "workspace-1:guild-1:1",
-  );
-});
-
 test("combineDashboardErrors preserves both overview and gateway failures", () => {
   assert.equal(
     combineDashboardErrors("Overview failed.", "Gateway failed."),
@@ -1374,7 +1325,7 @@ test("combineDashboardErrors preserves both overview and gateway failures", () =
 });
 
 test("describeError collapses HTML worker failures into a friendly dashboard message", () => {
-  const helper = (AdminAppModule as Record<string, unknown>).describeError;
+  const helper = describeAdminError;
 
   assert.equal(typeof helper, "function");
   const describeError = helper as (error: unknown) => string;
@@ -1404,7 +1355,7 @@ test("readJsonOrThrow shows friendly Discord rate limit JSON errors", async () =
 });
 
 test("describeError asks users to reconnect Discord when server-list access is missing", () => {
-  const helper = (AdminAppModule as Record<string, unknown>).describeError;
+  const helper = describeAdminError;
 
   assert.equal(typeof helper, "function");
   const describeError = helper as (error: unknown) => string;
@@ -2083,8 +2034,6 @@ function createTestAdminRouterContext(
       language: "en",
     },
     applyUserPreferencesPatch: async () => undefined,
-    pageMetadata: null,
-    setPageMetadata: (_metadata: AdminPageMetadata | null) => {},
     isRoutePending: false,
     ...overrides,
   };

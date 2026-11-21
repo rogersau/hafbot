@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@fontsource-variable/oxanium";
 @config "../../tailwind.config.js";
 
 @layer base {
@@ -40,8 +41,7 @@
     box-sizing: border-box;
   }
   html,
-  body,
-  #landing-root {
+  body {
     min-height: 100%;
   }
   html {
@@ -59,6 +59,10 @@
   :focus-visible {
     outline: 2px solid #aeb9ff;
   }
+}
+
+.changelog-page .font-display {
+  font-family: "Oxanium Variable", ui-sans-serif, system-ui, sans-serif;
 }
 
 [hidden] {
@@ -107,7 +111,7 @@
   margin: 0;
   color: #92a0ef;
   font:
-    700 10px "Oxanium",
+    700 10px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.14em;
   text-wrap: balance;
@@ -178,7 +182,7 @@
   margin-right: auto;
   color: #f5f6fa;
   font:
-    700 15px "Oxanium",
+    700 15px "Oxanium Variable",
     sans-serif;
   text-decoration: none;
   letter-spacing: 0.03em;
@@ -197,7 +201,7 @@
 .install-link {
   color: #bdc4d1;
   font:
-    600 11px "Oxanium",
+    600 11px "Oxanium Variable",
     sans-serif;
   text-decoration: none;
 }
@@ -254,7 +258,7 @@
   padding: 14px 22px;
   border-radius: 10px;
   font:
-    700 12px "Oxanium",
+    700 12px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.05em;
   text-decoration: none;
@@ -517,7 +521,7 @@
   max-width: 13ch;
   margin: 26px 0 30px;
   font:
-    800 italic clamp(46px, 5.6vw, 74px)/0.98 "Oxanium",
+    800 italic clamp(46px, 5.6vw, 74px)/0.98 "Oxanium Variable",
     sans-serif;
   letter-spacing: -0.05em;
   text-transform: uppercase;
@@ -546,7 +550,7 @@
   list-style: none;
   color: var(--faint);
   font:
-    600 10.5px "Oxanium",
+    600 10.5px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.05em;
 }
@@ -696,11 +700,43 @@
       rotate(calc(var(--bearing) * -1));
   }
 }
+.bearing-0 {
+  --bearing: 0deg;
+}
+.bearing-90 {
+  --bearing: 90deg;
+}
+.bearing-180 {
+  --bearing: 180deg;
+}
+.bearing-270 {
+  --bearing: 270deg;
+}
 .scope-blip {
   position: absolute;
   z-index: 3;
   width: 0;
   height: 0;
+}
+.blip-verified {
+  --delay: 1.87s;
+  left: 72.7%;
+  top: 24.7%;
+}
+.blip-lfg {
+  --delay: 4.98s;
+  left: 77.8%;
+  top: 61.2%;
+}
+.blip-trade {
+  --delay: 9.11s;
+  left: 35.2%;
+  top: 81.7%;
+}
+.blip-moderation {
+  --delay: 14.04s;
+  left: 27.1%;
+  top: 26.3%;
 }
 .scope-blip i {
   position: absolute;
@@ -815,7 +851,7 @@
   max-width: 690px;
   margin: 17px 0 0;
   font:
-    800 italic clamp(34px, 4.2vw, 52px)/1.02 "Oxanium",
+    800 italic clamp(34px, 4.2vw, 52px)/1.02 "Oxanium Variable",
     sans-serif;
   letter-spacing: -0.04em;
   text-transform: uppercase;
@@ -863,7 +899,7 @@
   background: #242936;
   color: #aab4c6;
   font:
-    700 9px "Oxanium",
+    700 9px "Oxanium Variable",
     sans-serif;
   transition:
     border-radius 0.2s,
@@ -895,14 +931,14 @@
   border-bottom: 1px solid #0d1016;
   color: #f0f1f5;
   font:
-    700 11px "Oxanium",
+    700 11px "Oxanium Variable",
     sans-serif;
 }
 .channel-rail > p {
   margin: 20px 10px 6px;
   color: #737b8a;
   font:
-    700 8px "Oxanium",
+    700 8px "Oxanium Variable",
     sans-serif;
 }
 .channel-rail > span,
@@ -938,7 +974,7 @@
   margin: 20px 10px 6px;
   color: #737b8a;
   font:
-    700 8px "Oxanium",
+    700 8px "Oxanium Variable",
     sans-serif;
 }
 .message-pane {
@@ -960,7 +996,7 @@
 }
 .message-pane > header b {
   font:
-    700 12px "Oxanium",
+    700 12px "Oxanium Variable",
     sans-serif;
 }
 .message-pane > header span {
@@ -1006,7 +1042,7 @@
   border-radius: 50%;
   color: white;
   font:
-    700 10px "Oxanium",
+    700 10px "Oxanium Variable",
     sans-serif;
   background: #303958;
 }
@@ -1057,7 +1093,7 @@
 .bot-heading h2 {
   margin: 13px 0 8px;
   font:
-    700 24px "Oxanium",
+    700 24px "Oxanium Variable",
     sans-serif;
 }
 .bot-heading > div > p:last-child {
@@ -1112,7 +1148,7 @@
 .bot-reply > b {
   color: #aeb9ff;
   font:
-    700 9px "Oxanium",
+    700 9px "Oxanium Variable",
     sans-serif;
 }
 .bot-reply p {
@@ -1150,14 +1186,14 @@
 .discord-event aside small {
   color: #707a8d;
   font:
-    700 7px "Oxanium",
+    700 7px "Oxanium Variable",
     sans-serif;
 }
 .discord-event aside b {
   margin-top: 8px;
   color: #c8ccd5;
   font:
-    600 9px "Oxanium",
+    600 9px "Oxanium Variable",
     sans-serif;
 }
 .discord-event aside a,
@@ -1166,7 +1202,7 @@
   margin-top: 16px;
   color: #95a4fa;
   font:
-    700 8px "Oxanium",
+    700 8px "Oxanium Variable",
     sans-serif;
   text-decoration: none;
   transition: color 0.15s;
@@ -1184,7 +1220,7 @@
 .panel-intro h2 {
   margin: 15px 0 10px;
   font:
-    700 28px/1.1 "Oxanium",
+    700 28px/1.1 "Oxanium Variable",
     sans-serif;
 }
 .panel-intro > p:last-child {
@@ -1206,14 +1242,14 @@
 .queue-card small {
   color: #8796e7;
   font:
-    700 8px "Oxanium",
+    700 8px "Oxanium Variable",
     sans-serif;
 }
 .announcement-card h3,
 .queue-card h3 {
   margin: 9px 0;
   font:
-    700 17px "Oxanium",
+    700 17px "Oxanium Variable",
     sans-serif;
 }
 .announcement-card p,
@@ -1358,7 +1394,7 @@
   margin-top: 13px;
   color: #95a4fa;
   font:
-    700 8px "Oxanium",
+    700 8px "Oxanium Variable",
     sans-serif;
   text-decoration: none;
   transition: color 0.15s;
@@ -1380,7 +1416,7 @@
   margin: 0;
   flex: 0 0 auto;
   font:
-    700 12px "Oxanium",
+    700 12px "Oxanium Variable",
     sans-serif;
 }
 .capability-marquee {
@@ -1405,7 +1441,7 @@
   padding-right: 28px;
   color: #737e92;
   font:
-    700 9px "Oxanium",
+    700 9px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.18em;
   white-space: nowrap;
@@ -1450,7 +1486,7 @@
   gap: 22px;
   padding: 26px 64px 26px 8px;
   color: #f4f6fb;
-  font-family: "Oxanium", sans-serif;
+  font-family: "Oxanium Variable", sans-serif;
   font-size: clamp(1.2rem, 2vw, 1.65rem);
   font-weight: 700;
   cursor: pointer;
@@ -1579,7 +1615,7 @@
   margin-top: 13px;
   color: #aeb9ff;
   font:
-    700 10px "Oxanium",
+    700 10px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.02em;
   text-decoration: none;
@@ -1668,21 +1704,21 @@
   background: linear-gradient(160deg, #cdd5ff, #aeb9ff);
   box-shadow: 0 6px 20px -6px #aeb9ff99;
   font:
-    700 7px "Oxanium",
+    700 7px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.12em;
 }
 .plan-grid article > small {
   color: #8997e8;
   font:
-    700 9px "Oxanium",
+    700 9px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.1em;
 }
 .plan-grid h3 {
   margin: 13px 0 23px;
   font:
-    700 19px "Oxanium",
+    700 19px "Oxanium Variable",
     sans-serif;
 }
 .plan-price,
@@ -1695,7 +1731,7 @@
 .plan-price strong,
 .stripe-price strong {
   font:
-    700 28px "Oxanium",
+    700 28px "Oxanium Variable",
     sans-serif;
 }
 .plan-price span,
@@ -1713,7 +1749,7 @@
   margin: 5px 0;
   color: #aab4c6;
   font:
-    600 12px "Oxanium",
+    600 12px "Oxanium Variable",
     sans-serif;
 }
 .plan-grid ul {
@@ -1745,7 +1781,7 @@
   text-align: center;
   text-decoration: none;
   font:
-    700 9.5px "Oxanium",
+    700 9.5px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.06em;
   transition:
@@ -1788,7 +1824,7 @@
 .faq h2 {
   margin: 16px 0;
   font:
-    800 italic 38px/1.08 "Oxanium",
+    800 italic 38px/1.08 "Oxanium Variable",
     sans-serif;
   letter-spacing: -0.03em;
   text-transform: uppercase;
@@ -1804,7 +1840,7 @@
   padding: 20px 48px 20px 0;
   cursor: pointer;
   font:
-    600 14px "Oxanium",
+    600 14px "Oxanium Variable",
     sans-serif;
   list-style: none;
   transition: color 0.2s;
@@ -1873,7 +1909,7 @@
   margin: 18px auto 16px;
   max-width: 16ch;
   font:
-    800 italic clamp(38px, 4.6vw, 58px)/1.02 "Oxanium",
+    800 italic clamp(38px, 4.6vw, 58px)/1.02 "Oxanium Variable",
     sans-serif;
   letter-spacing: -0.045em;
   text-transform: uppercase;
@@ -1923,7 +1959,7 @@
   justify-content: space-between;
   gap: 20px;
   font:
-    600 9px "Oxanium",
+    600 9px "Oxanium Variable",
     sans-serif;
   letter-spacing: 0.06em;
 }

@@ -11,19 +11,19 @@ import {
 
 const BROWSER_TEST = join("test", "admin-emoji-picker-browser.test.mjs");
 
-test("PostgreSQL contracts build generated landing source before compiling tests", () => {
+test("PostgreSQL contracts build the Start server before running tests", () => {
   const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 
   assert.match(
     manifest.scripts["test:postgres"],
-    /^pnpm run build:landing && pnpm run build:test:types && /,
+    /^pnpm run build:web && pnpm run build:test:types && /,
   );
 });
 
-test("repeated tests build generated landing source before compiling tests", () => {
+test("repeated tests build the Start server before running tests", () => {
   const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 
-  assert.match(manifest.scripts["test:repeat"], /^pnpm run build:landing && /);
+  assert.match(manifest.scripts["test:repeat"], /^pnpm run build:web && /);
 });
 
 test("every tracked test belongs to exactly one executable suite", () => {

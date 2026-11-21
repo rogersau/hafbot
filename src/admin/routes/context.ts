@@ -50,7 +50,5 @@ export interface AdminRouterContext {
     patch: UserPreferencesPatch,
     options?: ApplyUserPreferencesOptions,
   ) => Promise<void>;
-  pageMetadata: AdminPageMetadata | null;
-  setPageMetadata: (metadata: AdminPageMetadata | null) => void;
   isRoutePending: boolean;
 }

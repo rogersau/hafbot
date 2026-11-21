@@ -1,20 +1,12 @@
+import { createPublicRuntimeEndpoints } from "../web/public-runtime-endpoints";
+import { fetchStart } from "../node/start-web";
 import { APIError } from "better-auth/api";
 import { isRecord } from "../unknown-parse";
 import { reportOperationalEvent } from "../observability/operational-reporter";
 import { logScheduledCompletion } from "../observability/scheduled-telemetry";
-import { createAdminSpaRoutes } from "./admin-spa-routes";
-import { createAuthRoutes } from "../routes/auth-routes";
-import { browserPrivacySignalEnabled, createInsertionId } from "../product-analytics";
-import { createInteractionRoutes } from "../routes/interaction-routes";
-import { createMemberVerificationRoutes } from "../routes/member-verification-routes";
-import { createPublicRoutes } from "../routes/public-routes";
 import { purgeExpiredTicketTranscripts } from "./ticket-transcript-retention";
-import { createCommerceBuyerRoutes } from "../routes/commerce-buyer-routes";
-import { createCommerceSupportRoutes } from "../routes/commerce-support-routes";
-import { createPlatformLinkRoutes } from "../routes/platform-link-routes";
 import { AdminOverviewService } from "../services/admin-overview-service";
 import { fetchGuildMember } from "../discord/members";
-import { listGuildRoles } from "../discord/guilds";
 import { createAdminApiHandler } from "./admin-api";
 import { buildAdminOverviewGuilds } from "./admin-overview-guilds";
 import {
@@ -33,14 +25,10 @@ import {
   type BotGuild,
 } from "./admin-discord-cache";
 import { getMemberBaseGuildPermissions } from "./admin-permissions";
-import { getAdminLoginLocation, redirect, renderAdminShell } from "./admin-shell";
+import { redirect } from "./admin-redirects";
 import type { RuntimeAppOptions } from "./app-types";
 import type { CustomerAuth } from "./auth/customer-auth";
-import { DiscordPaidRoleAdapter } from "./commerce/discord-paid-role-adapter";
-import { DEFAULT_COMMERCE_ACCENT_COLOR, defaultCommerceBranding } from "../commerce/branding";
 import { readCustomerSession } from "./auth/customer-session";
-import { handleInteractionRequest } from "./interaction-handler";
-import { createBanAppealPublicRoutes } from "../moderation-appeals/routes";
 import { createGuildDiscoveryService, type GuildDiscoveryService } from "./discord-guild-discovery";
 import { ALL_FEATURES_ENABLED } from "./features";
 import {
@@ -49,8 +37,6 @@ import {
   hasDiscordAdministrator,
   type GuildMemberRolesFetcher,
 } from "./guild-admin-access";
-import { createXboxPlatformConfig } from "../services/xbox-platform-config";
-import { createSteamPlatformConfig } from "../services/steam-platform-config";
 import type { WorkspaceRole, WorkspaceSummary } from "./workspace-types";
 import { WorkspaceGuildAlreadyLinkedError, type WorkspaceStore } from "./workspace-store";
 import { createBillingApiHandler } from "./billing/billing-api";
@@ -61,15 +47,7 @@ import {
   findGuildIdInValue,
 } from "./guild-service-policy";
 
-export { escapeHtmlAttribute } from "./admin-shell";
 export type { RuntimeAppOptions } from "./app-types";
-
-function discordGuildIconUrl(guildId: string, icon: string | null | undefined): string | null {
-  if (!/^[A-Za-z0-9_-]{2,100}$/.test(guildId) || !icon || !/^[A-Za-z0-9_-]{2,200}$/.test(icon)) {
-    return null;
-  }
-  return `https://cdn.discordapp.com/icons/${encodeURIComponent(guildId)}/${encodeURIComponent(icon)}.png?size=128`;
-}
 
 export function createRuntimeApp(options: RuntimeAppOptions) {
   const operationalReporter = options.reportOperationalEvent ?? reportOperationalEvent;
@@ -93,7 +71,6 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
     timedRoleService,
     blocklistService,
     webhookProxyService,
-    platformLinkService,
     lfgService,
     eventsService,
     eventTeamDeliveryService,
@@ -167,7 +144,7 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
         },
         readSession: readCustomerAdminSession,
       })
-    : async () => null;
+    : undefined;
   const customerAdminMode = Boolean(options.customerAuth);
   const adminOverviewService = new AdminOverviewService(
     options.stores.blocklist,
@@ -438,228 +415,11 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
     workspaceApi,
   });
 
-  const banAppealRoutes =
-    options.banAppealServiceForGuild && options.publicUrl
-      ? createBanAppealPublicRoutes({
-          serviceForGuild: options.banAppealServiceForGuild,
-          readCustomerSession: (request) => readCustomerSession(request, options.customerAuth),
-          publicBaseUrl: options.publicUrl,
-        })
-      : async () => null;
-  const publicRoutes = createPublicRoutes({
-    selfHostedSite: options.selfHostedSite,
-    microsoftApplicationId: options.xboxOAuthClientId,
-    landingPriceCatalog: options.landingPriceCatalog,
-    discordApplicationId: options.discordApplicationId,
-    discordInstallPermissions: options.discordInstallPermissions,
-    ticketTranscriptBlobs: options.ticketTranscriptBlobs,
-    ticketTranscriptCapabilities: options.ticketTranscriptCapabilities,
-    ticketTranscriptAccessGuard: options.webhookIngressGuard,
-    evidenceVaultBlobs: options.evidenceVaultBlobs,
-    publicManagedMedia: options.publicManagedMedia,
-    evidenceVaultStore: options.stores.evidenceVault,
-    evidenceMediaCapability: options.evidenceMediaCapability,
-    webhookIngressGuard: options.webhookIngressGuard,
-    features,
-    webhookProxyService,
-    banCaseService,
-    productAnalytics: options.productAnalytics,
-    waitUntil: options.waitUntil,
-    serverLevelIngressHandler: options.serverLevelIngressHandler,
-  });
-  const steamLinkRoutes = features.steamLink
-    ? createPlatformLinkRoutes({
-        platformLinkService,
-        platformConfig: createSteamPlatformConfig({
-          steamWebApiKey: options.steamWebApiKey,
-        }),
-      })
-    : async () => null;
-  const xboxLinkRoutes =
-    features.xboxLink && options.xboxOAuthClientId && options.xboxOAuthClientSecret
-      ? createPlatformLinkRoutes({
-          platformLinkService,
-          platformConfig: createXboxPlatformConfig({
-            clientId: options.xboxOAuthClientId,
-            clientSecret: options.xboxOAuthClientSecret,
-          }),
-        })
-      : async () => null;
-  const memberVerificationRoutes = features.memberVerification
-    ? createMemberVerificationRoutes({
-        memberVerificationService: services.memberVerificationService,
-        customerAuth: options.customerAuth,
-        turnstileSiteKey: options.turnstileSiteKey,
-        turnstileSecretKey: options.turnstileSecretKey,
-      })
-    : async () => null;
-  const commerceBuyerRoutes =
-    options.commerceBuyerCheckoutService &&
-    options.commercePurchaseSigningSecret &&
-    options.publicUrl &&
-    options.customerAuth &&
-    options.discordBotUserId
-      ? createCommerceBuyerRoutes({
-          service: options.commerceBuyerCheckoutService,
-          signingSecret: options.commercePurchaseSigningSecret,
-          publicBaseUrl: options.publicUrl,
-          readSession: readCustomerAdminSession,
-          readMember: async (guildId, discordUserId) => {
-            const member = await fetchGuildMember(guildId, discordUserId, options.discordBotToken);
-            return {
-              present: member !== null,
-              bot: member?.user?.bot === true,
-              // Discord's member endpoint returns 404 for users who are not
-              // current members, including banned users.
-              banned: false,
-            };
-          },
-          roleManageable: async (guildId, discordRoleId, discordUserId) => {
-            const adapter = new DiscordPaidRoleAdapter(
-              options.discordBotUserId!,
-              options.discordBotToken,
-            );
-            return (
-              await adapter.preflightRole({
-                guildId,
-                discordRoleId,
-                discordUserId,
-                action: "assign",
-              })
-            ).ok;
-          },
-          readPresentation: async (guildId, discordRoleId) => {
-            const [guild, roles] = await Promise.all([
-              getCachedGuildSummary(guildId, options.discordBotToken, false),
-              listGuildRoles(guildId, options.discordBotToken),
-            ]);
-            return {
-              guildName: guild.name,
-              roleName: roles.find(({ id }) => id === discordRoleId)?.name ?? discordRoleId,
-            };
-          },
-          readBranding: async (guildId) => {
-            const [guild, configured] = await Promise.all([
-              getCachedGuildSummary(guildId, options.discordBotToken, false),
-              options.commerceBrandingStore?.readByGuild(guildId) ?? Promise.resolve(null),
-            ]);
-            const fallback = defaultCommerceBranding(guild.name);
-            return {
-              guildName: guild.name,
-              guildIconUrl: discordGuildIconUrl(guild.id, guild.icon),
-              accentColor: configured?.accentColor ?? DEFAULT_COMMERCE_ACCENT_COLOR,
-              tagline: configured?.tagline ?? fallback.tagline,
-            };
-          },
-          readSupportEnabled: options.commerceSupportService
-            ? async (guildId) =>
-                options.commerceSupportService!.page(guildId).then((page) => page.config.enabled)
-            : undefined,
-        })
-      : async () => null;
-  const authRoutes = options.customerAuth
-    ? createAuthRoutes({
-        handle: (request) => options.customerAuth!.handler(request),
-        onDiscordSignInCompleted: (request) => {
-          if (!options.productAnalytics || browserPrivacySignalEnabled(request)) return;
-          try {
-            const delivery = options.productAnalytics
-              .report({ name: "dashboard_signed_in", insertionId: createInsertionId() })
-              .catch(() => undefined);
-            options.waitUntil?.(delivery);
-          } catch {
-            // Authentication success cannot depend on product analytics.
-          }
-        },
-      })
-    : async () => null;
-  const commerceSupportRoutes =
-    options.commerceSupportService &&
-    options.commercePurchaseSigningSecret &&
-    options.publicUrl &&
-    options.customerAuth
-      ? createCommerceSupportRoutes({
-          service: options.commerceSupportService,
-          signingSecret: options.commercePurchaseSigningSecret,
-          publicBaseUrl: options.publicUrl,
-          readSession: readCustomerAdminSession,
-          readMember: async (guildId, discordUserId) => {
-            const member = await fetchGuildMember(guildId, discordUserId, options.discordBotToken);
-            return {
-              present: member !== null,
-              bot: member?.user?.bot === true,
-              banned: false,
-            };
-          },
-          readGuildName: async (guildId) =>
-            (await getCachedGuildSummary(guildId, options.discordBotToken, false)).name,
-          readBranding: async (guildId) => {
-            const [guild, configured] = await Promise.all([
-              getCachedGuildSummary(guildId, options.discordBotToken, false),
-              options.commerceBrandingStore?.readByGuild(guildId) ?? Promise.resolve(null),
-            ]);
-            const fallback = defaultCommerceBranding(guild.name);
-            return {
-              guildName: guild.name,
-              guildIconUrl: discordGuildIconUrl(guild.id, guild.icon),
-              accentColor: configured?.accentColor ?? DEFAULT_COMMERCE_ACCENT_COLOR,
-              tagline: configured?.tagline ?? fallback.tagline,
-            };
-          },
-        })
-      : async () => null;
-  const signOutCustomerAdminRequest = options.customerAuth
-    ? async (request: Request) => {
-        const url = new URL(request.url);
-        url.pathname = "/api/auth/sign-out";
-        url.search = "";
-        return options.customerAuth!.handler(
-          new Request(url, {
-            method: "POST",
-            headers: request.headers,
-          }),
-        );
-      }
-    : undefined;
-  const adminRoutes = features.adminUi
-    ? createAdminSpaRoutes({
-        readCustomerAdminSession,
-        signOutCustomerAdminRequest,
-        redirect,
-        getAdminLoginLocation,
-        renderAdminShell,
-        isAdminUiAuthorized: customerAdminMode
-          ? (request) => isCustomerAdminUiAuthorized(request, options.customerAuth)
-          : async () => false,
-        features,
-        workerVersion: options.workerVersion,
-      })
-    : async () => null;
-  const interactionRoutes = createInteractionRoutes({
-    selfHostedSite: options.selfHostedSite,
-    communityTools: options.communityTools,
-    reputationServiceForGuild: options.reputationServiceForGuild,
-    discordPublicKey: options.discordPublicKey,
-    discordBotToken: options.discordBotToken,
-    hafAdminGuildId: options.hafAdminGuildId,
-    hafAdminRoleId: options.hafAdminRoleId,
-    attendanceObservations: options.attendanceObservations,
-    verifyDiscordRequest: options.verifyDiscordRequest,
-    stores: options.stores,
-    gateway: options.gateway,
-    ticketTranscriptBlobs: options.ticketTranscriptBlobs,
-    ticketTranscriptCapabilities: options.ticketTranscriptCapabilities,
-    evidenceVaultBlobs: options.evidenceVaultBlobs,
-    services,
-    handleInteractionRequest,
-    features,
-    workspaceStore: options.workspaceStore,
-    waitUntil: options.waitUntil,
-    componentIdSigner: options.componentIdSigner,
-  });
-
-  return {
-    async fetch(request: Request): Promise<Response> {
+  const haf = {
+    ...createPublicRuntimeEndpoints(options, features, readCustomerAdminSession),
+    adminApi: features.adminUi ? handleAdminApiRequest : undefined,
+    billingApi: billingApiHandler,
+    async checkGuildAccess(request: Request) {
       const requestUrl = new URL(request.url);
       const guildId =
         (await readGuildIdFromRequest(request, requestUrl)) ??
@@ -673,54 +433,49 @@ export function createRuntimeApp(options: RuntimeAppOptions) {
         }
         return GuildServicePolicy.buildHttpUnavailableResponse();
       }
-      const billingWebhookResponse = options.billingWebhookHandler
-        ? await options.billingWebhookHandler(request)
-        : null;
-      if (billingWebhookResponse) return billingWebhookResponse;
-      const commerceWebhookResponse = options.commerceWebhookHandler
-        ? await options.commerceWebhookHandler(request)
-        : null;
-      if (commerceWebhookResponse) return commerceWebhookResponse;
-      const billingApiResponse = await billingApiHandler(request);
-      if (billingApiResponse) return billingApiResponse;
-
-      const authResponse = await authRoutes(request);
-      if (authResponse) return authResponse;
-
-      const steamLinkResponse = steamLinkRoutes ? await steamLinkRoutes(request) : null;
-      if (steamLinkResponse) return steamLinkResponse;
-
-      const xboxLinkResponse = xboxLinkRoutes ? await xboxLinkRoutes(request) : null;
-      if (xboxLinkResponse) return xboxLinkResponse;
-
-      const memberVerificationResponse = memberVerificationRoutes
-        ? await memberVerificationRoutes(request)
-        : null;
-      if (memberVerificationResponse) return memberVerificationResponse;
-
-      const commerceBuyerResponse = await commerceBuyerRoutes(request);
-      if (commerceBuyerResponse) return commerceBuyerResponse;
-      const commerceSupportResponse = await commerceSupportRoutes(request);
-      if (commerceSupportResponse) return commerceSupportResponse;
-
-      const banAppealResponse = await banAppealRoutes(request);
-      if (banAppealResponse) return banAppealResponse;
-      const publicResponse = await publicRoutes(request);
-      if (publicResponse) return publicResponse;
-
-      const url = new URL(request.url);
-      if (features.adminUi && url.pathname.startsWith("/admin/api/")) {
-        const adminApiResponse = await handleAdminApiRequest(request, url);
-        if (adminApiResponse) return adminApiResponse;
+      return null;
+    },
+    async readAdminDocument(request: Request) {
+      if (!options.customerAuth) return null;
+      const session = await readCustomerSession(request, options.customerAuth);
+      if (!session) return null;
+      const profile = (await options.readCustomerAdminSession?.(request))?.user ?? session.user;
+      const { name, email, image } = profile;
+      return { name, email, image };
+    },
+    async logout(request: Request) {
+      if (!features.adminUi) return new Response("Not found", { status: 404 });
+      const url = new URL("/api/auth/sign-out", request.url);
+      const headers = new Headers();
+      if (options.customerAuth) {
+        const response = await options.customerAuth.handler(
+          new Request(url, { method: "POST", headers: request.headers }),
+        );
+        if (!response.ok) return response;
+        for (const cookie of response.headers.getSetCookie()) headers.append("set-cookie", cookie);
       }
+      return redirect("/admin/login", headers);
+    },
+  };
 
-      const adminResponse = await adminRoutes(request);
-      if (adminResponse) return adminResponse;
-
-      const interactionResponse = await interactionRoutes(request);
-      if (interactionResponse) return interactionResponse;
-
-      return new Response("Not found", { status: 404 });
+  return {
+    async fetch(request: Request): Promise<Response> {
+      const nonce = crypto.randomUUID().replaceAll("-", "");
+      return fetchStart(request, {
+        haf,
+        nonce,
+        admin: {
+          enabled: features.adminUi,
+          authenticated: false,
+          userProfile: null,
+          playstationLinkEnabled: features.playstationLink,
+          workerVersion: options.workerVersion ?? "",
+        },
+        selfHostedSite: options.selfHostedSite,
+        landingPriceCatalog: options.landingPriceCatalog,
+        productAnalytics: options.productAnalytics,
+        waitUntil: options.waitUntil,
+      });
     },
     async bootstrap() {
       return gatewayService.bootstrap();
@@ -1182,13 +937,6 @@ function createWorkspaceAdminApi(options: WorkspaceAdminApiOptions) {
       return Response.json({ ok: true });
     },
   };
-}
-
-async function isCustomerAdminUiAuthorized(
-  request: Request,
-  customerAuth: CustomerAuth | undefined,
-): Promise<boolean> {
-  return (await readCustomerSession(request, customerAuth)) !== null;
 }
 
 function createMembershipResolver(

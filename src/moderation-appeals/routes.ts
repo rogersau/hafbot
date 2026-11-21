@@ -29,42 +29,33 @@ const privateJson = (body: unknown, status = 200) =>
     headers: { "cache-control": "private, no-store", "x-content-type-options": "nosniff" },
   });
 
-export function createBanAppealPublicRoutes(options: {
+interface BanAppealPublicRouteOptions {
   serviceForGuild: BanAppealServiceFactory;
   readCustomerSession: (request: Request) => Promise<CustomerSession | null>;
   publicBaseUrl: string;
   now?: () => number;
-}) {
+}
+
+export function createBanAppealPublicEndpoints(options: BanAppealPublicRouteOptions) {
   const base = new URL(options.publicBaseUrl);
   if (
     base.protocol !== "https:" &&
     !(base.protocol === "http:" && ["localhost", "127.0.0.1"].includes(base.hostname))
   )
     throw new Error("Ban appeal publicBaseUrl must use HTTPS or local development HTTP.");
-  return async (request: Request): Promise<Response | null> => {
-    const url = new URL(request.url);
-    if (url.pathname === "/assets/ban-appeals.js")
-      return request.method === "GET"
-        ? new Response(BAN_APPEAL_CLIENT_SCRIPT, {
-            headers: {
-              "content-type": "text/javascript; charset=utf-8",
-              "cache-control": "public, max-age=300",
-              "x-content-type-options": "nosniff",
-            },
-          })
-        : new Response(null, { status: 405, headers: { allow: "GET" } });
-    const page = /^\/ban-appeals\/([^/]+)$/.exec(url.pathname);
-    const api = /^\/api\/ban-appeals\/([^/]+)$/.exec(url.pathname);
-    if (!page && !api) return null;
-    const guildId = (page ?? api)![1];
+  async function handleAppeal(
+    request: Request,
+    guildId: string,
+    operation?: "page" | "submission",
+  ): Promise<Response> {
     if (!banAppealGuildIdSchema.safeParse(guildId).success)
       return privateJson({ error: "Invalid ban appeal link." }, 404);
-    if (url.origin !== base.origin)
+    if (new URL(request.url).origin !== base.origin)
       return privateJson({ error: "Use the official HAF Bot address for ban appeals." }, 403);
-    if ((page && request.method !== "GET") || (api && request.method !== "POST"))
-      return privateJson({ error: "Method not allowed." }, 405);
+    if (!operation) return privateJson({ error: "Method not allowed." }, 405);
+    const page = operation === "page";
     if (
-      api &&
+      !page &&
       (request.headers.get("origin") !== base.origin ||
         request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !==
           "application/json")
@@ -72,7 +63,7 @@ export function createBanAppealPublicRoutes(options: {
       return privateJson({ error: "The appeal request origin or format was rejected." }, 403);
     try {
       const session = await options.readCustomerSession(request);
-      if (api && !session)
+      if (!page && !session)
         return privateJson({ error: "Sign in with Discord before submitting an appeal." }, 401);
       const service = await options.serviceForGuild(guildId);
       if (page)
@@ -125,6 +116,24 @@ export function createBanAppealPublicRoutes(options: {
         ? renderBanAppealPage({ guildId, error: message, publicBaseUrl: base.origin, status })
         : privateJson({ error: message }, status);
     }
+  }
+
+  return {
+    banAppealScript: () =>
+      new Response(BAN_APPEAL_CLIENT_SCRIPT, {
+        headers: {
+          "content-type": "text/javascript; charset=utf-8",
+          "cache-control": "public, max-age=300",
+          "x-content-type-options": "nosniff",
+        },
+      }),
+    banAppealScriptMethodNotAllowed: () =>
+      new Response(null, { status: 405, headers: { allow: "GET" } }),
+    banAppealPage: (request: Request, guildId: string) => handleAppeal(request, guildId, "page"),
+    banAppealSubmission: (request: Request, guildId: string) =>
+      handleAppeal(request, guildId, "submission"),
+    banAppealMethodNotAllowed: (request: Request, guildId: string) =>
+      handleAppeal(request, guildId),
   };
 }
 

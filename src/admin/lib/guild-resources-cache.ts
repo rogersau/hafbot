@@ -1,3 +1,4 @@
+import { getAdminRead, type AdminReadCache } from "./admin-read";
 import { buildWorkspaceGuildPath, describeError } from "./api";
 
 export interface GuildResource {
@@ -16,61 +17,47 @@ export interface GuildResources {
   emojis?: Array<{ id: string; name: string; animated: boolean; available: boolean }>;
 }
 
-type GuildResourcesEntry =
-  | { kind: "loading"; request: Promise<GuildResources> }
-  | { kind: "ready"; value: GuildResources };
+export type GuildResourcesCache = AdminReadCache;
 
-const guildResourcesCache = new Map<string, GuildResourcesEntry>();
+const fallbackCache: GuildResourcesCache = new Map();
 
 interface LoadGuildResourcesOptions {
   refresh?: boolean;
   path?: string;
+  cache?: GuildResourcesCache;
 }
 
-export async function loadGuildResources(
+export function getGuildResourcesRequest(
   workspaceId: string,
   guildId: string,
   options: LoadGuildResourcesOptions = {},
-): Promise<GuildResources> {
-  const trimmedGuildId = guildId.trim();
-  const trimmedWorkspaceId = workspaceId.trim();
-  const path = options.path ?? "/admin/api/tickets/resources";
-  const cacheKey = `${path}:${trimmedWorkspaceId}:${trimmedGuildId}`;
-  const cached = options.refresh ? undefined : guildResourcesCache.get(cacheKey);
-  if (cached) {
-    return cached.kind === "loading" ? cached.request : cached.value;
-  }
-
-  const request = (async () => {
-    const path = buildWorkspaceGuildPath(
-      options.path ?? "/admin/api/tickets/resources",
-      trimmedWorkspaceId,
-      trimmedGuildId,
-    );
-    const response = await fetch(options.refresh ? `${path}&refresh=1` : path);
+) {
+  const url = buildWorkspaceGuildPath(
+    options.path ?? "/admin/api/tickets/resources",
+    workspaceId.trim(),
+    guildId.trim(),
+  );
+  async function fetchResources(refresh = false) {
+    const response = await fetch(refresh ? `${url}&refresh=1` : url);
     if (!response.ok) {
       const rawMessage = (await response.text()) || `${response.status} ${response.statusText}`;
       throw new Error(describeError(new Error(rawMessage)));
     }
     return (await response.json()) as GuildResources;
-  })();
-
-  const entry: GuildResourcesEntry = { kind: "loading", request };
-  guildResourcesCache.set(cacheKey, entry);
-
-  try {
-    const value = await request;
-    if (guildResourcesCache.get(cacheKey) === entry) {
-      guildResourcesCache.set(cacheKey, { kind: "ready", value });
-    }
-    return value;
-  } catch (error) {
-    // A superseded failure cannot evict a newer refresh or repopulate a reset cache.
-    if (guildResourcesCache.get(cacheKey) === entry) guildResourcesCache.delete(cacheKey);
-    throw error;
   }
+  const read = getAdminRead(options.cache ?? fallbackCache, url, fetchResources);
+  return { read, refresh: () => read.refresh(() => fetchResources(true)) };
 }
 
-export function resetGuildResourcesCache(): void {
-  guildResourcesCache.clear();
+export function loadGuildResources(
+  workspaceId: string,
+  guildId: string,
+  options: LoadGuildResourcesOptions = {},
+): Promise<GuildResources> {
+  const { read, refresh } = getGuildResourcesRequest(workspaceId, guildId, options);
+  return options.refresh ? refresh() : read.ensure();
+}
+
+export function resetGuildResourcesCache(cache = fallbackCache): void {
+  cache.clear();
 }

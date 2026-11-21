@@ -5,7 +5,7 @@ import { createSqliteEventStore } from "./support/sqlite/runtime/sqlite-event-st
 import { EventsService, type EventsDiscordApi } from "../src/services/events-service";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 import { createEventsAdminRoutes } from "../src/runtime/admin-routes/events";
-import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import type { RuntimeStores } from "../src/runtime/app-types";
 import { allowAllAdminAccess } from "./helpers/admin-api";

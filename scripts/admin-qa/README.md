@@ -1,6 +1,7 @@
 # Reusable Admin QA
 
-`pnpm qa:admin` builds the real Admin SPA and drives it with the existing Playwright dependency.
+`pnpm qa:admin` builds the web app and drives its production Admin routes with Playwright.
+The loopback fixture server uses the compiled TanStack Start request handler and browser assets.
 Every scenario gets a new browser context and a new, method-aware fictional API. It never logs in,
 contacts Discord, or calls a payment provider. Unexpected API methods/routes, external requests,
 WebSockets, and uncaught page errors fail the scenario.
@@ -26,15 +27,9 @@ pnpm qa:admin --prebuilt --output=.artifacts/admin-qa-rerun
 ```
 
 `--prebuilt` skips the build only when explicitly requested. The caller is responsible for making
-sure `dist-admin` matches the source under test. Unknown scenario IDs and arguments fail rather than
-silently running no tests. The default run builds first; a missing build, dependency, or browser
-produces `blocked` scenario results rather than a pass.
-
-CI selects the scenarios for UI, fixture, harness, and related dependency/configuration changes,
-and for manual CI dispatch. They run inside `CI / Validate` using its existing Admin build with
-`--prebuilt`, after architecture checks in the second test lane while Node tests run alongside.
-The harness unit tests remain in the Node suite. Run the same combined pipeline locally with
-`TEST_RUN_ADMIN_QA=true pnpm test:timings`. Standalone `pnpm qa:admin` remains available.
+sure `dist-admin` and `dist/server` match the source under test. Unknown scenario IDs and arguments
+fail. The default run builds first. Missing build artifacts, dependencies, or browsers produce
+`blocked` scenario results. The harness unit tests run in the Node test suite.
 
 ## Evidence
 
@@ -50,8 +45,7 @@ The summary counts each status separately. Exit code 0 means all selected scenar
 a failure; 2 means setup was blocked or no scenario passed. Reports include fictional API requests
 and unhandled calls. Failed scenarios also write a screenshot and Playwright trace when possible.
 Open a trace with `pnpm exec playwright show-trace .artifacts/admin-qa/SCENARIO_ID.trace.zip`.
-CI uploads the evidence even when a scenario fails. Never point this runner at a live Admin instance
-or insert real customer data, tokens, or provider credentials into fixtures.
+Use fictional data and credentials in fixtures.
 
 ## What it proves
 
@@ -62,6 +56,10 @@ mutation response is insufficient evidence of persistence. Unit controls verify 
 reset isolation, explicit failures, and report status behavior.
 
 The `reaction-roles-publish` scenario creates a game-role panel on Free, publishes it, verifies saved settings after a reload, and pauses it.
+
+Billing checkout and Commerce onboarding return scenarios exercise fixture-backed synchronization,
+readback after a failure, and Back/Forward after the return parameters are removed. The command
+palette and webhook delivery log scenarios cover keyboard focus and dismissal.
 
 Workspace membership, Guild Admin access, and plan ownership are different concepts. Fixture roles
 exercise frontend contexts only. The non-owner `member` persona uses the API's actual `viewer`

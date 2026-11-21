@@ -13,6 +13,7 @@ export interface HtmlResponseOptions {
   requestUrl?: URL;
   headers?: HeadersInit;
   styleNonce?: string;
+  scriptNonce?: string;
 }
 
 const PROTECTED_HEADERS = new Set([
@@ -36,6 +37,13 @@ const SENSITIVE = new Set<HtmlPolicyProfile>([
 ]);
 
 export function htmlResponse(options: HtmlResponseOptions): Response {
+  return new Response(options.html, {
+    status: options.status ?? 200,
+    headers: htmlResponseHeaders(options),
+  });
+}
+
+export function htmlResponseHeaders(options: Omit<HtmlResponseOptions, "html">): Headers {
   const additions = new Headers(options.headers);
   for (const name of PROTECTED_HEADERS) {
     if (additions.has(name)) throw new TypeError(`HTML response policy owns the ${name} header.`);
@@ -45,7 +53,10 @@ export function htmlResponse(options: HtmlResponseOptions): Response {
   headers.set("content-type", "text/html; charset=utf-8");
   headers.set(
     "content-security-policy",
-    contentSecurityPolicy(options.profile, { styleNonce: options.styleNonce }),
+    contentSecurityPolicy(options.profile, {
+      styleNonce: options.styleNonce,
+      scriptNonce: options.scriptNonce,
+    }),
   );
   headers.set("x-content-type-options", "nosniff");
   // Fetch serializes the Origin header as `null` for navigation POSTs under
@@ -75,5 +86,5 @@ export function htmlResponse(options: HtmlResponseOptions): Response {
   if (isCanonicalProductionHttps(options.requestUrl)) {
     headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
   }
-  return new Response(options.html, { status: options.status ?? 200, headers });
+  return headers;
 }

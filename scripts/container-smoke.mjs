@@ -121,6 +121,15 @@ try {
   if (statusBody.runtime?.persistence !== "postgres") {
     throw new Error(`Container database status was invalid: ${JSON.stringify(statusBody.runtime)}`);
   }
+  const login = await fetch(`${baseUrl}/admin/login`);
+  const document = await login.text();
+  if (!login.ok || !document.includes("Sign in with Discord")) {
+    throw new Error(`Container could not render the Start login document (HTTP ${login.status}).`);
+  }
+  const stylesheet = document.match(/href="(\/admin\/assets\/[^"]+\.css)"/)?.[1];
+  if (!stylesheet || !(await fetch(new URL(stylesheet, baseUrl))).ok) {
+    throw new Error("Container could not serve the login document's stylesheet.");
+  }
   const application = await fetch(`${baseUrl}/not-a-real-route`);
   if (application.status !== 404) {
     throw new Error(`Container application route returned ${application.status}.`);

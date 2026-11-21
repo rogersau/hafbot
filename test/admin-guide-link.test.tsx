@@ -62,6 +62,7 @@ test("AdminShellHeader exposes a safe route-aware View guide action", async () =
   const rootRoute = createRootRoute({
     component: () => (
       <AdminShellHeader
+        currentPath="/admin/123456789/lfg"
         pageMetadata={{ title: "LFG", description: "Find a group", icon: <span /> }}
         sidebarCollapsed={false}
         accountMenuOpen={false}
@@ -137,6 +138,7 @@ test("AdminShellHeader exposes an external Support action in the account menu", 
   const rootRoute = createRootRoute({
     component: () => (
       <AdminShellHeader
+        currentPath="/admin/123456789/lfg"
         pageMetadata={{ title: "LFG", description: "Find a group", icon: <span /> }}
         sidebarCollapsed={false}
         accountMenuOpen

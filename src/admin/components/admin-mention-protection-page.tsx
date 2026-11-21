@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { MentionProtectionConfig, MentionProtectionResponsePolicy } from "../../types";
 import { createDefaultMentionProtectionConfig } from "../../services/mention-protection/message-handler";
 import { FormField, SectionHeader, SettingsBlock } from "./admin-form-layout";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { AdminBottomActionBar, areAdminActionSnapshotsEqual } from "./admin-bottom-action-bar";
 import { MultiChannelSelect, MultiRoleSelect, RoleSelect } from "./guild-resource-select";
 import { NavigationGuard } from "./navigation-guard";
@@ -17,7 +17,7 @@ import { UnsavedChangesIndicator } from "./unsaved-changes-indicator";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { useGuildResources } from "../hooks/use-guild-resources";
 import { useToast } from "./toast";
-import { refreshAdminRouteData, requireAdminRouteRefresh } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { createAdminLoaderClient } from "../lib/admin-loader-client";
 import type { EntitlementInfo } from "../hooks/use-entitlement";
 import type { MentionProtectionLoaderData } from "../lib/admin-route-loaders";
@@ -43,23 +43,30 @@ export function AdminMentionProtectionPage({
   initialData?: MentionProtectionLoaderData | null;
   onRouteDataRefresh?: () => Promise<void>;
 }) {
+  const { requireAdminRouteRefresh } = useAdminRouteRefresh();
   const guildId = selectedGuildId.trim();
   const [editorGeneration, setEditorGeneration] = useState(0);
   const editorHasUnsavedChanges = useRef(false);
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Mention Protection"
+      description="Protect selected admin roles and respond to direct-user mention spam with independent escalation policies."
+      readinessFeature="mention-protection"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-settings admin-mention-protection-page space-y-6">
-      <AdminPageHeader
-        title="Mention Protection"
-        description="Protect selected admin roles and respond to direct-user mention spam with independent escalation policies."
-        readinessFeature="mention-protection"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {guildId ? null : renderHeader()}
       {!guildId ? (
         <NoGuildSelected feature="Mention Protection" />
       ) : (
         <>
           <MentionProtectionEditor
+            renderHeader={renderHeader}
             key={editorGeneration}
             selectedWorkspaceId={selectedWorkspaceId}
             selectedGuildId={guildId}
@@ -89,6 +96,7 @@ export function AdminMentionProtectionPage({
 }
 
 function MentionProtectionEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   paidFeaturesAvailable,
@@ -96,6 +104,7 @@ function MentionProtectionEditor({
   onRouteDataRefresh,
   onUnsavedChangesChange,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   paidFeaturesAvailable: boolean;
@@ -110,6 +119,7 @@ function MentionProtectionEditor({
   const [saved, setSaved] = useState(false);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { resources } = useGuildResources(selectedWorkspaceId, selectedGuildId);
   const roles = resources?.roles ?? [];
   const channels = [...(resources?.textChannels ?? []), ...(resources?.forumChannels ?? [])];
@@ -159,7 +169,7 @@ function MentionProtectionEditor({
     }
   }
 
-  return (
+  const content = (
     <div className="admin-mention-protection-editor space-y-5">
       <NavigationGuard
         hasChanges={hasChanges}
@@ -302,6 +312,13 @@ function MentionProtectionEditor({
         ]}
       />
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasChanges)}
+      {content}
+    </>
   );
 }
 

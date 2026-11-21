@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   banAppealSettingsSchema,
   type BanAppeal,
@@ -6,6 +6,7 @@ import {
   type BanAppealOperation,
   type BanAppealSettings,
 } from "../../moderation-appeals/types";
+import { useAdminRead } from "../hooks/use-admin-read";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { createAdminLoaderClient } from "../lib/admin-loader-client";
 import { FormField, SectionHeader, SettingsBlock } from "./admin-form-layout";
@@ -28,79 +29,106 @@ interface AppealDetail {
   operations: BanAppealOperation[];
 }
 
-export function AdminBanAppealsPanel(props: {
-  selectedGuildId: string;
-  selectedWorkspaceId: string;
-}) {
-  if (!props.selectedGuildId) return null;
+type BanAppealsScope = { selectedGuildId: string; selectedWorkspaceId: string };
+
+export function AdminBanAppealsPanel({ selectedGuildId, selectedWorkspaceId }: BanAppealsScope) {
+  const scope = selectedGuildId ? JSON.stringify([selectedWorkspaceId, selectedGuildId]) : null;
+  const { read, data, error, loading } = useAdminRead(scope, () =>
+    createAdminLoaderClient().getJson<BanAppealsData>("/admin/api/ban-appeals", {
+      guildId: selectedGuildId,
+      workspaceId: selectedWorkspaceId,
+    }),
+  );
+
+  if (!scope) return null;
+  if (!data) {
+    return (
+      <SettingsBlock>
+        <BanAppealsHeading />
+        <PageFeedback
+          error={
+            error instanceof Error
+              ? error.message
+              : error
+                ? "Ban appeals could not be loaded."
+                : null
+          }
+        />
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading ban appeal settings…</p>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void read?.refresh().catch(() => undefined)}
+          >
+            Retry
+          </Button>
+        )}
+      </SettingsBlock>
+    );
+  }
+
   return (
-    <BanAppealsEditor key={`${props.selectedWorkspaceId}:${props.selectedGuildId}`} {...props} />
+    <BanAppealsEditor
+      key={scope}
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      initialData={data}
+    />
+  );
+}
+
+function BanAppealsHeading({ dirty = false }: { dirty?: boolean }) {
+  return (
+    <SectionHeader
+      title="Discord ban appeals"
+      description="Let banned members sign in with Discord and request a private staff review."
+      actions={<UnsavedChangesIndicator hasChanges={dirty} />}
+    />
   );
 }
 
 function BanAppealsEditor({
   selectedGuildId,
   selectedWorkspaceId,
-}: {
-  selectedGuildId: string;
-  selectedWorkspaceId: string;
-}) {
-  const [data, setData] = useState<BanAppealsData | null>(null);
-  const [settings, setSettings] = useState<BanAppealSettings | null>(null);
-  const [savedSettings, setSavedSettings] = useState<BanAppealSettings | null>(null);
-  const [configRevision, setConfigRevision] = useState(0);
+  initialData,
+}: BanAppealsScope & { initialData: BanAppealsData }) {
+  const [data, setData] = useState(initialData);
+  const [settings, setSettings] = useState(() => toSettings(initialData.config));
+  const [savedSettings, setSavedSettings] = useState(settings);
+  const [configRevision, setConfigRevision] = useState(initialData.config.revision);
   const [detail, setDetail] = useState<AppealDetail | null>(null);
   const [reason, setReason] = useState("");
-  const [initialError, setInitialError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const controller = useRef<AbortController | null>(null);
   const busy = useRef(false);
   const api = useAdminApi();
   const { confirm, dialog } = useConfirmDialog();
-  const dirty = settings !== null && JSON.stringify(settings) !== JSON.stringify(savedSettings);
+  const dirty = JSON.stringify(settings) !== JSON.stringify(savedSettings);
   const query = { guildId: selectedGuildId, workspaceId: selectedWorkspaceId };
-  useEffect(() => {
-    const next = new AbortController();
-    controller.current = next;
-    void createAdminLoaderClient(next.signal)
-      .getJson<BanAppealsData>("/admin/api/ban-appeals", {
-        guildId: selectedGuildId,
-        workspaceId: selectedWorkspaceId,
-      })
-      .then((response) => {
-        if (next.signal.aborted) return;
-        setData(response);
-        setSettings(toSettings(response.config));
-        setSavedSettings(toSettings(response.config));
-        setConfigRevision(response.config.revision);
-      })
-      .catch((error: unknown) => {
-        if (!next.signal.aborted)
-          setInitialError(
-            error instanceof Error ? error.message : "Ban appeals could not be loaded.",
-          );
-      });
-    return () => next.abort();
-  }, [selectedGuildId, selectedWorkspaceId]);
-
-  const client = () => createAdminLoaderClient(controller.current?.signal);
   async function refreshAppeals() {
-    const response = await client().getJson<BanAppealsData>("/admin/api/ban-appeals", query);
+    const response = await createAdminLoaderClient().getJson<BanAppealsData>(
+      "/admin/api/ban-appeals",
+      query,
+    );
     setData(response);
   }
   async function selectAppeal(id: string) {
     await api.run(async () => {
-      const response = await client().getJson<AppealDetail>("/admin/api/ban-appeals/detail", {
-        ...query,
-        search: { appealId: id },
-      });
+      const response = await createAdminLoaderClient().getJson<AppealDetail>(
+        "/admin/api/ban-appeals/detail",
+        {
+          ...query,
+          search: { appealId: id },
+        },
+      );
       setDetail(response);
       setReason("");
       setNotice(null);
     });
   }
   async function saveSettings() {
-    if (!settings || busy.current) return;
+    if (busy.current) return;
     const parsed = banAppealSettingsSchema.safeParse(settings);
     if (!parsed.success) {
       api.setError(parsed.error.issues[0]?.message ?? "Check the ban appeal settings.");
@@ -108,7 +136,7 @@ function BanAppealsEditor({
     }
     busy.current = true;
     await api.run(async () => {
-      const response = await client().postJson<{ config: BanAppealConfig }>(
+      const response = await createAdminLoaderClient().postJson<{ config: BanAppealConfig }>(
         "/admin/api/ban-appeals/config",
         { settings: parsed.data, expectedRevision: configRevision },
         query,
@@ -147,7 +175,7 @@ function BanAppealsEditor({
     }
     await api.run(async () => {
       try {
-        const result = await client().postJson<{ appeal: BanAppeal }>(
+        const result = await createAdminLoaderClient().postJson<{ appeal: BanAppeal }>(
           "/admin/api/ban-appeals/review",
           { appealId: appeal.id, expectedRevision: appeal.revision, action, reason: note },
           query,
@@ -159,7 +187,7 @@ function BanAppealsEditor({
             : "Appeal rejected.",
         );
       } finally {
-        await client()
+        await createAdminLoaderClient()
           .getJson<AppealDetail>("/admin/api/ban-appeals/detail", {
             ...query,
             search: { appealId: appeal.id },
@@ -172,7 +200,7 @@ function BanAppealsEditor({
     busy.current = false;
   }
   function update<K extends keyof BanAppealSettings>(key: K, value: BanAppealSettings[K]) {
-    setSettings((current) => (current ? { ...current, [key]: value } : current));
+    setSettings((current) => ({ ...current, [key]: value }));
     setNotice(null);
   }
 
@@ -181,80 +209,68 @@ function BanAppealsEditor({
       {dialog}
       <NavigationGuard hasChanges={dirty} />
       <SettingsBlock>
-        <SectionHeader
-          title="Discord ban appeals"
-          description="Let banned members sign in with Discord and request a private staff review."
-          actions={<UnsavedChangesIndicator hasChanges={dirty} />}
-        />
-        <PageFeedback error={initialError ?? api.error} message={notice} />
-        {!settings ? (
-          <p className="text-sm text-muted-foreground">
-            {initialError ? "Reload this page to try again." : "Loading ban appeal settings…"}
-          </p>
-        ) : (
-          <>
-            <div className="flex items-center gap-3">
-              <Switch
-                id="ban-appeals-enabled"
-                checked={settings.enabled}
-                onCheckedChange={(value) => update("enabled", value)}
-                disabled={api.loading}
-              />
-              <label htmlFor="ban-appeals-enabled">Accept new ban appeals</label>
-            </div>
-            <FormField label="Appeal page title" htmlFor="ban-appeals-title">
-              <Input
-                id="ban-appeals-title"
-                value={settings.title}
-                maxLength={120}
-                disabled={api.loading}
-                onChange={(event) => update("title", event.target.value)}
-              />
-            </FormField>
-            <FormField label="Instructions for appellants" htmlFor="ban-appeals-instructions">
-              <Textarea
-                id="ban-appeals-instructions"
-                value={settings.instructions}
-                maxLength={1000}
-                disabled={api.loading}
-                onChange={(event) => update("instructions", event.target.value)}
-              />
-            </FormField>
-            <FormField
-              label="Submission cooldown (hours)"
-              htmlFor="ban-appeals-cooldown"
-              hint="Wait between submitted appeals, including appeals that staff rejected. One appeal can remain open at a time."
-            >
-              <Input
-                id="ban-appeals-cooldown"
-                type="number"
-                min={1}
-                max={720}
-                value={settings.cooldownHours}
-                disabled={api.loading}
-                onChange={(event) => update("cooldownHours", Number(event.target.value))}
-              />
-            </FormField>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                type="button"
-                onClick={() => void saveSettings()}
-                disabled={!dirty || api.loading}
-                loading={api.loading}
-              >
-                Save appeal settings
-              </Button>
-              <a
-                className="text-sm underline"
-                href={`/ban-appeals/${selectedGuildId}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open public appeal page
-              </a>
-            </div>
-          </>
-        )}
+        <BanAppealsHeading dirty={dirty} />
+        <PageFeedback error={api.error} message={notice} />
+        <div className="flex items-center gap-3">
+          <Switch
+            id="ban-appeals-enabled"
+            checked={settings.enabled}
+            onCheckedChange={(value) => update("enabled", value)}
+            disabled={api.loading}
+          />
+          <label htmlFor="ban-appeals-enabled">Accept new ban appeals</label>
+        </div>
+        <FormField label="Appeal page title" htmlFor="ban-appeals-title">
+          <Input
+            id="ban-appeals-title"
+            value={settings.title}
+            maxLength={120}
+            disabled={api.loading}
+            onChange={(event) => update("title", event.target.value)}
+          />
+        </FormField>
+        <FormField label="Instructions for appellants" htmlFor="ban-appeals-instructions">
+          <Textarea
+            id="ban-appeals-instructions"
+            value={settings.instructions}
+            maxLength={1000}
+            disabled={api.loading}
+            onChange={(event) => update("instructions", event.target.value)}
+          />
+        </FormField>
+        <FormField
+          label="Submission cooldown (hours)"
+          htmlFor="ban-appeals-cooldown"
+          hint="Wait between submitted appeals, including appeals that staff rejected. One appeal can remain open at a time."
+        >
+          <Input
+            id="ban-appeals-cooldown"
+            type="number"
+            min={1}
+            max={720}
+            value={settings.cooldownHours}
+            disabled={api.loading}
+            onChange={(event) => update("cooldownHours", Number(event.target.value))}
+          />
+        </FormField>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            onClick={() => void saveSettings()}
+            disabled={!dirty || api.loading}
+            loading={api.loading}
+          >
+            Save appeal settings
+          </Button>
+          <a
+            className="text-sm underline"
+            href={`/ban-appeals/${selectedGuildId}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open public appeal page
+          </a>
+        </div>
       </SettingsBlock>
       {data ? (
         <SettingsBlock>

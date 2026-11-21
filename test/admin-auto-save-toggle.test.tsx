@@ -183,8 +183,6 @@ for (const feature of ["Steam", "Evidence Vault", "Image Rules", "Tickets"] as c
                 userProfile: { name: "Admin", email: "", image: "" },
                 userPreferences: DEFAULT_USER_PREFERENCES,
                 applyUserPreferencesPatch: async () => {},
-                pageMetadata: null,
-                setPageMetadata() {},
                 isRoutePending: false,
               }}
             >

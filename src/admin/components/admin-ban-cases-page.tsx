@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import type { BanCaseConfig, BanCaseSource } from "../../types";
 import type { SubjectIdentifierPlatform } from "../../types";
 import type { EntitlementInfo } from "../hooks/use-entitlement";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import {
   EditorActions,
   FormField,
@@ -22,7 +22,7 @@ import { Input } from "./ui/input";
 import { Switch } from "./ui/switch";
 import { PageFeedback } from "./page-feedback";
 import { useToast } from "./toast";
-import { refreshAdminRouteData } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { useGuildResources } from "../hooks/use-guild-resources";
 import { ChannelSelect, MultiRoleSelect } from "./guild-resource-select";
@@ -129,15 +129,20 @@ export function AdminBanCasesPage({
 }) {
   const trimmedGuildId = selectedGuildId.trim();
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Ban Cases"
+      description="Auto-create forum threads when game-server ban webhooks arrive. Each banned player gets a single thread that staff can mark as completed."
+      readinessFeature="ban-cases"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-data space-y-6">
-      <AdminPageHeader
-        title="Ban Cases"
-        description="Auto-create forum threads when game-server ban webhooks arrive. Each banned player gets a single thread that staff can mark as completed."
-        readinessFeature="ban-cases"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId && !(entitlement && entitlement.tier === "free") ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="ban cases" />
       ) : entitlement && entitlement.tier === "free" ? (
@@ -149,6 +154,7 @@ export function AdminBanCasesPage({
       ) : (
         <>
           <BanCasesEditor
+            renderHeader={renderHeader}
             selectedWorkspaceId={selectedWorkspaceId}
             selectedGuildId={trimmedGuildId}
             initialData={initialData}
@@ -166,11 +172,13 @@ export function AdminBanCasesPage({
 }
 
 function BanCasesEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: BanCasesLoaderData | null;
@@ -191,6 +199,7 @@ function BanCasesEditor({
   const [pendingSourceActionBusy, setPendingSourceActionBusy] = useState(false);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { dialog: confirmDialog, confirm } = useConfirmDialog();
   const { resources: guildResources } = useGuildResources(selectedWorkspaceId, selectedGuildId);
 
@@ -420,7 +429,7 @@ function BanCasesEditor({
     return `${u.protocol}//${u.host}/ban-cases/`;
   }, []);
 
-  return (
+  const content = (
     <SettingsPanel>
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardSourceChanges} />
       {confirmDialog}
@@ -838,5 +847,12 @@ function BanCasesEditor({
 
       <PageFeedback error={api.error} />
     </SettingsPanel>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }

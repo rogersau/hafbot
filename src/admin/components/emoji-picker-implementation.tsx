@@ -2,6 +2,7 @@ import Picker, { EmojiStyle, Theme, type EmojiClickData } from "emoji-picker-rea
 
 export interface EmojiPickerImplementationProps {
   onSelect: (emoji: string) => void;
+  disabledUnicode: readonly string[];
 }
 
 const pickerThemeStyle: React.CSSProperties = {
@@ -24,13 +25,19 @@ const pickerThemeStyle: React.CSSProperties = {
   "--epr-preview-border-color": "hsl(var(--border))",
 } as React.CSSProperties;
 
-export function EmojiPickerImplementation({ onSelect }: EmojiPickerImplementationProps) {
+export function EmojiPickerImplementation({
+  onSelect,
+  disabledUnicode,
+}: EmojiPickerImplementationProps) {
   const styleNonce = document.getElementById("admin-root")?.dataset.cspStyleNonce;
 
   return (
     <Picker
       emojiStyle={EmojiStyle.APPLE}
       height={340}
+      hiddenEmojis={disabledUnicode.map((emoji) =>
+        Array.from(emoji, (character) => character.codePointAt(0)!.toString(16)).join("-"),
+      )}
       lazyLoadEmojis
       nonce={styleNonce}
       onEmojiClick={(emoji: EmojiClickData) => onSelect(emoji.emoji)}

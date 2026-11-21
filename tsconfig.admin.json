@@ -5,6 +5,6 @@
     "types": ["node", "react", "react-dom", "vite/client"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["src/admin/**/*.ts", "src/admin/**/*.tsx"],
+  "include": ["src/admin/**/*.ts", "src/admin/**/*.tsx", "src/web/**/*", "src/landing/**/*"],
   "exclude": ["dist-admin"]
 }

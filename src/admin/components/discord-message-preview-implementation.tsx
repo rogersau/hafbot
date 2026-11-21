@@ -10,7 +10,7 @@ import {
   DiscordMessages,
 } from "@skyra/discord-components-react";
 import type { ButtonVariant, DiscordMessagePreviewProps } from "./discord-message-preview";
-import { DiscordMarkdown } from "./markdown-editor";
+import { DiscordMarkdown } from "./discord-markdown";
 
 const buttonTypeMap: Record<ButtonVariant, "primary" | "secondary" | "success" | "destructive"> = {
   primary: "primary",

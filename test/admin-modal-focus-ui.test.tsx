@@ -166,7 +166,6 @@ test("mobile navigation traps focus, makes content inert, closes on Escape, and 
         userProfile={{ name: "Alex Morgan", image: "" }}
         userPreferences={DEFAULT_USER_PREFERENCES}
         applyUserPreferencesPatch={async () => undefined}
-        pageMetadata={null}
       >
         <button type="button">Page action</button>
       </AdminShell>

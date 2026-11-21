@@ -7,7 +7,7 @@ import type {
   EventSignupGroup,
   EventStatus,
 } from "../../types";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { FormField, SectionHeader, SettingsBlock } from "./admin-form-layout";
 import { ChannelSelect, MultiRoleSelect, RoleSelect } from "./guild-resource-select";
 import { copyTextToClipboard } from "../lib/clipboard";
@@ -23,7 +23,7 @@ import { ResponsiveTable, type ResponsiveTableColumn } from "./ui/responsive-tab
 import { Textarea } from "./ui/textarea";
 import { ChevronDownIcon } from "./ui/icons";
 import { useToast } from "./toast";
-import { refreshAdminRouteData } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { useGuildResources } from "../hooks/use-guild-resources";
 import type { EventsLoaderData } from "../lib/admin-route-loaders";
@@ -32,7 +32,7 @@ import { EventRecurrenceControls } from "./event-recurrence-controls";
 import { AdminBottomActionBar, areAdminActionSnapshotsEqual } from "./admin-bottom-action-bar";
 import { NavigationGuard } from "./navigation-guard";
 import { UnsavedChangesIndicator } from "./unsaved-changes-indicator";
-import { DiscordMarkdown } from "./markdown-editor";
+import { DiscordMarkdown } from "./discord-markdown";
 import {
   DISCORD_USER_ID_HINT,
   discordUserIdError,
@@ -94,19 +94,25 @@ export function AdminEventsPage({
 }) {
   const trimmedGuildId = selectedGuildId.trim();
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Events"
+      description="Create scheduled Discord events with flexible Signup Groups, waitlists, reminders, and roster management."
+      readinessFeature="events"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-workflow space-y-6">
-      <AdminPageHeader
-        title="Events"
-        description="Create scheduled Discord events with flexible Signup Groups, waitlists, reminders, and roster management."
-        readinessFeature="events"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="Events" />
       ) : (
         <EventsEditor
+          renderHeader={renderHeader}
           selectedWorkspaceId={selectedWorkspaceId}
           selectedGuildId={trimmedGuildId}
           initialData={initialData}
@@ -118,11 +124,13 @@ export function AdminEventsPage({
 }
 
 function EventsEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: EventsLoaderData | null;
@@ -146,6 +154,7 @@ function EventsEditor({
   const [pendingDraftActionBusy, setPendingDraftActionBusy] = useState(false);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { dialog: confirmDialog, confirm } = useConfirmDialog();
   const { resources } = useGuildResources(selectedWorkspaceId, selectedGuildId);
 
@@ -215,9 +224,6 @@ function EventsEditor({
       const saved = draft.eventId
         ? await eventsClient.update({ ...payload, eventId: draft.eventId })
         : await eventsClient.create(payload);
-      // The mutation response is authoritative even when the subsequent route
-      // reconciliation fails. Keep the returned ID and values locally so a
-      // retry cannot create a duplicate event.
       const savedDraft = draftFromEvent(saved.event);
       setDraft(savedDraft);
       setSavedDraftSnapshot(savedDraft);
@@ -636,7 +642,7 @@ function EventsEditor({
     },
   ];
 
-  return (
+  const content = (
     <div className="space-y-5">
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardDraftChanges} />
       {confirmDialog}
@@ -1188,6 +1194,13 @@ function EventsEditor({
       </div>
       <AdminBottomActionBar actions={eventActions} />
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }
 

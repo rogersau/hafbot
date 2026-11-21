@@ -5,7 +5,7 @@ import { Readable } from "node:stream";
 
 export type FetchHandler = (request: Request) => Promise<Response>;
 
-export interface DynamicFirstHandlerOptions {
+export interface AssetHandlerOptions {
   dynamic: FetchHandler;
   staticRoot?: string;
 }
@@ -27,13 +27,11 @@ const CONTENT_TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
-/** Matches Workers static asset fallback: application routes get first refusal. */
-export function createDynamicFirstHandler(options: DynamicFirstHandlerOptions): FetchHandler {
+export function createAssetHandler(options: AssetHandlerOptions): FetchHandler {
   const staticRoot = options.staticRoot ? resolve(options.staticRoot) : undefined;
   return async (request) => {
-    const dynamicResponse = await options.dynamic(request);
-    if (dynamicResponse.status !== 404 || !staticRoot) return dynamicResponse;
-    return (await serveStaticAsset(request, staticRoot)) ?? dynamicResponse;
+    const asset = staticRoot ? await serveStaticAsset(request, staticRoot) : null;
+    return asset ?? options.dynamic(request);
   };
 }
 

@@ -1,6 +1,3 @@
-import { useEffect } from "react";
-
-import { buildAdminDocumentTitle } from "../lib/admin-document-title";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { CheckIcon, ShieldIcon } from "./ui/icons";
@@ -13,18 +10,6 @@ export function SignInCard({
   onSignIn: () => void;
 }) {
   const checkoutIntent = readCheckoutIntent(initialSearch);
-
-  // The browser title is external document state owned by the sign-in surface.
-  // oxlint-disable-next-line custom/no-use-effect
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    document.title = buildAdminDocumentTitle({
-      authenticated: false,
-      currentPath: "/admin",
-      selectedGuildId: "",
-      guildDirectory: null,
-    });
-  }, []);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-4 sm:p-6">

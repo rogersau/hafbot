@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 
 import { getAdminGuideUrl } from "../dashboard-routes";
 import { Button } from "./ui/button";
@@ -20,6 +20,7 @@ import { useAdminFeedback } from "./admin-feedback-dialog";
 import { reportDashboardMilestone } from "../lib/product-analytics";
 
 export function AdminShellHeader({
+  currentPath,
   pageMetadata,
   sidebarCollapsed,
   accountMenuOpen,
@@ -37,6 +38,7 @@ export function AdminShellHeader({
   onOpenCommandPalette,
   mobileNavigationTriggerRef,
 }: {
+  currentPath: string;
   pageMetadata: AdminPageMetadata;
   sidebarCollapsed: boolean;
   accountMenuOpen: boolean;
@@ -60,7 +62,6 @@ export function AdminShellHeader({
   const accountMenuId = "admin-account-menu";
   const userName = userProfile.name.trim() || "Admin User";
   const userImage = userProfile.image.trim();
-  const currentPath = useRouterState({ select: (state) => state.location.pathname });
   const guideUrl = getAdminGuideUrl(currentPath);
   const openFeedback = useAdminFeedback();
   const accountMenuTriggerRef = useRef<HTMLButtonElement>(null);

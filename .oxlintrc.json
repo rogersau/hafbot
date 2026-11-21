@@ -4,6 +4,8 @@
     ".worktrees/**",
     ".wrangler/**",
     "dist/**",
+    "src/web/routeTree.gen.ts",
+    ".tanstack/**",
     "dist-admin/**",
     "dist-node/**",
     "dist-tests/**",

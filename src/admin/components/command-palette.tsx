@@ -15,17 +15,11 @@ import { SearchIcon } from "./ui/icons";
 export type CommandPaletteGroupKind = "pages" | "resources" | "recent";
 
 export interface CommandPaletteItem {
-  /** Stable identifier passed back to `onSelect`. */
   id: string;
-  /** Visible label rendered inside the palette. */
   label: string;
-  /** Optional group — items without a group go into the ungrouped list. */
   group?: CommandPaletteGroupKind;
-  /** Optional extra keywords used for substring matching only. */
   keywords?: string[];
-  /** Optional hint shown on the right of the item (e.g. "↵"). */
   hint?: ReactNode;
-  /** Disable the item (filtered out from selection but still rendered). */
   disabled?: boolean;
 }
 
@@ -49,33 +43,24 @@ export interface CommandPaletteProps {
   emptyMessage?: string;
 }
 
-/**
- * Global search/command palette. Entirely presentational: the caller owns the
- * `open` state, the searchable items, and the `onSelect` callback (typically
- * wiring it through `useNavigate()` from `@tanstack/react-router`).
- */
-export function CommandPalette({
-  open,
+export function CommandPalette({ open, ...props }: CommandPaletteProps) {
+  return open ? <OpenCommandPalette {...props} /> : null;
+}
+
+function OpenCommandPalette({
   items,
   onSelect,
   onDismiss,
   placeholder = "Search pages, servers, and recent actions…",
   emptyMessage = "No matches found.",
-}: CommandPaletteProps) {
+}: Omit<CommandPaletteProps, "open">) {
   const [query, setQuery] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
 
-  // Reset the query each time the palette opens so the user always starts fresh.
-  // eslint-disable-next-line custom/no-use-effect -- Resets palette query state on open.
-  useEffect(() => {
-    if (open) setQuery("");
-  }, [open]);
-
   // eslint-disable-next-line custom/no-use-effect -- Contains modal focus and preserves background accessibility and scroll state.
   useEffect(() => {
-    if (!open) return;
     const dialog = dialogRef.current;
     if (!dialog) return;
     const previousFocus = document.activeElement as HTMLElement | null;
@@ -148,11 +133,9 @@ export function CommandPalette({
       }
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [open]);
+  }, []);
 
   const grouped = useMemo(() => groupAndFilterItems(items, query), [items, query]);
-
-  if (!open) return null;
 
   const palette = (
     <div

@@ -1,5 +1,6 @@
 import { useAdminApi } from "../hooks/use-admin-api";
-import { useEffect, useRef, useState } from "react";
+import { useAdminRead } from "../hooks/use-admin-read";
+import { useRef, useState } from "react";
 
 import {
   applyChannelPermissionCopy,
@@ -32,18 +33,34 @@ export const CHANNEL_PERMISSION_PREVIEW_SECTION_ORDER = [
   "changes",
 ] as const;
 
-export function AdminChannelPermissionsPage({
-  selectedWorkspaceId,
-  selectedGuildId,
-  initialData,
-  onRouteDataRefresh,
-}: {
+type ChannelPermissionsPageProps = {
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: ChannelPermissionCopyResources | null;
   onRouteDataRefresh?: () => Promise<void>;
-}) {
-  const [resources, setResources] = useState(initialData ?? null);
+};
+
+export function AdminChannelPermissionsPage(props: ChannelPermissionsPageProps) {
+  return (
+    <ChannelPermissionsEditor
+      key={JSON.stringify([props.selectedWorkspaceId, props.selectedGuildId])}
+      {...props}
+    />
+  );
+}
+
+function ChannelPermissionsEditor({
+  selectedWorkspaceId,
+  selectedGuildId,
+  initialData,
+  onRouteDataRefresh,
+}: ChannelPermissionsPageProps) {
+  const [updatedResources, setResources] = useState<ChannelPermissionCopyResources | null>(null);
+  const fallback = useAdminRead(
+    !initialData && selectedGuildId ? "channel-permissions" : null,
+    () => getChannelPermissionCopyResources(selectedWorkspaceId, selectedGuildId),
+  );
+  const resources = updatedResources ?? initialData ?? fallback.data;
   const resourceRequest = useRef(initialAdminRequest);
   const [resourceState, setResourceState] = useState(initialAdminRequest);
   function cancelResourceRead() {
@@ -105,13 +122,6 @@ export function AdminChannelPermissionsPage({
       throw cause;
     }
   }
-
-  useEffect(() => {
-    if (!initialData && selectedGuildId) void loadResources().catch(() => undefined);
-    return cancelResourceRead;
-    // Loading is keyed by the Guild route; selection changes remount this page.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGuildId]);
 
   function invalidatePreview() {
     cancelPreview();
@@ -206,6 +216,12 @@ export function AdminChannelPermissionsPage({
   const canApply = Boolean(
     preview && !preview.blockers.length && confirmation === preview.target.name,
   );
+  const resourceError =
+    resourceState.kind === "failed"
+      ? resourceState.error
+      : resourceState.kind === "idle" && fallback.error
+        ? describeError(fallback.error)
+        : null;
 
   return (
     <section className="admin-feature-page admin-page-system space-y-6">
@@ -215,7 +231,7 @@ export function AdminChannelPermissionsPage({
           title="Copy channel permissions"
           description="Copy only Discord channel permission overwrites. HAF Bot adds minimal recovery access for itself when needed; channel content and other settings are not changed."
         />
-        {resourceState.kind === "running" ? (
+        {resourceState.kind === "running" || fallback.loading ? (
           <p role="status">Loading supported channels...</p>
         ) : null}
         {error ? (
@@ -223,10 +239,10 @@ export function AdminChannelPermissionsPage({
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
-        {resourceState.kind === "failed" && !reconciliationPending ? (
+        {resourceError && !reconciliationPending ? (
           <>
             <Alert variant="destructive" role="alert">
-              <AlertDescription>{resourceState.error}</AlertDescription>
+              <AlertDescription>{resourceError}</AlertDescription>
             </Alert>
             <Button
               variant="outline"

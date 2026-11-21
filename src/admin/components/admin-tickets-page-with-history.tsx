@@ -5,7 +5,7 @@ import type { EntitlementInfo } from "../hooks/use-entitlement";
 import type { TicketsLoaderData } from "../lib/admin-route-loaders";
 import { buildTicketsTabHref } from "../lib/admin-route-state";
 import { useAdminRouteContext } from "../routes/page-context";
-import { refreshAdminRouteData } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { AdminPageHeader } from "./admin-page-header";
 import { AdminTicketsPage } from "./admin-tickets-page";
 import { EmptyState } from "./ui/empty-state";
@@ -29,6 +29,7 @@ export function AdminTicketsPageWithHistory({
   initialData?: TicketsLoaderData | null;
   onRouteDataRefresh?: () => Promise<void>;
 }) {
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { ticketsTab, currentPath, currentSearch } = useAdminRouteContext();
   const navigate = useNavigate();
   const isPremium = Boolean(entitlement && entitlement.tier !== "free");

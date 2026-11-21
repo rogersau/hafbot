@@ -5,7 +5,6 @@ import type { MemberVerificationService } from "../services/member-verification-
 import { safeTextResponse } from "../http/safe-text-response";
 import { verifyTurnstileToken } from "../services/member-verification-turnstile";
 import { verifyAttemptToken } from "../services/member-verification-token";
-import type { RouteHandler } from "./public-routes";
 
 export interface MemberVerificationRouteOptions {
   memberVerificationService: MemberVerificationService;
@@ -17,35 +16,25 @@ export interface MemberVerificationRouteOptions {
 
 const ATTEMPT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function createMemberVerificationRoutes(
-  options: MemberVerificationRouteOptions,
-): RouteHandler {
+export function createMemberVerificationRoutes(options: MemberVerificationRouteOptions) {
   const verifyTurnstile = options.verifyTurnstileToken ?? verifyTurnstileToken;
 
-  const handler = async function (request: Request): Promise<Response | null> {
-    const url = new URL(request.url);
-    const match = /^\/verify\/([^/]+)$/.exec(url.pathname);
-    if (!match) {
-      return null;
-    }
+  const withValidAttempt =
+    (handle: (request: Request, attemptId: string) => Response | Promise<Response>) =>
+    (request: Request, attemptId: string) =>
+      ATTEMPT_ID_PATTERN.test(attemptId)
+        ? handle(request, attemptId)
+        : renderErrorPage("Invalid verification link.");
 
-    const attemptId = decodeURIComponent(match[1] ?? "");
-    if (!ATTEMPT_ID_PATTERN.test(attemptId)) {
-      return renderErrorPage("Invalid verification link.");
-    }
-
-    if (request.method === "GET") {
-      return handleGet(request, attemptId, options);
-    }
-
-    if (request.method === "POST") {
-      return handlePost(request, attemptId, options, verifyTurnstile);
-    }
-
-    return safeTextResponse("Method not allowed", 405, { allow: "GET, POST" });
+  return {
+    get: withValidAttempt((request, attemptId) => handleGet(request, attemptId, options)),
+    post: withValidAttempt((request, attemptId) =>
+      handlePost(request, attemptId, options, verifyTurnstile),
+    ),
+    methodNotAllowed: withValidAttempt(() =>
+      safeTextResponse("Method not allowed", 405, { allow: "GET, POST" }),
+    ),
   };
-
-  return handler;
 }
 
 async function verifyAttemptSignature(

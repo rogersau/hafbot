@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { createDashboardProductAnalyticsEvent } from "../src/contracts/admin/cross-cutting";
 import type { ProductAnalyticsEvent } from "../src/product-analytics";
-import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import { createSocialAdminRoutes } from "../src/runtime/admin-routes/social";
 import { allowAllAdminAccess } from "./helpers/admin-api";
 

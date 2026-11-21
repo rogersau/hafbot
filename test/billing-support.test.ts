@@ -17,6 +17,7 @@ import type {
 } from "../src/runtime/billing/types";
 import { createBillingApiHandler } from "../src/runtime/billing/billing-api";
 import type { BillingCheckoutService } from "../src/runtime/billing/checkout";
+import { billingContracts } from "../src/contracts/admin/billing";
 
 test("Billing Support exposes only allow-listed recovery operations and audits outcomes", async () => {
   const store = new MemorySupportStore();
@@ -97,11 +98,14 @@ test("Billing summary includes the validated display Price catalogue", async () 
     },
   });
 
-  const response = await handler(new Request("https://haf/admin/api/billing"));
-  const body = (await response?.json()) as {
+  const response = await handler(
+    billingContracts.get.operationId,
+    new Request("https://haf/admin/api/billing"),
+  );
+  const body = (await response.json()) as {
     prices: Array<{ formattedAmount: string }>;
   };
-  assert.equal(response?.status, 200);
+  assert.equal(response.status, 200);
   assert.equal(body.prices[0]?.formattedAmount, "$4.99");
   assert.equal(Object.hasOwn(body, "founderAdmission"), false);
 });
@@ -131,15 +135,11 @@ test("Billing Support authorization is freshly checked and broad admin sessions 
       return roleGranted;
     },
   });
-  assert.equal(
-    (await handler(new Request("https://haf/admin/api/billing-support/cases")))?.status,
-    200,
-  );
+  const { operationId } = billingContracts.supportCases;
+  const request = new Request("https://haf/admin/api/billing-support/cases");
+  assert.equal((await handler(operationId, request)).status, 200);
   roleGranted = false;
-  assert.equal(
-    (await handler(new Request("https://haf/admin/api/billing-support/cases")))?.status,
-    403,
-  );
+  assert.equal((await handler(operationId, request)).status, 403);
   assert.equal(checks, 2);
 
   const broadAdminOnly = createBillingApiHandler({
@@ -155,13 +155,36 @@ test("Billing Support authorization is freshly checked and broad admin sessions 
   assert.equal(
     (
       await broadAdminOnly(
+        operationId,
         new Request("https://haf/admin/api/billing-support/cases", {
           headers: { cookie: "global-admin=session" },
         }),
       )
-    )?.status,
+    ).status,
     401,
   );
+});
+
+test("Billing API rejects unknown or mismatched operation bindings before reading the session", async () => {
+  const handler = createBillingApiHandler({
+    service: emptyCheckoutService(),
+    async readSession() {
+      assert.fail("Unsupported requests must not read the session");
+    },
+  });
+  const cases = [
+    ["missing.get", new Request("https://haf/admin/api/billing")],
+    [billingContracts.get.operationId, new Request("https://haf/admin/api/billing/history")],
+    [
+      billingContracts.get.operationId,
+      new Request("https://haf/admin/api/billing", { method: "HEAD" }),
+    ],
+  ] as const;
+  for (const [operationId, request] of cases) {
+    const response = await handler(operationId, request);
+    assert.equal(response.status, 405);
+    assert.deepEqual(await response.json(), { error: "Method not allowed" });
+  }
 });
 
 function emptyCheckoutService(): BillingCheckoutService {

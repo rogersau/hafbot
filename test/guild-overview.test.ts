@@ -14,7 +14,7 @@ import {
 } from "../src/runtime/admin-routes/guild-overview";
 import { ADMIN_GUILD_FEATURE_ROUTES } from "../src/admin/dashboard-routes";
 import { createAdminRoutes } from "../src/runtime/admin-routes";
-import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import { allowAllAdminAccess } from "./helpers/admin-api";
 import { createDefaultMentionProtectionConfig } from "../src/services/mention-protection/message-handler";
 import type { RuntimeStores } from "../src/runtime/app-types";

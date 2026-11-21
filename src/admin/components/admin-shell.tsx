@@ -1,13 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 
-import { getPaidAdminFeature, type AdminDashboardPath } from "../dashboard-routes";
+import type { AdminDashboardPath } from "../dashboard-routes";
 import { cn } from "../lib/utils";
 import { AdminCommandPalette, captureCommandPaletteReturnFocus } from "./admin-command-palette";
 import { AdminBottomActionBarProvider } from "./admin-bottom-action-bar";
 import { AdminShellHeader, BrandMark } from "./admin-shell-header";
 import { AdminShellNav, getCurrentPageLabel } from "./admin-shell-nav";
 import { AdminShellSwitcher } from "./admin-shell-switcher";
-import { AdminWorkspaceTabs, getAdminWorkspaceRouteId } from "./admin-workspace-tabs";
+import {
+  AdminWorkspaceTabs,
+  adminWorkspaceContextKey,
+  getAdminWorkspaceRouteId,
+} from "./admin-workspace-tabs";
 import { useAdminFeedback } from "./admin-feedback-dialog";
 import { Button } from "./ui/button";
 import {
@@ -35,9 +39,17 @@ import type {
 import type { GuildEntitlementTier } from "../../types";
 import type { AdminPageMetadata } from "../routes/context";
 import type { ApplyUserPreferencesOptions } from "../hooks/use-user-preferences";
-import { reportDashboardMilestone } from "../lib/product-analytics";
+import { AdminSessionProvider, useAdminSession, useAdminSessionState } from "../lib/admin-session";
 
-export function AdminShell({
+export function AdminShell(props: ComponentProps<typeof AdminShellContent>) {
+  return (
+    <AdminSessionProvider>
+      <AdminShellContent {...props} />
+    </AdminSessionProvider>
+  );
+}
+
+function AdminShellContent({
   currentPath,
   currentSearch,
   guildDirectory,
@@ -52,7 +64,6 @@ export function AdminShell({
   userProfile,
   userPreferences,
   applyUserPreferencesPatch,
-  pageMetadata,
   isRoutePending = false,
   children,
 }: {
@@ -76,12 +87,12 @@ export function AdminShell({
     patch: UserPreferencesPatch,
     options?: ApplyUserPreferencesOptions,
   ) => Promise<void>;
-  pageMetadata: AdminPageMetadata | null;
   isRoutePending?: boolean;
   children: ReactNode;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const session = useAdminSession();
+  const sidebarCollapsed = useAdminSessionState((state) => state.sidebarCollapsed);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -91,25 +102,14 @@ export function AdminShell({
   const commandPaletteReturnFocusRef = useRef<HTMLElement | null>(null);
   const signOutAction = "/admin/logout";
   const currentPageLabel = getCurrentPageLabel(currentPath, selectedGuildId);
-  const effectiveMetadata = pageMetadata ?? getDefaultPageMetadata(currentPath, currentPageLabel);
+  const effectiveMetadata = getDefaultPageMetadata(currentPath, currentPageLabel);
   const showRouteProgress = useMinimumVisible(isRoutePending, 300);
   const selectedGuild = guildDirectory?.find((guild) => guild.guildId === selectedGuildId);
-  const currentRouteLocked =
-    getPaidAdminFeaturePath(currentPath, selectedGuildId) !== null && selectedGuildTier === "free";
-  const workspaceContextKey = `${selectedWorkspaceId || "no-workspace"}:${selectedGuildId || "no-guild"}`;
-
-  // eslint-disable-next-line custom/no-use-effect -- Reports entry to the explicit billing surface.
-  useEffect(() => {
-    if (!selectedGuildId || !currentPath.endsWith("/billing")) return;
-    void reportDashboardMilestone({
-      guildId: selectedGuildId,
-      workspaceId: selectedWorkspaceId,
-      action: "upgrade_viewed",
-    }).catch(() => undefined);
-  }, [currentPath, selectedGuildId, selectedWorkspaceId]);
+  const workspaceContextKey = adminWorkspaceContextKey(selectedWorkspaceId, selectedGuildId);
 
   const closeMobileNavigation = () => setMobileNavOpen(false);
-  const toggleSidebar = () => setSidebarCollapsed((collapsed) => !collapsed);
+  const toggleSidebar = () =>
+    session.update(({ sidebarCollapsed }) => ({ sidebarCollapsed: !sidebarCollapsed }));
 
   // eslint-disable-next-line custom/no-use-effect -- Coordinates modal focus, background inertness, and scroll locking.
   useEffect(() => {
@@ -209,13 +209,6 @@ export function AdminShell({
           onToggleMenu={() => setSwitcherOpen((open) => !open)}
           onCloseMenu={() => setSwitcherOpen(false)}
           onSelectedGuildChange={(guildId) => {
-            if (guildId !== selectedGuildId) {
-              void reportDashboardMilestone({
-                guildId,
-                workspaceId: selectedWorkspaceId,
-                action: "guild_selected",
-              }).catch(() => undefined);
-            }
             onSelectedGuildChange(guildId);
             closeMobileNavigation();
           }}
@@ -249,13 +242,14 @@ export function AdminShell({
           currentPath={currentPath}
           currentSearch={currentSearch}
           currentLabel={currentPageLabel}
-          currentLocked={currentRouteLocked}
+          selectedGuildTier={selectedGuildTier}
           selectedGuildId={selectedGuildId}
           contextKey={workspaceContextKey}
           overviewHref={buildNavigationHref("/admin")}
           showOverview
         />
         <AdminShellHeader
+          currentPath={currentPath}
           pageMetadata={effectiveMetadata}
           sidebarCollapsed={sidebarCollapsed}
           accountMenuOpen={accountMenuOpen}
@@ -342,15 +336,6 @@ function AdminStatusBar({
 
 function formatStatusTier(tier: GuildEntitlementTier) {
   return tier === "premium_plus" ? "Premium Plus" : tier === "premium" ? "Premium" : "Free";
-}
-
-function getPaidAdminFeaturePath(currentPath: string, selectedGuildId: string) {
-  const guildPrefix = selectedGuildId ? `/admin/${encodeURIComponent(selectedGuildId)}` : "";
-  const canonicalPath =
-    guildPrefix && currentPath.startsWith(`${guildPrefix}/`)
-      ? `/admin/${currentPath.slice(guildPrefix.length + 1)}`
-      : currentPath;
-  return getPaidAdminFeature(canonicalPath);
 }
 
 function PageRouteProgress({ visible }: { visible: boolean }) {

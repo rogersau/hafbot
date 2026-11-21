@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useAdminRead } from "../hooks/use-admin-read";
 
 import type {
   AdminPermissionCheck,
@@ -9,7 +9,6 @@ import { buildAdminDashboardHref } from "../lib/dashboard-urls";
 import { describeError, readJsonOrThrow } from "../lib/api";
 import { Button } from "./ui/button";
 import { RefreshIcon } from "./ui/icons";
-import { useSetupCheckDirtyState } from "./setup-check-dirty-state";
 
 type ReadinessState =
   | { kind: "loading" }
@@ -20,38 +19,35 @@ export function FeatureReadiness({
   feature,
   selectedGuildId,
   selectedWorkspaceId,
+  hasUnsavedChanges = false,
 }: {
   feature: AdminPermissionFeature;
   selectedGuildId: string;
   selectedWorkspaceId: string;
+  hasUnsavedChanges?: boolean;
 }) {
   const guildId = selectedGuildId.trim();
   const workspaceId = selectedWorkspaceId.trim();
-  const [state, setState] = useState<ReadinessState>({ kind: "loading" });
-  const { hasUnsavedChanges } = useSetupCheckDirtyState();
+  async function load(refresh = false) {
+    const params = new URLSearchParams({ guildId });
+    if (workspaceId) params.set("workspaceId", workspaceId);
+    if (refresh) params.set("refresh", "1");
+    const diagnostics = await readJsonOrThrow<AdminPermissionDiagnosticsResponse>(
+      `/admin/api/permissions/diagnostics?${params.toString()}`,
+    );
+    if (!diagnostics?.checksByFeature) throw new Error("Permission diagnostics are unavailable.");
+    return diagnostics.checksByFeature;
+  }
 
-  const load = useCallback(
-    async (refresh = false) => {
-      if (!guildId) return;
-      setState({ kind: "loading" });
-      try {
-        const params = new URLSearchParams({ guildId });
-        if (workspaceId) params.set("workspaceId", workspaceId);
-        if (refresh) params.set("refresh", "1");
-        const diagnostics = await readJsonOrThrow<AdminPermissionDiagnosticsResponse>(
-          `/admin/api/permissions/diagnostics?${params.toString()}`,
-        );
-        setState({ kind: "ready", checks: diagnostics.checksByFeature[feature] ?? [] });
-      } catch (error) {
-        setState({ kind: "unavailable", message: describeError(error) });
-      }
-    },
-    [feature, guildId, workspaceId],
+  const { read, data, loading, error } = useAdminRead(
+    guildId ? JSON.stringify(["feature-readiness", workspaceId, guildId]) : null,
+    load,
   );
-
-  useEffect(() => {
-    if (guildId) void load(false);
-  }, [guildId, load]);
+  const state: ReadinessState = loading
+    ? { kind: "loading" }
+    : error
+      ? { kind: "unavailable", message: describeError(error) }
+      : { kind: "ready", checks: data?.[feature] ?? [] };
 
   if (!guildId) return null;
   const troubleshootingHref = buildFeatureTroubleshootingHref(feature, workspaceId, guildId);
@@ -77,7 +73,7 @@ export function FeatureReadiness({
         variant="ghost"
         className="h-8 gap-1"
         disabled={state.kind === "loading" || hasUnsavedChanges}
-        onClick={() => void load(true)}
+        onClick={() => void read?.refresh(() => load(true)).catch(() => undefined)}
       >
         <RefreshIcon className="h-3.5 w-3.5" />
         {state.kind === "loading" ? "Checking…" : "Recheck setup"}

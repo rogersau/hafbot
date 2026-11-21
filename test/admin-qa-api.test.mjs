@@ -3,7 +3,11 @@ import test from "node:test";
 import { build } from "esbuild";
 
 import { commonResponses } from "../scripts/admin-docs/fixtures.mjs";
-import { createApi } from "../scripts/admin-qa/api.mjs";
+import {
+  checkoutSessionId,
+  createApi,
+  createCommerceOnboardingFixture,
+} from "../scripts/admin-qa/api.mjs";
 
 const root = "/admin/api";
 const limits = `${root}/reaction-limits`;
@@ -337,4 +341,42 @@ test("analytics is a recognized POST acknowledgement without mutable GET state",
   assert.deepEqual(response, { status: 202, json: { accepted: true } });
   assert.equal(api.snapshot(`${root}/product-analytics/events`), undefined);
   api.assertNoUnhandled();
+});
+
+test("provider returns persist the synchronized subscription and refreshed seller", async () => {
+  const billing = `${root}/billing`;
+  const commerce = `${root}/commerce`;
+  const seller = createCommerceOnboardingFixture();
+  const api = createApi({ responses: { [commerce]: seller } });
+
+  const invalidCheckout = await request(api, "POST", `${billing}/sync`, {
+    checkoutSessionId: "unknown",
+  });
+  assert.equal(invalidCheckout.status, 400);
+  assert.equal(api.snapshot(billing).subscription, null);
+  const checkout = await request(api, "POST", `${billing}/sync`, { checkoutSessionId });
+  assert.equal(checkout.status, 200);
+  assert.equal(checkout.json.subscription.plan, "premium_plus");
+  assert.deepEqual(
+    (await request(api, "GET", billing)).json.subscription,
+    checkout.json.subscription,
+  );
+
+  const invalidSeller = await request(api, "POST", `${commerce}/seller/refresh`, {
+    guildId: "another-guild",
+  });
+  assert.equal(invalidSeller.status, 400);
+  assert.deepEqual(api.snapshot(commerce), seller);
+  const refresh = await request(api, "POST", `${commerce}/seller/refresh`, {
+    guildId: "docs-guild",
+    workspaceId: "docs-workspace",
+  });
+  assert.equal(refresh.status, 200);
+  const readback = await request(api, "GET", commerce);
+  assert.deepEqual(readback.json.sellerProfile, refresh.json.sellerProfile);
+  assert.equal(readback.json.sellerProfile.lifecycleState, "active");
+  assert.equal(readback.json.dashboard.seller.chargesEnabled, true);
+  api.reset();
+  assert.equal(api.snapshot(billing).subscription, null);
+  assert.deepEqual(api.snapshot(commerce), seller);
 });

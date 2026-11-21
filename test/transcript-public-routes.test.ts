@@ -6,24 +6,14 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createPublicRoutes } from "../src/routes/public-routes";
+import { createPublicWebRoutes } from "./helpers/runtime-endpoint-requests";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { createSqliteTicketTranscriptCapabilityStore } from "./support/sqlite/runtime/sqlite-ticket-transcript-capability-store";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 
-test("public routes serve the customer changelog application", async () => {
-  const routes = createPublicRoutes({ features: ALL_FEATURES_ENABLED });
-
-  const response = await routes(new Request("https://worker.example/changelog"));
-
-  assert.equal(response?.status, 200);
-  assert.equal(response?.headers.get("content-type"), "text/html; charset=utf-8");
-  assert.match((await response?.text()) ?? "", /landing-root/);
-});
-
 test("public routes retire legacy tokenless ticket transcripts", async () => {
   const requestedHtmlKeys: string[] = [];
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     ticketTranscriptBlobs: {
       putHtml: async () => {},
@@ -40,13 +30,13 @@ test("public routes retire legacy tokenless ticket transcripts", async () => {
     new Request("https://worker.example/transcripts/guild-1/channel-1"),
   );
 
-  assert.equal(response, null);
+  assert.equal(response.status, 404);
   assert.deepEqual(requestedHtmlKeys, []);
 });
 
 test("public routes retire legacy tokenless transcript attachments", async () => {
   const requestedAttachmentKeys: string[] = [];
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     ticketTranscriptBlobs: {
       putHtml: async () => {},
@@ -67,13 +57,13 @@ test("public routes retire legacy tokenless transcript attachments", async () =>
     ),
   );
 
-  assert.equal(response, null);
+  assert.equal(response.status, 404);
   assert.deepEqual(requestedAttachmentKeys, []);
 });
 
 test("public routes fail closed for legacy token-in-object-path transcripts", async () => {
   const requestedHtmlKeys: string[] = [];
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     ticketTranscriptBlobs: {
       putHtml: async () => {},
@@ -110,7 +100,7 @@ test("public routes reject an expired transcript capability before reading conte
     retentionExpiresAtMs: 10_000,
   });
   const requestedHtmlKeys: string[] = [];
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     ticketTranscriptCapabilities: capabilities,
     ticketTranscriptBlobs: {
@@ -154,7 +144,7 @@ test("public routes authorize transcript attachments through the parent capabili
     retentionExpiresAtMs: Date.now() + 20_000,
   });
   const requestedAttachmentKeys: string[] = [];
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     ticketTranscriptCapabilities: capabilities,
     ticketTranscriptBlobs: {
@@ -184,19 +174,19 @@ test("public routes authorize transcript attachments through the parent capabili
   try {
     const response = await routes(
       new Request(
-        "https://worker.example/transcripts/guild-1/channel-1/valid-token/media/attachment-1/proof.png",
+        "https://worker.example/transcripts/guild-1/channel-1/valid%2Dtoken/media/attachment-1/proof%20%252F%2Fimage.png",
       ),
     );
 
     assert.equal(response?.status, 200);
     assert.equal(await response?.text(), "image");
     assert.deepEqual(requestedAttachmentKeys, [
-      "guild-1/channel-1/transcript-object-1/attachments/attachment-1/proof.png",
+      "guild-1/channel-1/transcript-object-1/attachments/attachment-1/proof%20%252F%2Fimage.png",
     ]);
     assert.equal(cancelled, 0);
     const head = await routes(
       new Request(
-        "https://worker.example/transcripts/guild-1/channel-1/valid-token/media/attachment-1/proof.png",
+        "https://worker.example/transcripts/guild-1/channel-1/valid%2Dtoken/media/attachment-1/proof%20%252F%2Fimage.png",
         { method: "HEAD" },
       ),
     );
@@ -204,6 +194,16 @@ test("public routes authorize transcript attachments through the parent capabili
     assert.equal(head?.headers.get("content-type"), "image/png");
     assert.equal(head?.body, null);
     assert.equal(cancelled, 1);
+
+    const aliases = [
+      "Transcripts/guild-1/channel-1/valid-token/media/attachment-1/proof.png",
+      "transcripts/guild-1/channel-1/valid-token/%6dedia/attachment-1/proof.png",
+      "transcripts/guild-1/channel-1/valid-token/media/attachment-1/",
+    ];
+    for (const path of aliases) {
+      assert.equal((await routes(new Request(`https://worker.example/${path}`))).status, 404, path);
+    }
+    assert.equal(requestedAttachmentKeys.length, 2);
   } finally {
     database.close();
   }
@@ -228,7 +228,7 @@ test("public routes make revoked transcript and attachment links indistinguishab
     revokedAtMs: nowMs,
   });
   let blobReads = 0;
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     ticketTranscriptCapabilities: capabilities,
     ticketTranscriptBlobs: {
@@ -282,7 +282,7 @@ test("public routes reject capabilities issued for another Guild or channel", as
     retentionExpiresAtMs: Date.now() + 20_000,
   });
   let blobReads = 0;
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     ticketTranscriptCapabilities: capabilities,
     ticketTranscriptBlobs: {
@@ -336,7 +336,7 @@ test("public routes durably limit transcript capability failures", async () => {
       };
     },
   } as unknown as WebhookIngressGuardNamespace;
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     ticketTranscriptAccessGuard: guard,
     ticketTranscriptCapabilities: {
@@ -363,7 +363,7 @@ test("public routes durably limit transcript capability failures", async () => {
 
 test("public ban case webhook route returns accepted empty response", async () => {
   const publicIds: string[] = [];
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     banCaseService: {
       async handleInboundBanWebhook(publicId: string) {
@@ -387,7 +387,7 @@ test("public ban case webhook route returns accepted empty response", async () =
 
 test("webhook proxy GET verification probe returns 200 without reading config", async () => {
   const readCalls: string[] = [];
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     webhookProxyService: {
       async handleInboundWebhook(publicId: string) {
@@ -410,7 +410,7 @@ test("webhook proxy GET verification probe returns 200 without reading config", 
 
 test("webhook proxy HEAD verification probe returns 200 for an unknown path", async () => {
   const readCalls: string[] = [];
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     webhookProxyService: {
       async handleInboundWebhook(publicId: string) {
@@ -433,7 +433,7 @@ test("webhook proxy HEAD verification probe returns 200 for an unknown path", as
 
 test("webhook proxy OPTIONS verification probe returns 204 without reading config", async () => {
   const readCalls: string[] = [];
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     webhookProxyService: {
       async handleInboundWebhook(publicId: string) {
@@ -458,7 +458,7 @@ test("webhook proxy POST preserves retries without exposing source state", async
   let handled = false;
   let limitInvalidSource = false;
   let limitKnownSource = false;
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     webhookIngressGuard: {
       getByName(name: string) {
@@ -556,7 +556,7 @@ test("webhook proxy POST preserves retries without exposing source state", async
 
 test("ban case GET verification probe returns 200 without invoking the service", async () => {
   const publicIds: string[] = [];
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     banCaseService: {
       async handleInboundBanWebhook(publicId: string) {

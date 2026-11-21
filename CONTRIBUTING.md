@@ -3,6 +3,18 @@
 Keep changes focused. Use a clear PR title, briefly explain the problem and the fix, and say how you checked it.
 A few sentences and a validation line are usually enough.
 
+## Web routes
+
+TanStack Start builds the public pages, dashboard, and HTTP endpoints together with
+`pnpm build:web`. Add routes under `src/web/routes`. The Vite plugin generates
+`src/web/routeTree.gen.ts`. For Admin API changes, run `pnpm admin-contract:generate`
+to update the server route files and API contract artifacts before building.
+The Node host serves the built client assets and passes request-scoped services to
+the Start server entry. Keep database clients and secrets in the server context.
+Admin dashboard loaders run in the browser and may run on link preload. Keep
+loaders read-only and process checkout returns after navigation commits. Keep
+shared dashboard reads and UI state in the mounted Admin session.
+
 ## Development
 
 Read [CONTEXT.md](CONTEXT.md) for project terminology. Install dependencies with
@@ -12,6 +24,11 @@ Read [CONTEXT.md](CONTEXT.md) for project terminology. Install dependencies with
 - `pnpm build`, `pnpm typecheck` and `pnpm test`
 - `pnpm docs:build` for documentation changes
 - `pnpm test:postgres` for runtime/database changes, using a disposable local `_test` database
+
+`pnpm build:web` checks the Admin bundle budgets. The initial JavaScript budget of
+675 kB raw and 220 kB gzip covers TanStack Start's hydration runtime and the Admin
+layouts loaded on dashboard entry. See `artifacts/admin-bundle-report.md` for the
+measured initial, route, and interaction sizes.
 
 CI runs the full checks. Use fictional data and your own development Discord identity.
 Preserve Discord authorization, tenant boundaries and secret redaction. Update the current

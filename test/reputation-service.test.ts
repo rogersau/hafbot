@@ -12,7 +12,7 @@ import {
 import { handleReputationInteraction } from "../src/reputation/interaction";
 import type { GuildPermissionContext } from "../src/runtime/admin-permissions";
 import { createReputationAdminRoutes } from "../src/runtime/admin-routes/reputation";
-import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { createReputationRuntime } from "../src/reputation/runtime";
 import { createReputationDiscord } from "../src/reputation/discord";

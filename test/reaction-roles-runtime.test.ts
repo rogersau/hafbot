@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createProductionRuntimeStores } from "./support/production-runtime-stores";
 import { createReactionRolesAdminRoutes } from "../src/runtime/admin-routes/reaction-roles";
-import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { allowAllAdminAccess } from "./helpers/admin-api";
 import { createDiscordReactionRoleOperations } from "../src/discord/reaction-roles";

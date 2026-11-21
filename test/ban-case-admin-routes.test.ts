@@ -10,7 +10,7 @@ import {
   createBanCasesAdminRoutes,
 } from "../src/runtime/admin-routes/ban-cases";
 import type { DiscordChannelResource } from "../src/discord/guilds";
-import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import type { RuntimeStores } from "../src/runtime/app-types";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { allowAllAdminAccess } from "./helpers/admin-api";

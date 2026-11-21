@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-import { createPlatformLinkRoutes } from "../src/routes/platform-link-routes";
+import { createPlatformLinkRoutes } from "./helpers/runtime-endpoint-requests";
 import { createSteamPlatformConfig } from "../src/services/steam-platform-config";
 import { createXboxPlatformConfig } from "../src/services/xbox-platform-config";
 import {

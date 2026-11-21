@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { ImageRulesConfig } from "../../types";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { FormField, SectionHeader, SettingsBlock, AdvancedSection } from "./admin-form-layout";
 import { AdminBottomActionBar, areAdminActionSnapshotsEqual } from "./admin-bottom-action-bar";
 import { ChannelSelect, MultiChannelSelect, MultiRoleSelect } from "./guild-resource-select";
@@ -115,15 +115,20 @@ export function AdminImageRulesPage({
 }) {
   const trimmedGuildId = selectedGuildId.trim();
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Image Rules"
+      description="Classify image attachments against a configured topic and route off-topic uploads."
+      readinessFeature="image-rules"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-settings space-y-6">
-      <AdminPageHeader
-        title="Image Rules"
-        description="Classify image attachments against a configured topic and route off-topic uploads."
-        readinessFeature="image-rules"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId && !(entitlement && entitlement.tier === "free") ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="Image Rules" />
       ) : entitlement && entitlement.tier === "free" ? (
@@ -134,6 +139,7 @@ export function AdminImageRulesPage({
         />
       ) : (
         <ImageRulesEditor
+          renderHeader={renderHeader}
           selectedWorkspaceId={selectedWorkspaceId}
           selectedGuildId={trimmedGuildId}
           initialData={initialData}
@@ -209,11 +215,13 @@ async function postImageRulesConfig(
 }
 
 function ImageRulesEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: ImageRulesLoaderData | null;
@@ -378,7 +386,7 @@ function ImageRulesEditor({
     }
   }
 
-  return (
+  const content = (
     <div className="space-y-5">
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardChanges} />
       <AdminRefreshNotice action="Image Rules" error={refreshError} refresh={onRouteDataRefresh} />
@@ -758,5 +766,12 @@ function ImageRulesEditor({
         ]}
       />
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }

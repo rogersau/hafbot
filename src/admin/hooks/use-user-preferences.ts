@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 
 import { describeError } from "../lib/api";
+import { useAdminRead } from "./use-admin-read";
 import {
   DEFAULT_USER_PREFERENCES,
   type UserPreferences,
@@ -18,65 +19,53 @@ export interface UseUserPreferencesResult {
   loading: boolean;
   error: string | null;
   applyPatch: (patch: UserPreferencesPatch, options?: ApplyUserPreferencesOptions) => Promise<void>;
-  refresh: () => Promise<void>;
 }
 
 export function useUserPreferences(authenticated: boolean): UseUserPreferencesResult {
-  const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_USER_PREFERENCES);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const lastFetchedAtMs = useRef<number>(0);
-
-  const refresh = useCallback(async () => {
-    if (!authenticated) {
-      setPreferences(DEFAULT_USER_PREFERENCES);
-      setError(null);
-      return;
-    }
-
-    setLoading(true);
-    try {
+  const { read, data, loading, error } = useAdminRead(
+    authenticated ? "profile" : null,
+    async () => {
       const { crossCuttingClient } = await import("../generated/admin-client/cross-cutting");
-      const next = await crossCuttingClient.profile({});
-      lastFetchedAtMs.current = Date.now();
-      setPreferences(next);
-      setError(null);
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [authenticated]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+      return crossCuttingClient.profile({});
+    },
+    { shared: true },
+  );
+  const queue = useRef(Promise.resolve());
+  const enqueue = useCallback((action: () => Promise<void>) => {
+    const pending = queue.current.then(action);
+    queue.current = pending.catch(() => undefined);
+    return pending;
+  }, []);
 
   const applyPatch = useCallback(
-    async (patch: UserPreferencesPatch, options?: ApplyUserPreferencesOptions) => {
-      const previous = preferences;
-      const optimistic = applyUserPreferencesPatch(previous, patch);
-      setPreferences(optimistic);
-      setError(null);
+    (patch: UserPreferencesPatch, options?: ApplyUserPreferencesOptions) =>
+      enqueue(async () => {
+        if (!read) return;
+        const previous = read.getSnapshot().data ?? DEFAULT_USER_PREFERENCES;
+        const optimistic = applyUserPreferencesPatch(previous, patch);
+        read.setData(optimistic);
 
-      try {
-        const { crossCuttingClient } = await import("../generated/admin-client/cross-cutting");
-        const next = await crossCuttingClient.saveProfile(patch);
-        setPreferences(next);
-        lastFetchedAtMs.current = Date.now();
-      } catch (err) {
-        setPreferences(previous);
-        const message = describeError(err);
-        setError(message);
-        options?.onError?.(message);
-        return;
-      }
-      options?.onSuccess?.();
-    },
-    [preferences],
+        try {
+          const { crossCuttingClient } = await import("../generated/admin-client/cross-cutting");
+          const next = await crossCuttingClient.saveProfile(patch);
+          read.setData(next);
+        } catch (err) {
+          const message = describeError(err);
+          read.setData(previous, err);
+          options?.onError?.(message);
+          return;
+        }
+        options?.onSuccess?.();
+      }),
+    [enqueue, read],
   );
 
-  return { preferences, loading, error, applyPatch, refresh };
+  return {
+    preferences: data ?? DEFAULT_USER_PREFERENCES,
+    loading,
+    error: error ? describeError(error) : null,
+    applyPatch,
+  };
 }
 
 function applyUserPreferencesPatch(

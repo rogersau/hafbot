@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { isRecord } from "../../unknown-parse";
 import { AdminPageHeader } from "./admin-page-header";
 import { AdminErrorNotice } from "./admin-error-notice";
 import { Button } from "./ui/button";
@@ -9,6 +10,10 @@ import { ConfirmDialog } from "./ui/confirm-dialog";
 import { useToast } from "./toast";
 import { billingClient } from "../generated/admin-client/billing";
 import { reportDashboardMilestone } from "../lib/product-analytics";
+import { useAdminApi } from "../hooks/use-admin-api";
+import { describeError } from "../lib/api";
+import type { BillingRouteData, BillingSectionRead } from "../lib/billing-route-data";
+import { PageFeedback } from "./page-feedback";
 
 type CatalogEntry = {
   priceId: string;
@@ -21,11 +26,6 @@ type DisplayPrice = {
   unitAmount: number;
   currency: string;
   formattedAmount: string;
-};
-type BillingData = {
-  subscription: Subscription | null;
-  catalog: CatalogEntry[];
-  prices: DisplayPrice[];
 };
 type Subscription = {
   priceId: string | null;
@@ -47,109 +47,177 @@ type AssignmentData = {
 };
 type HistoryEvent = { id: string; summaryJson: string; createdAtMs: number };
 
-export function AdminBillingPage() {
-  const requestedPlan = readRequestedPlan();
-  const [data, setData] = useState<BillingData | null>(null);
-  const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "error">("loading");
-  const [loadError, setLoadError] = useState<unknown>(null);
-  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
+export function AdminBillingPage({
+  data,
+  search,
+  hash,
+  checkoutSessionId,
+  committed,
+  onReload,
+  onCheckoutSynced,
+}: {
+  data: BillingRouteData | null | undefined;
+  search: Record<string, unknown>;
+  hash: string;
+  checkoutSessionId: string | null;
+  committed: boolean;
+  onReload: () => Promise<void>;
+  onCheckoutSynced: () => Promise<void>;
+}) {
+  return (
+    <section className="admin-feature-page admin-page-system space-y-6">
+      <AdminPageHeader title="Billing" />
+      {checkoutSessionId ? (
+        <BillingCheckoutReturn
+          key={checkoutSessionId}
+          sessionId={checkoutSessionId}
+          committed={committed}
+          onSynced={onCheckoutSynced}
+        />
+      ) : !data ? (
+        <BillingLoading />
+      ) : data.ok ? (
+        <BillingPlan data={data} search={search} hash={hash} />
+      ) : (
+        <BillingSummaryError error={data.error} onReload={onReload} />
+      )}
+    </section>
+  );
+}
+
+function BillingLoading() {
+  return (
+    <p role="status" className="text-sm text-muted-foreground">
+      Loading Billing…
+    </p>
+  );
+}
+
+function BillingRetry({ retrying, onRetry }: { retrying: boolean; onRetry: () => void }) {
+  return (
+    <Button
+      type="button"
+      loading={retrying}
+      loadingLabel="Retrying Billing…"
+      disabled={retrying}
+      onClick={onRetry}
+    >
+      Retry
+    </Button>
+  );
+}
+
+function BillingSummaryError({
+  error,
+  onReload,
+}: {
+  error: unknown;
+  onReload: () => Promise<void>;
+}) {
+  const inFlight = useRef(false);
+  const [retrying, setRetrying] = useState(false);
+
+  async function retry() {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setRetrying(true);
+    try {
+      await onReload();
+    } finally {
+      inFlight.current = false;
+      setRetrying(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {!retrying ? <AdminErrorNotice error={error} /> : null}
+      <BillingRetry retrying={retrying} onRetry={() => void retry()} />
+    </div>
+  );
+}
+
+function BillingCheckoutReturn({
+  sessionId,
+  committed,
+  onSynced,
+}: {
+  sessionId: string;
+  committed: boolean;
+  onSynced: () => Promise<void>;
+}) {
+  const attempt = useRef<"idle" | "running" | "failed" | "synced">("idle");
+  const [state, setState] = useState<
+    { kind: "loading" | "retrying" } | { kind: "error"; error: unknown }
+  >({ kind: "loading" });
+
+  const sync = useCallback(
+    async (retry: boolean) => {
+      if (!committed || attempt.current === "running" || (!retry && attempt.current !== "idle")) {
+        return;
+      }
+      let synced = attempt.current === "synced";
+      attempt.current = "running";
+      if (retry) setState({ kind: "retrying" });
+      try {
+        if (!synced) {
+          await billingClient.sync({ checkoutSessionId: sessionId });
+          synced = true;
+        }
+        await onSynced();
+      } catch (error) {
+        attempt.current = synced ? "synced" : "failed";
+        setState({ kind: "error", error });
+      }
+    },
+    [committed, onSynced, sessionId],
+  );
+
+  // oxlint-disable-next-line custom/no-use-effect
+  useEffect(() => {
+    void sync(false);
+  }, [sync]);
+
+  if (state.kind === "loading") return <BillingLoading />;
+  return (
+    <div className="space-y-3">
+      {state.kind === "error" ? <AdminErrorNotice error={state.error} /> : null}
+      <BillingRetry retrying={state.kind === "retrying"} onRetry={() => void sync(true)} />
+    </div>
+  );
+}
+
+function BillingPlan({
+  data: { data, assignments, history },
+  search,
+  hash,
+}: {
+  data: Extract<BillingRouteData, { ok: true }>;
+  search: Record<string, unknown>;
+  hash: string;
+}) {
+  const requestedPlan =
+    search.plan === "premium" || search.plan === "premium_plus" ? search.plan : null;
+  const requestedFrequency =
+    search.frequency === "monthly" || search.frequency === "yearly" ? search.frequency : null;
+  const plan = data.subscription?.plan;
+  const [selectedFrequency, setFrequency] = useState<"monthly" | "yearly" | null>(null);
+  const frequency =
+    selectedFrequency ??
+    (!requestedPlan && data.subscription?.plan !== "free" ? data.subscription?.frequency : null) ??
+    requestedFrequency ??
+    "yearly";
   const [pendingPrice, setPendingPrice] = useState<string | null>(null);
   const [portalPending, setPortalPending] = useState(false);
   const [changeTarget, setChangeTarget] = useState<CatalogEntry | null>(null);
-  const [frequency, setFrequency] = useState<"monthly" | "yearly">("yearly");
-  const [assignmentData, setAssignmentData] = useState<AssignmentData | null>(null);
-  const [history, setHistory] = useState<HistoryEvent[]>([]);
-  const [assignmentPending, setAssignmentPending] = useState<{
-    action: "assign" | "unassign" | "move";
-    guildId: string;
-    fromGuildId?: string;
-  } | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<{
-    guildId: string;
-    name: string;
-  } | null>(null);
-  const [moveTarget, setMoveTarget] = useState<{
-    guildId: string;
-    name: string;
-  } | null>(null);
-  const [moveSource, setMoveSource] = useState<string>("");
   const toast = useToast();
-  const loadAttemptRef = useRef<Promise<void> | null>(null);
-
-  const loadBilling = useCallback(async () => {
-    if (loadAttemptRef.current) return loadAttemptRef.current;
-
-    setLoadError(null);
-    setLoadStatus("loading");
-    setAssignmentData(null);
-    setHistory([]);
-
-    const attempt = (async () => {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const requestedFrequency = params.get("frequency");
-        if (requestedFrequency === "monthly" || requestedFrequency === "yearly") {
-          setFrequency(requestedFrequency);
-        }
-        const sessionId = params.get("checkout") === "success" ? params.get("session_id") : null;
-        const value = sessionId
-          ? await billingClient
-              .sync({ checkoutSessionId: sessionId })
-              .then(async ({ subscription }) => {
-                const summary = await billingClient.get({});
-                return { ...summary, subscription };
-              })
-          : await billingClient.get({});
-
-        setData(value);
-        if (value.subscription && value.subscription.plan !== "free") {
-          if (value.subscription.frequency && !requestedPlan)
-            setFrequency(value.subscription.frequency);
-          void billingClient
-            .assignments({})
-            .then(setAssignmentData)
-            .catch(() => undefined);
-        }
-        void billingClient
-          .history({})
-          .then((result) => setHistory(result.events))
-          .catch(() => undefined);
-        setLoadStatus("loaded");
-      } catch (cause: unknown) {
-        setData(null);
-        setLoadError(cause);
-        setLoadStatus("error");
-      } finally {
-        setHasAttemptedLoad(true);
-        loadAttemptRef.current = null;
-      }
-    })();
-
-    loadAttemptRef.current = attempt;
-    return attempt;
-  }, [requestedPlan]);
-
-  // oxlint-disable-next-line custom/no-use-effect
-  useEffect(() => {
-    void loadBilling();
-  }, [loadBilling]);
-
-  // oxlint-disable-next-line custom/no-use-effect
-  useEffect(() => {
-    if (assignmentData && window.location.hash === "#assignments") {
-      document
-        .getElementById("assignments")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [assignmentData]);
 
   async function checkout(priceId: string) {
     setPendingPrice(priceId);
     try {
-      const search = new URLSearchParams(window.location.search);
       void reportDashboardMilestone({
-        guildId: search.get("guildId") ?? "",
-        workspaceId: search.get("workspaceId") ?? undefined,
+        guildId: typeof search.guildId === "string" ? search.guildId : "",
+        workspaceId: typeof search.workspaceId === "string" ? search.workspaceId : undefined,
         action: "upgrade_started",
       }).catch(() => undefined);
       const result = await billingClient.checkout({ priceId, intentId: crypto.randomUUID() });
@@ -158,41 +226,6 @@ export function AdminBillingPage() {
       toast.error(cause instanceof Error ? cause.message : "Checkout could not be started.");
       setPendingPrice(null);
     }
-  }
-
-  async function mutateAssignment(
-    action: "assign" | "unassign" | "move",
-    guildId: string,
-    fromGuildId?: string,
-  ) {
-    if (assignmentPending) return;
-    setAssignmentPending({ action, guildId, fromGuildId });
-    try {
-      const next = await billingClient.mutateAssignments({ action, guildId, fromGuildId });
-      setAssignmentData(next);
-      const source = fromGuildId ? assignmentName(fromGuildId, assignmentData) : null;
-      const target = assignmentName(guildId, assignmentData) ?? guildId;
-      toast.success(buildAssignmentAnnouncement(action, target, source ?? fromGuildId));
-      setRemoveTarget(null);
-      setMoveTarget(null);
-    } catch (cause) {
-      toast.error(
-        cause instanceof Error ? cause.message : "Guild Assignment could not be changed.",
-      );
-    } finally {
-      setAssignmentPending(null);
-    }
-  }
-
-  async function requestRemove(guildId: string, name: string) {
-    if (assignmentPending) return;
-    setRemoveTarget({ guildId, name });
-  }
-
-  function requestMove(guildId: string, name: string, sourceGuildIds: string[]) {
-    if (assignmentPending) return;
-    setMoveTarget({ guildId, name });
-    setMoveSource(sourceGuildIds.length === 1 ? sourceGuildIds[0]! : "");
   }
 
   async function openPortal() {
@@ -222,114 +255,144 @@ export function AdminBillingPage() {
   }
 
   return (
-    <section className="admin-feature-page admin-page-system space-y-6">
-      <AdminPageHeader title="Billing" />
-      {loadStatus === "error" && loadError ? (
-        <div className="space-y-3">
-          <AdminErrorNotice error={loadError} />
-          <Button
-            type="button"
-            loading={false}
-            loadingLabel="Retrying Billing…"
-            disabled={false}
-            onClick={() => void loadBilling()}
-          >
-            Retry
-          </Button>
-        </div>
-      ) : null}
-      {loadStatus === "loading" && !hasAttemptedLoad ? (
-        <p className="text-sm text-muted-foreground">Loading Billing…</p>
-      ) : null}
-      {loadStatus === "loading" && hasAttemptedLoad ? (
-        <Button
-          type="button"
-          loading
-          loadingLabel="Retrying Billing…"
-          disabled
-          onClick={() => void loadBilling()}
-        >
-          Retry
-        </Button>
-      ) : null}
-      {loadStatus === "loaded" && data ? (
-        <>
-          <Card className="overflow-hidden">
-            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1.5">
-                <p className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Current plan
-                </p>
-                <div className="flex items-center gap-2">
-                  <h2 className="font-display text-2xl font-semibold">
-                    {formatPlan(data.subscription?.plan ?? "free")}
-                  </h2>
-                  {data.subscription && data.subscription.plan !== "free" ? (
-                    <Badge>{data.subscription.status}</Badge>
-                  ) : null}
-                </div>
-                {!data.subscription || data.subscription.plan === "free" ? (
-                  <p className="text-sm text-muted-foreground">
-                    Core community tools are active. Upgrade when you need more capacity and
-                    automation.
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-2 sm:text-right">
-                {data.subscription?.frequency ? (
-                  <p className="text-sm capitalize">Billed {data.subscription.frequency}</p>
-                ) : null}
-                {data.subscription?.currentPeriodEndMs ? (
-                  <p className="text-sm">
-                    {data.subscription.cancelAtPeriodEnd ? "Access ends" : "Renews"}:{" "}
-                    {new Date(data.subscription.currentPeriodEndMs).toLocaleDateString()}
-                  </p>
-                ) : null}
-                {data.subscription?.quarantineReason ? (
-                  <p className="text-sm text-destructive">
-                    Billing needs support attention before changes can be made.
-                  </p>
-                ) : null}
-                {data.subscription && data.subscription.plan !== "free" ? (
-                  <div className="flex flex-wrap gap-2 sm:justify-end">
-                    <Button
-                      loading={portalPending}
-                      loadingLabel="Opening Stripe…"
-                      onClick={() => void openPortal()}
-                    >
-                      Manage billing in Stripe
-                    </Button>
-                    <p className="w-full text-xs text-muted-foreground">
-                      Payment methods, invoices and cancellation
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
-          {!data.subscription || data.subscription.plan === "free" ? (
-            <section className="space-y-5" aria-labelledby="choose-plan-title">
-              {requestedPlan ? (
-                <div className="rounded-lg border border-primary/35 bg-primary/5 p-4 text-sm">
-                  <p className="font-semibold">
-                    Your {formatPlan(requestedPlan)} selection is ready
-                  </p>
-                  <p className="mt-1 text-muted-foreground">
-                    Review the plan below, then choose it to continue to secure Stripe checkout.
-                  </p>
-                </div>
+    <>
+      <Card className="overflow-hidden">
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1.5">
+            <p className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Current plan
+            </p>
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-2xl font-semibold">
+                {formatPlan(data.subscription?.plan ?? "free")}
+              </h2>
+              {data.subscription && data.subscription.plan !== "free" ? (
+                <Badge>{data.subscription.status}</Badge>
               ) : null}
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 id="choose-plan-title" className="font-display text-xl font-semibold">
-                    Choose the plan that fits your community
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Upgrade, cancel, or change billing frequency whenever you need to.
-                  </p>
-                </div>
+            </div>
+            {!data.subscription || data.subscription.plan === "free" ? (
+              <p className="text-sm text-muted-foreground">
+                Core community tools are active. Upgrade when you need more capacity and automation.
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-2 sm:text-right">
+            {data.subscription?.frequency ? (
+              <p className="text-sm capitalize">Billed {data.subscription.frequency}</p>
+            ) : null}
+            {data.subscription?.currentPeriodEndMs ? (
+              <p className="text-sm">
+                {data.subscription.cancelAtPeriodEnd ? "Access ends" : "Renews"}:{" "}
+                {new Date(data.subscription.currentPeriodEndMs).toLocaleDateString()}
+              </p>
+            ) : null}
+            {data.subscription?.quarantineReason ? (
+              <p className="text-sm text-destructive">
+                Billing needs support attention before changes can be made.
+              </p>
+            ) : null}
+            {data.subscription && data.subscription.plan !== "free" ? (
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                <Button
+                  loading={portalPending}
+                  loadingLabel="Opening Stripe…"
+                  onClick={() => void openPortal()}
+                >
+                  Manage billing in Stripe
+                </Button>
+                <p className="w-full text-xs text-muted-foreground">
+                  Payment methods, invoices and cancellation
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+      {!data.subscription || data.subscription.plan === "free" ? (
+        <section className="space-y-5" aria-labelledby="choose-plan-title">
+          {requestedPlan ? (
+            <div className="rounded-lg border border-primary/35 bg-primary/5 p-4 text-sm">
+              <p className="font-semibold">Your {formatPlan(requestedPlan)} selection is ready</p>
+              <p className="mt-1 text-muted-foreground">
+                Review the plan below, then choose it to continue to secure Stripe checkout.
+              </p>
+            </div>
+          ) : null}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="choose-plan-title" className="font-display text-xl font-semibold">
+                Choose the plan that fits your community
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Upgrade, cancel, or change billing frequency whenever you need to.
+              </p>
+            </div>
+            <FrequencySelector value={frequency} onChange={setFrequency} />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {(["premium", "premium_plus"] as const).map((plan) => (
+              <PlanCard
+                key={plan}
+                plan={plan}
+                frequency={frequency}
+                catalog={data.catalog}
+                prices={data.prices ?? []}
+                pendingPrice={pendingPrice}
+                requested={requestedPlan === plan}
+                mode="checkout"
+                onSelect={(entry) => void checkout(entry.priceId)}
+              />
+            ))}
+          </div>
+          <p className="text-center text-xs text-muted-foreground">
+            Prices are in AUD. Payments, invoices, and card details are handled securely by Stripe.
+          </p>
+        </section>
+      ) : null}
+      {assignments && plan ? (
+        <Suspense fallback={<p role="status">Loading Guild assignments…</p>}>
+          <BillingSection
+            initial={assignments}
+            load={billingClient.assignments}
+            title="Guild assignments"
+            loadingLabel="Loading Guild assignments…"
+          >
+            {(value) => <BillingAssignments initialData={value} plan={plan} hash={hash} />}
+          </BillingSection>
+        </Suspense>
+      ) : null}
+      {data.subscription && data.subscription.plan !== "free" ? (
+        <details
+          open={requestedPlan ? true : undefined}
+          className="group rounded-lg border bg-card text-card-foreground shadow-xs"
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 marker:hidden">
+            <div className="space-y-1">
+              <h2 className="font-display text-lg font-semibold">Change subscription</h2>
+              <p className="text-sm text-muted-foreground">
+                Compare plans or change your billing frequency.
+              </p>
+            </div>
+            <span className="text-sm font-semibold text-primary group-open:hidden">
+              Show options
+            </span>
+            <span className="hidden text-sm font-semibold text-primary group-open:inline">
+              Hide options
+            </span>
+          </summary>
+          <div className="space-y-5 border-t p-5">
+            {data.catalog.length === 0 ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                Current plan prices are unavailable. Use Manage billing to review invoices, or
+                contact support to check the subscription.
+              </p>
+            ) : null}
+            {data.catalog.length > 0 ? (
+              <div className="flex justify-end">
                 <FrequencySelector value={frequency} onChange={setFrequency} />
               </div>
+            ) : null}
+            {data.catalog.length > 0 ? (
               <div className="grid gap-4 lg:grid-cols-2">
                 {(["premium", "premium_plus"] as const).map((plan) => (
                   <PlanCard
@@ -340,112 +403,30 @@ export function AdminBillingPage() {
                     prices={data.prices ?? []}
                     pendingPrice={pendingPrice}
                     requested={requestedPlan === plan}
-                    mode="checkout"
-                    onSelect={(entry) => void checkout(entry.priceId)}
+                    mode="change"
+                    currentSubscription={data.subscription ?? undefined}
+                    onSelect={setChangeTarget}
                   />
                 ))}
               </div>
-              <p className="text-center text-xs text-muted-foreground">
-                Prices are in AUD. Payments, invoices, and card details are handled securely by
-                Stripe.
-              </p>
-            </section>
-          ) : null}
-          {assignmentData ? (
-            <div id="assignments">
-              <GuildAssignmentsCard
-                data={assignmentData}
-                pending={assignmentPending}
-                onAssign={(guildId) => void mutateAssignment("assign", guildId)}
-                onRemove={requestRemove}
-                onMove={requestMove}
-              />
-            </div>
-          ) : null}
-          {data.subscription && data.subscription.plan !== "free" ? (
-            <details
-              open={requestedPlan ? true : undefined}
-              className="group rounded-lg border bg-card text-card-foreground shadow-xs"
-            >
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 marker:hidden">
-                <div className="space-y-1">
-                  <h2 className="font-display text-lg font-semibold">Change subscription</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Compare plans or change your billing frequency.
-                  </p>
-                </div>
-                <span className="text-sm font-semibold text-primary group-open:hidden">
-                  Show options
-                </span>
-                <span className="hidden text-sm font-semibold text-primary group-open:inline">
-                  Hide options
-                </span>
-              </summary>
-              <div className="space-y-5 border-t p-5">
-                {data.catalog.length === 0 ? (
-                  <p role="status" className="text-sm text-muted-foreground">
-                    Current plan prices are unavailable. Use Manage billing to review invoices, or
-                    contact support to check the subscription.
-                  </p>
-                ) : null}
-                {data.catalog.length > 0 ? (
-                  <div className="flex justify-end">
-                    <FrequencySelector value={frequency} onChange={setFrequency} />
-                  </div>
-                ) : null}
-                {data.catalog.length > 0 ? (
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    {(["premium", "premium_plus"] as const).map((plan) => (
-                      <PlanCard
-                        key={plan}
-                        plan={plan}
-                        frequency={frequency}
-                        catalog={data.catalog}
-                        prices={data.prices ?? []}
-                        pendingPrice={pendingPrice}
-                        requested={requestedPlan === plan}
-                        mode="change"
-                        currentSubscription={data.subscription ?? undefined}
-                        onSelect={setChangeTarget}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-                <p className="text-center text-xs text-muted-foreground">
-                  Confirmed changes are applied through Stripe, then Stripe opens so you can review
-                  billing and invoices.
-                </p>
-              </div>
-            </details>
-          ) : null}
-          {history.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent billing activity</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {history.map((event) => {
-                  const presentation = presentBillingHistory(event);
-                  return (
-                    <div key={event.id} className="border-b pb-3 text-sm last:border-b-0">
-                      <p className="font-medium">{presentation.title}</p>
-                      <p className="text-muted-foreground">{presentation.detail}</p>
-                      {presentation.requiredAction ? (
-                        <p>
-                          {presentation.requiredAction} ·{" "}
-                          <a className="underline" href={presentation.billingPath}>
-                            Review billing
-                          </a>
-                        </p>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          ) : null}
-        </>
+            ) : null}
+            <p className="text-center text-xs text-muted-foreground">
+              Confirmed changes are applied through Stripe, then Stripe opens so you can review
+              billing and invoices.
+            </p>
+          </div>
+        </details>
       ) : null}
+      <Suspense fallback={<p role="status">Loading billing activity…</p>}>
+        <BillingSection
+          initial={history}
+          load={billingClient.history}
+          title="Recent billing activity"
+          loadingLabel="Loading billing activity…"
+        >
+          {({ events }) => <BillingHistory history={events} />}
+        </BillingSection>
+      </Suspense>
       <ConfirmDialog
         open={Boolean(changeTarget)}
         onOpenChange={(open) => {
@@ -472,6 +453,125 @@ export function AdminBillingPage() {
           />
         ) : null}
       </ConfirmDialog>
+    </>
+  );
+}
+
+function BillingSection<T>({
+  initial,
+  load,
+  title,
+  loadingLabel,
+  children,
+}: {
+  initial: BillingSectionRead<T>;
+  load: (query: Record<string, never>) => Promise<T>;
+  title: string;
+  loadingLabel: string;
+  children: (value: T) => ReactNode;
+}) {
+  const routeResult = use(initial);
+  const [replacement, setReplacement] = useState<{ source: BillingSectionRead<T>; data: T } | null>(
+    null,
+  );
+  const { run, loading, error } = useAdminApi();
+  const result =
+    replacement?.source === initial ? { ok: true as const, data: replacement.data } : routeResult;
+
+  if (result.ok) return children(result.data);
+  if (loading) return <p role="status">{loadingLabel}</p>;
+
+  return (
+    <BillingSectionError
+      title={title}
+      error={error ?? describeError(result.error)}
+      onRetry={() =>
+        run(
+          () => load({}),
+          (next) => setReplacement({ source: initial, data: next }),
+        )
+      }
+    />
+  );
+}
+
+function BillingAssignments({
+  initialData,
+  plan,
+  hash,
+}: {
+  initialData: AssignmentData;
+  plan: Subscription["plan"];
+  hash: string;
+}) {
+  const [assignmentUpdate, setAssignmentUpdate] = useState<{
+    source: AssignmentData;
+    data: AssignmentData;
+  } | null>(null);
+  const assignmentData =
+    assignmentUpdate?.source === initialData ? assignmentUpdate.data : initialData;
+  const [assignmentPending, setAssignmentPending] = useState<{
+    action: "assign" | "unassign" | "move";
+    guildId: string;
+    fromGuildId?: string;
+  } | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<{
+    guildId: string;
+    name: string;
+  } | null>(null);
+  const [moveTarget, setMoveTarget] = useState<{
+    guildId: string;
+    name: string;
+  } | null>(null);
+  const [moveSource, setMoveSource] = useState<string>("");
+  const toast = useToast();
+
+  async function mutateAssignment(
+    action: "assign" | "unassign" | "move",
+    guildId: string,
+    fromGuildId?: string,
+  ) {
+    if (assignmentPending) return;
+    setAssignmentPending({ action, guildId, fromGuildId });
+    try {
+      const next = await billingClient.mutateAssignments({ action, guildId, fromGuildId });
+      setAssignmentUpdate({ source: initialData, data: next });
+      const source = fromGuildId ? assignmentName(fromGuildId, assignmentData) : null;
+      const target = assignmentName(guildId, assignmentData) ?? guildId;
+      toast.success(buildAssignmentAnnouncement(action, target, source ?? fromGuildId));
+      setRemoveTarget(null);
+      setMoveTarget(null);
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "Guild Assignment could not be changed.",
+      );
+    } finally {
+      setAssignmentPending(null);
+    }
+  }
+
+  async function requestRemove(guildId: string, name: string) {
+    if (assignmentPending) return;
+    setRemoveTarget({ guildId, name });
+  }
+
+  function requestMove(guildId: string, name: string, sourceGuildIds: string[]) {
+    if (assignmentPending) return;
+    setMoveTarget({ guildId, name });
+    setMoveSource(sourceGuildIds.length === 1 ? sourceGuildIds[0]! : "");
+  }
+
+  return (
+    <>
+      <div id="assignments" ref={hash === "assignments" ? scrollToAssignments : undefined}>
+        <GuildAssignmentsCard
+          data={assignmentData}
+          pending={assignmentPending}
+          onAssign={(guildId) => void mutateAssignment("assign", guildId)}
+          onRemove={requestRemove}
+          onMove={requestMove}
+        />
+      </div>
       <ConfirmDialog
         open={Boolean(removeTarget)}
         onOpenChange={(open) => {
@@ -479,9 +579,7 @@ export function AdminBillingPage() {
         }}
         title="Remove paid access?"
         description={
-          removeTarget && data?.subscription
-            ? `${removeTarget.name} will lose ${formatPlan(data.subscription.plan)} access.`
-            : undefined
+          removeTarget ? `${removeTarget.name} will lose ${formatPlan(plan)} access.` : undefined
         }
         cancelLabel="Keep access"
         confirmLabel="Remove access"
@@ -516,7 +614,7 @@ export function AdminBillingPage() {
             void mutateAssignment("move", moveTarget.guildId, moveSource);
         }}
       >
-        {assignmentData && requiresExplicitMoveSource(assignmentData.assignments.length) ? (
+        {requiresExplicitMoveSource(assignmentData.assignments.length) ? (
           <label className="block space-y-2">
             <span className="font-medium">Guild losing access</span>
             <select
@@ -539,7 +637,65 @@ export function AdminBillingPage() {
           deleted. This change takes effect immediately.
         </p>
       </ConfirmDialog>
-    </section>
+    </>
+  );
+}
+
+function scrollToAssignments(element: HTMLDivElement | null) {
+  element?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+}
+
+function BillingHistory({ history }: { history: HistoryEvent[] }) {
+  if (history.length === 0) return null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Recent billing activity</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {history.map((event) => {
+          const presentation = presentBillingHistory(event);
+          return (
+            <div key={event.id} className="border-b pb-3 text-sm last:border-b-0">
+              <p className="font-medium">{presentation.title}</p>
+              <p className="text-muted-foreground">{presentation.detail}</p>
+              {presentation.requiredAction ? (
+                <p>
+                  {presentation.requiredAction} ·{" "}
+                  <a className="underline" href={presentation.billingPath}>
+                    Review billing
+                  </a>
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function BillingSectionError({
+  title,
+  error,
+  onRetry,
+}: {
+  title: string;
+  error: string;
+  onRetry: () => Promise<void>;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <PageFeedback error={error} />
+        <Button type="button" variant="outline" onClick={() => void onRetry()}>
+          Retry {title.toLowerCase()}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -554,18 +710,17 @@ export function presentBillingHistory(event: HistoryEvent): {
   requiredAction: string | null;
   billingPath: string;
 } {
-  let summary: {
-    summary?: string;
-    resultingAccess?: string;
-    requiredAction?: string | null;
-    billingPath?: string;
-  } = {};
+  let decoded: unknown;
   try {
-    summary = JSON.parse(event.summaryJson) as typeof summary;
+    decoded = JSON.parse(event.summaryJson);
   } catch {
-    // An older malformed summary remains auditable without breaking the customer page.
+    decoded = null;
   }
-  const kind = summary.summary?.trim().toLowerCase().replaceAll("_", " ") ?? "";
+  const summary = isRecord(decoded) ? decoded : {};
+  const kind =
+    typeof summary.summary === "string"
+      ? summary.summary.trim().toLowerCase().replaceAll("_", " ")
+      : "";
   const plan = formatHistoryPlan(summary.resultingAccess);
   const date = new Date(event.createdAtMs).toLocaleDateString("en-AU", {
     day: "numeric",
@@ -614,12 +769,12 @@ export function presentBillingHistory(event: HistoryEvent): {
                     };
   return {
     ...copy,
-    requiredAction: summary.requiredAction ?? null,
-    billingPath: summary.billingPath ?? "/admin/billing",
+    requiredAction: typeof summary.requiredAction === "string" ? summary.requiredAction : null,
+    billingPath: typeof summary.billingPath === "string" ? summary.billingPath : "/admin/billing",
   };
 }
 
-function formatHistoryPlan(value: string | undefined): string {
+function formatHistoryPlan(value: unknown): string {
   if (value === "premium_plus") return "Premium Plus";
   if (value === "premium") return "Premium";
   return "Free";
@@ -905,12 +1060,6 @@ function PlanCard({
       </CardContent>
     </Card>
   );
-}
-
-function readRequestedPlan(): "premium" | "premium_plus" | null {
-  if (typeof window === "undefined") return null;
-  const plan = new URLSearchParams(window.location.search).get("plan");
-  return plan === "premium" || plan === "premium_plus" ? plan : null;
 }
 
 function ChangeReview({

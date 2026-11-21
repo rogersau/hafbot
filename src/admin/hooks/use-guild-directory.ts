@@ -1,62 +1,28 @@
-import { useAdminApi } from "./use-admin-api";
-import { useCallback, useEffect, useState } from "react";
-import type {
-  AdminGuildDirectoryEntry,
-  AdminGuildDirectoryResponse,
-} from "../../runtime/admin-types";
+import { useCallback } from "react";
 import { describeError } from "../lib/api";
+import { useAdminRead } from "./use-admin-read";
 
-interface UseGuildDirectoryResult {
-  guildDirectory: AdminGuildDirectoryEntry[] | null;
-  guildLookupError: string | null;
-  loadGuildDirectory: (refreshDiscordCache?: boolean) => Promise<AdminGuildDirectoryResponse>;
-  refreshGuildDirectory: () => Promise<void>;
+async function loadGuildDirectory(workspaceId: string, refresh = false) {
+  const { crossCuttingClient } = await import("../generated/admin-client/cross-cutting");
+  return crossCuttingClient.guildDirectory({
+    workspaceId: workspaceId || undefined,
+    refresh: refresh ? "1" : undefined,
+  });
 }
 
-export function useGuildDirectory(
-  enabled: boolean,
-  selectedWorkspaceId: string,
-): UseGuildDirectoryResult {
-  const [guildDirectory, setGuildDirectory] = useState<AdminGuildDirectoryEntry[] | null>(null);
-  const { run, cancel, error: guildLookupError, setError } = useAdminApi();
-
-  const loadGuildDirectory = useCallback(
-    async (refreshDiscordCache = false) => {
-      const { crossCuttingClient } = await import("../generated/admin-client/cross-cutting");
-      return crossCuttingClient.guildDirectory({
-        workspaceId: selectedWorkspaceId || undefined,
-        refresh: refreshDiscordCache ? "1" : undefined,
-      });
-    },
-    [selectedWorkspaceId],
+export function useGuildDirectory(enabled: boolean, workspaceId: string) {
+  const { read, data, error } = useAdminRead(
+    enabled ? JSON.stringify(["guild-directory", workspaceId]) : null,
+    () => loadGuildDirectory(workspaceId),
+    { shared: true, revalidate: true },
   );
-
-  useEffect(() => {
-    if (!enabled) {
-      setGuildDirectory(null);
-      cancel();
-      setError(null);
-      return;
-    }
-
-    void run(
-      loadGuildDirectory,
-      (response) => setGuildDirectory(response.guilds),
-      (error) => {
-        setGuildDirectory(null);
-        setError(describeError(new Error(error)));
-      },
-    );
-    return cancel;
-  }, [enabled, loadGuildDirectory, run, cancel, setError]);
-
   const refreshGuildDirectory = useCallback(async () => {
-    await run(
-      () => loadGuildDirectory(true),
-      (response) => setGuildDirectory(response.guilds),
-      (error) => setError(describeError(new Error(error))),
-    );
-  }, [loadGuildDirectory, run, setError]);
+    await read?.refresh(() => loadGuildDirectory(workspaceId, true)).catch(() => undefined);
+  }, [read, workspaceId]);
 
-  return { guildDirectory, guildLookupError, loadGuildDirectory, refreshGuildDirectory };
+  return {
+    guildDirectory: data?.guilds ?? null,
+    guildLookupError: error ? describeError(error) : null,
+    refreshGuildDirectory,
+  };
 }

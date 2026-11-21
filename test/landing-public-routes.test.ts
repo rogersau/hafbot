@@ -6,12 +6,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-import { createPublicRoutes } from "../src/routes/public-routes";
-import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
+import { createPublicWeb } from "./helpers/public-web";
 import type { ProductAnalyticsEvent } from "../src/product-analytics";
 
 test("home response exposes the launch content and discovery metadata without JavaScript", async () => {
-  const routes = createPublicRoutes({ features: ALL_FEATURES_ENABLED });
+  const routes = createPublicWeb();
 
   const response = await routes(new Request("https://hafbot.xyz/"));
   const html = (await response?.text()) ?? "";
@@ -31,15 +30,57 @@ test("home response exposes the launch content and discovery metadata without Ja
   assert.match(html, /"@type":"FAQPage"/);
   assert.match(html, /href="\/admin"[^>]*>Login<\/a>/);
   assert.match(html, /href="\/install"[^>]*>Install/);
-  assert.match(html, /href="\/changelog"[^>]*>What's New<\/a>/);
+  const dom = new JSDOM(html);
+  try {
+    assert.equal(
+      dom.window.document.querySelector('a[href="/changelog"]')?.textContent,
+      "What's New",
+    );
+  } finally {
+    dom.window.close();
+  }
   assert.equal([...html.matchAll(/<h1(?:\s|>)/g)].length, 1);
   assert.match(html, /What happens if I cancel\?/);
   assert.match(html, /href="https:\/\/docs\.hafbot\.xyz\/features\/image-rules"/);
 });
 
+test("public documents keep their security headers and nonce all hydration scripts", async () => {
+  const routes = createPublicWeb();
+  for (const path of ["/", "/changelog"]) {
+    const response = await routes(new Request(`https://hafbot.xyz${path}`));
+    const csp = response.headers.get("content-security-policy") ?? "";
+    const scriptSources = /(?:^|; )script-src ([^;]+)/.exec(csp)?.[1] ?? "";
+    assert.match(scriptSources, /'nonce-landingtest'/);
+    assert.match(scriptSources, /'self'/);
+    assert.doesNotMatch(scriptSources, /unsafe-inline/);
+    assert.equal(response.headers.get("x-frame-options"), "DENY");
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(
+      response.headers.get("cache-control"),
+      "public, max-age=60, stale-while-revalidate=300",
+    );
+    assert.equal(
+      response.headers.get("strict-transport-security"),
+      "max-age=31536000; includeSubDomains",
+    );
+    assert.equal(response.headers.get("set-cookie"), null);
+    const dom = new JSDOM(await response.text());
+    try {
+      const document = dom.window.document;
+      assert.equal(document.documentElement.lang, "en-AU");
+      assert.ok(document.querySelector('script[type="module"]'));
+      for (const script of document.querySelectorAll("script")) {
+        assert.equal(script.getAttribute("nonce"), "landingtest");
+      }
+    } finally {
+      dom.window.close();
+    }
+  }
+});
+
 test("home response renders the same Stripe catalogue values into plans and structured offers", async () => {
-  const routes = createPublicRoutes({
-    features: ALL_FEATURES_ENABLED,
+  const routes = createPublicWeb({
     landingPriceCatalog: {
       read: async () => [
         {
@@ -105,8 +146,7 @@ test("home response renders the same Stripe catalogue values into plans and stru
 });
 
 test("home response fails honestly when no valid Stripe catalogue is available", async () => {
-  const routes = createPublicRoutes({
-    features: ALL_FEATURES_ENABLED,
+  const routes = createPublicWeb({
     landingPriceCatalog: { read: async () => null },
   });
 
@@ -122,7 +162,7 @@ test("home response fails honestly when no valid Stripe catalogue is available",
 });
 
 test("home response has coherent accessible tab and landmark semantics", async () => {
-  const routes = createPublicRoutes({ features: ALL_FEATURES_ENABLED });
+  const routes = createPublicWeb();
   const html = (await (await routes(new Request("https://hafbot.xyz/")))?.text()) ?? "";
   const document = new JSDOM(html).window.document;
   const ids = [...document.querySelectorAll<HTMLElement>("[id]")].map((element) => element.id);
@@ -138,7 +178,7 @@ test("home response has coherent accessible tab and landmark semantics", async (
 });
 
 test("home Discord preview exposes each community workflow as a selectable Discord embed", async () => {
-  const routes = createPublicRoutes({ features: ALL_FEATURES_ENABLED });
+  const routes = createPublicWeb();
   const html = (await (await routes(new Request("https://hafbot.xyz/")))?.text()) ?? "";
   const document = new JSDOM(html).window.document;
   const expectedChannels = [
@@ -170,7 +210,7 @@ test("home Discord preview exposes each community workflow as a selectable Disco
   const auditText = document.querySelector('[data-panel="audit-log"]')?.textContent ?? "";
   assert.match(auditText, /Image Rules Mod Queue Action/);
   assert.match(auditText, /Author[\s\S]+Channel[\s\S]+Message ID/);
-  assert.match(auditText, /Member Verified[\s\S]+User[\s\S]+Context/);
+  assert.match(auditText, /Member Verified[\s\S]*User[\s\S]+Context/);
   assert.equal(
     document.querySelectorAll('[data-panel="audit-log"] .embed-fields.single-column').length,
     3,
@@ -191,7 +231,7 @@ test("home Discord preview exposes each community workflow as a selectable Disco
 });
 
 test("public discovery documents point crawlers at the canonical product sources", async () => {
-  const routes = createPublicRoutes({ features: ALL_FEATURES_ENABLED });
+  const routes = createPublicWeb();
 
   const robots = await routes(new Request("https://hafbot.xyz/robots.txt"));
   const sitemap = await routes(new Request("https://hafbot.xyz/sitemap.xml"));
@@ -212,8 +252,7 @@ test("public discovery documents point crawlers at the canonical product sources
 
 test("public HTML and install routes emit bounded events without affecting responses", async () => {
   const events: ProductAnalyticsEvent[] = [];
-  const routes = createPublicRoutes({
-    features: ALL_FEATURES_ENABLED,
+  const routes = createPublicWeb({
     discordApplicationId: "123456789012345678",
     productAnalytics: { report: async (event) => void events.push(event) },
   });
@@ -253,8 +292,7 @@ test("public HTML and install routes emit bounded events without affecting respo
 
 test("public page views honor privacy signals and exclude crawlers", async () => {
   const events: ProductAnalyticsEvent[] = [];
-  const routes = createPublicRoutes({
-    features: ALL_FEATURES_ENABLED,
+  const routes = createPublicWeb({
     productAnalytics: { report: async (event) => void events.push(event) },
   });
 
@@ -269,7 +307,7 @@ test("public page views honor privacy signals and exclude crawlers", async () =>
 
 function readStructuredData(html: string): StructuredData {
   return JSON.parse(
-    /<script id="landing-structured-data" type="application\/ld\+json">([^<]+)<\/script>/.exec(
+    /<script id="landing-structured-data" type="application\/ld\+json"[^>]*>([^<]+)<\/script>/.exec(
       html,
     )?.[1] ?? "{}",
   ) as StructuredData;

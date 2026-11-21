@@ -38,7 +38,7 @@ import {
 import { copyTextToClipboard } from "../lib/clipboard";
 import { useToast } from "./toast";
 import { useConfirmDialog } from "./ui/confirm-dialog";
-import { refreshAdminRouteData } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 
 export function AdminClansPage({
   selectedWorkspaceId,
@@ -129,6 +129,7 @@ function ClanManagementEditor({
     selectedGuildId,
   );
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { dialog: confirmDialog, confirm } = useConfirmDialog();
   const hasUnsavedChanges = !areAdminActionSnapshotsEqual(config, savedConfig);
   const configBusy = saving || publishing || settingUp;
@@ -139,7 +140,6 @@ function ClanManagementEditor({
   }
 
   async function refreshRouteData() {
-    // Route invalidation remounts this editor. Local responses already reconcile its data.
     if (
       !onRouteDataRefresh ||
       !areAdminActionSnapshotsEqual(configRef.current, savedConfigRef.current)
@@ -154,11 +154,9 @@ function ClanManagementEditor({
   }
 
   function acceptSavedConfig(next: ClanManagementConfig, baseline = savedConfigRef.current) {
-    // A review refresh can finish after a newer configuration save.
     if (next.updatedAtMs < savedConfigRef.current.updatedAtMs) return;
     const current = configRef.current;
     const merged = { ...next };
-    // Only replace fields that have not been edited since this operation's baseline.
     for (const key of Object.keys(current) as Array<keyof ClanManagementConfig>) {
       if (key === "updatedAtMs") continue;
       if (!areAdminActionSnapshotsEqual(current[key], baseline[key])) {
@@ -385,9 +383,7 @@ function ClanManagementEditor({
           acceptSavedConfig(latest.config);
           const latestRequest = latest.requests.find((item) => item.id === request.id);
           if (latestRequest) setReviewRequest(latestRequest);
-        } catch {
-          // Keep the original request visible when refreshing the latest revision is unavailable.
-        }
+        } catch {}
         setReviewError(
           "This request changed while you were reviewing it. The latest revision is shown; verify it before submitting. Your entered reason is still here.",
         );

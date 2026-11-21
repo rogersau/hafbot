@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   SUGGESTION_STATUSES,
   isTerminalSuggestionStatus,
@@ -14,7 +14,7 @@ import type { SuggestionsLoaderData } from "../lib/admin-route-loaders";
 import { AdminApiError, parseAdminApiError, readResponseError } from "../lib/api";
 import { AdminErrorNotice } from "./admin-error-notice";
 import { copyTextToClipboard } from "../lib/clipboard";
-import { loadGuildResources, type GuildResources } from "../lib/guild-resources-cache";
+import { useGuildResources } from "../hooks/use-guild-resources";
 import { adminRefreshWarning, reconcileAdminMutation } from "../lib/mutation-reconciliation";
 import { AdminPageHeader } from "./admin-page-header";
 import { AdminRefreshNotice } from "./admin-refresh-notice";
@@ -99,6 +99,10 @@ export function AdminSuggestionsPage({
   );
 }
 
+function compareSuggestionVersions(a: Suggestion, b: Suggestion): number {
+  return a.revision - b.revision || a.updatedAtMs - b.updatedAtMs;
+}
+
 function SuggestionsEditor({
   workspaceId,
   guildId,
@@ -115,16 +119,30 @@ function SuggestionsEditor({
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [promptErrors, setPromptErrors] = useState<Record<number, string>>({});
-  const [resources, setResources] = useState<GuildResources | null>(null);
-  const [resourceError, setResourceError] = useState<string | null>(null);
-  const [resourceAttempt, setResourceAttempt] = useState(0);
+  const {
+    resources,
+    error: resourcesError,
+    refresh: refreshResources,
+  } = useGuildResources(workspaceId, guildId);
+  const resourceError = resourcesError instanceof Error ? resourcesError.message : null;
   const [categoryDraft, setCategoryDraft] = useState("");
   const categoryOriginalsRef = useRef(new Map<number, string>());
   const [categoryValidation, setCategoryValidation] = useState<{
     index: number;
     message: string;
   } | null>(null);
-  const [suggestions, setSuggestions] = useState(initialData.suggestions);
+  const loaderSuggestions = initialData.suggestions;
+  const [confirmedSuggestions, setConfirmedSuggestions] = useState(
+    () => new Map<string, { suggestion: Suggestion; source: Suggestion[] }>(),
+  );
+  const suggestions = loaderSuggestions.map((row) => {
+    const confirmed = confirmedSuggestions.get(row.id);
+    if (!confirmed) return row;
+    const order = compareSuggestionVersions(confirmed.suggestion, row);
+    return order > 0 || (order === 0 && confirmed.source === loaderSuggestions)
+      ? confirmed.suggestion
+      : row;
+  });
   const [transitionDraft, setTransitionDraft] = useState<TransitionDraft | null>(null);
   const [transitionPendingId, setTransitionPendingId] = useState<string | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
@@ -140,30 +158,16 @@ function SuggestionsEditor({
   const { dialog: confirmDialog, confirm } = useConfirmDialog();
   const toast = useToast();
 
-  useEffect(() => {
-    let active = true;
-    setResourceError(null);
-    void loadGuildResources(workspaceId, guildId)
-      .then((value) => {
-        if (active) setResources(value);
-      })
-      .catch((cause) => {
-        if (active) {
-          setResourceError(
-            cause instanceof Error ? cause.message : "Discord resources could not be loaded.",
-          );
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [guildId, workspaceId, resourceAttempt]);
-
   const hasUnsavedChanges = !areAdminActionSnapshotsEqual(config, savedConfig);
 
-  useEffect(() => {
-    setSuggestions(initialData.suggestions);
-  }, [initialData.suggestions]);
+  function recordConfirmedSuggestion(suggestion: Suggestion) {
+    setConfirmedSuggestions((current) => {
+      const previous = current.get(suggestion.id);
+      if (previous && compareSuggestionVersions(previous.suggestion, suggestion) > 0)
+        return current;
+      return new Map(current).set(suggestion.id, { suggestion, source: loaderSuggestions });
+    });
+  }
 
   function discardChanges() {
     setConfig(savedConfig);
@@ -308,9 +312,7 @@ function SuggestionsEditor({
         setCategoryValidation(null);
       }
       if (value.suggestion) {
-        setSuggestions((current) =>
-          current.map((item) => (item.id === value.suggestion?.id ? value.suggestion : item)),
-        );
+        recordConfirmedSuggestion(value.suggestion);
       }
       toast.success("Suggestions updated.");
       await reconcileRefresh("Suggestions update");
@@ -387,9 +389,7 @@ function SuggestionsEditor({
           await readResponseError(response, "Suggestion status could not be changed."),
         );
       const value = (await response.json()) as { suggestion: Suggestion };
-      setSuggestions((current) =>
-        current.map((item) => (item.id === value.suggestion.id ? value.suggestion : item)),
-      );
+      recordConfirmedSuggestion(value.suggestion);
       toast.success(`Suggestion moved to ${humanize(value.suggestion.status)}.`);
       setTransitionDraft(null);
       restoreSuggestionFocus(suggestion.id);
@@ -490,7 +490,7 @@ function SuggestionsEditor({
           <Button
             className="mt-2"
             variant="outline"
-            onClick={() => setResourceAttempt((v) => v + 1)}
+            onClick={() => void refreshResources().catch(() => undefined)}
           >
             Retry
           </Button>

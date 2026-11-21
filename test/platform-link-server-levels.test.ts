@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test, { type TestContext } from "node:test";
 import { DiscordApiError, isDiscordRateLimitError } from "../src/discord/client";
-import { createPlatformLinkRoutes } from "../src/routes/platform-link-routes";
+import { createPlatformLinkRoutes } from "./helpers/runtime-endpoint-requests";
 import { createServiceFactory } from "../src/runtime/service-factory";
 import { handleSteamManualLinkCommand } from "../src/runtime/steam-link-interaction-handler";
 import { ServerLevelProcessor } from "../src/server-levels/processor";

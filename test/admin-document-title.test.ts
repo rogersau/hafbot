@@ -1,10 +1,11 @@
-/// <reference types="node/assert" />
-/// <reference types="node/assert/strict" />
-
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createElement } from "react";
 
 import { buildAdminDocumentTitle } from "../src/admin/lib/admin-document-title";
+import type { AdminRouterContext } from "../src/admin/routes/context";
+import { AdminRouteContextProvider } from "../src/admin/routes/page-context";
+import { withAdminDom } from "./support/admin-dom";
 
 const guildDirectory = [
   {
@@ -69,4 +70,30 @@ test("buildAdminDocumentTitle never exposes an unresolved raw Guild ID", () => {
 
   assert.equal(title, "LFG | HAF Bot");
   assert.doesNotMatch(title, /123456789012345678/);
+});
+
+test("Admin updates the existing browser title when the guild name becomes available", async () => {
+  await withAdminDom(async ({ render }) => {
+    document.title = "Admin";
+    const originalTitle = document.head.querySelector("title");
+    assert.ok(originalTitle);
+    const show = (directory: typeof guildDirectory | null) =>
+      render(
+        createElement(AdminRouteContextProvider, {
+          value: {
+            currentPath: "/admin/guild-1/lfg",
+            selectedGuildId: "guild-1",
+            pathGuildId: "guild-1",
+            guildDirectory: directory,
+          } as AdminRouterContext,
+          children: null,
+        }),
+      );
+    await show(null);
+    assert.equal(document.title, "LFG | HAF Bot");
+    await show(guildDirectory);
+    assert.equal(document.title, "LFG · My Server | HAF Bot");
+    assert.equal(document.head.querySelectorAll("title").length, 1);
+    assert.equal(document.head.querySelector("title"), originalTitle);
+  });
 });

@@ -1,54 +1,17 @@
-import { useEffect, useState } from "react";
-
-import { type GuildResources, loadGuildResources } from "../lib/guild-resources-cache";
+import { useOptionalAdminSession } from "../lib/admin-session";
+import { getGuildResourcesRequest } from "../lib/guild-resources-cache";
+import { useAdminReadSnapshot } from "./use-admin-read";
 
 export function useGuildResources(workspaceId: string, guildId: string, path?: string) {
-  const [resources, setResources] = useState<GuildResources | null>(null);
-  const [loading, setLoading] = useState(false);
+  const cache = useOptionalAdminSession()?.guildResourcesCache;
+  const request = guildId.trim()
+    ? getGuildResourcesRequest(workspaceId, guildId, { path, cache })
+    : null;
+  const { data, loading, error } = useAdminReadSnapshot(request?.read ?? null);
 
-  useEffect(() => {
-    const trimmedGuildId = guildId.trim();
-    if (!trimmedGuildId) {
-      setResources(null);
-      return;
-    }
+  return { resources: data, loading, error, refresh: request?.refresh ?? noResources };
+}
 
-    let cancelled = false;
-    setLoading(true);
-
-    void (async () => {
-      try {
-        const nextResources = await loadGuildResources(workspaceId, trimmedGuildId, { path });
-        if (!cancelled) setResources(nextResources);
-      } catch {
-        if (!cancelled) setResources(null);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId, guildId, path]);
-
-  async function refresh() {
-    const trimmedGuildId = guildId.trim();
-    if (!trimmedGuildId) return null;
-    setLoading(true);
-    try {
-      const nextResources = await loadGuildResources(workspaceId, trimmedGuildId, {
-        path,
-        refresh: true,
-      });
-      setResources(nextResources);
-      return nextResources;
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return { resources, loading, refresh };
+async function noResources() {
+  return null;
 }

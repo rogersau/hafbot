@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { checkoutSessionId, createCommerceOnboardingFixture } from "./api.mjs";
 
 // These scenarios exercise the compiled browser client against fictional, stateful
 // responses. Workspace roles are fixture inputs, not proof of backend authorization.
@@ -10,6 +11,10 @@ const LFG = `/admin/${GUILD}/lfg?workspaceId=${WORKSPACE}`;
 const REACTION_READ = "/admin/api/reaction-limits";
 const REACTION_WRITE = "/admin/api/reaction-limits/config";
 const LFG_WRITE = "/admin/api/lfg/config";
+const BILLING_READ = "/admin/api/billing";
+const BILLING_SYNC = `${BILLING_READ}/sync`;
+const COMMERCE_READ = "/admin/api/commerce";
+const COMMERCE_REFRESH = `${COMMERCE_READ}/seller/refresh`;
 
 const overviewScenarios = ["free", "premium"].flatMap((tier) =>
   ["owner", "member"].map((role) => ({
@@ -100,6 +105,7 @@ export const scenarios = [
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
       await expect(dialog.getByRole("combobox")).toBeFocused();
+      await dialog.getByRole("combobox").fill("Tickets");
       await page.keyboard.press("Escape");
       await expect(dialog).toHaveCount(0);
       await expect(trigger).toBeFocused();
@@ -115,6 +121,7 @@ export const scenarios = [
       await expect(guild).toHaveCount(0);
 
       await trigger.click();
+      await expect(dialog.getByRole("combobox")).toHaveValue("");
       await dialog.getByRole("combobox").fill("Reaction Rules");
       await expect(
         dialog.getByRole("option", { name: "Reaction Rules", exact: true }),
@@ -125,6 +132,216 @@ export const scenarios = [
         page.getByRole("heading", { name: "Reaction Rules", exact: true }),
       ).toBeVisible();
       assert.deepEqual(featureWrites(api), [], "Menu navigation must not change configuration");
+    },
+  },
+  {
+    id: "webhook-logs-focus",
+    title: "Webhook delivery logs trap focus and restore the trigger",
+    tier: "premium",
+    role: "owner",
+    route: `/admin/${GUILD}/webhooks?workspaceId=${WORKSPACE}`,
+    apiOptions: {
+      responses: {
+        "/admin/api/webhook-proxy": {
+          guildId: GUILD,
+          configs: [
+            {
+              guildId: GUILD,
+              publicId: "example-relay",
+              name: "Example relay",
+              enabled: true,
+              banLookupEnabled: false,
+              banLookupCredential: null,
+              banLookupAppIds: [],
+              destinations: [
+                {
+                  id: "main",
+                  label: "Main",
+                  credential: {
+                    configured: true,
+                    credentialId: "example-credential",
+                    provider: "discord",
+                    fingerprint: "example-fingerprint",
+                    maskedDisplay: "•••",
+                  },
+                },
+              ],
+              defaultDestinationIds: ["main"],
+              routingRules: [],
+              contentReplacements: [],
+              createdAtMs: 0,
+              updatedAtMs: 0,
+            },
+          ],
+        },
+        "/admin/api/webhook-proxy/logs": { guildId: GUILD, publicId: "example-relay", logs: [] },
+      },
+    },
+    async run({ page, api, expect }) {
+      await page.locator("summary").filter({ hasText: "Example relay" }).click();
+      const trigger = page.getByRole("button", { name: "Logs", exact: true });
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: "Delivery logs" });
+      await expect(dialog.getByText("No delivery logs yet.")).toBeVisible();
+      const close = dialog.getByRole("button", { name: "Close", exact: true });
+      await expect(close).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(close).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+      assert.deepEqual(featureWrites(api), [], "Reading logs must not change configuration");
+    },
+  },
+  {
+    id: "billing-checkout-return",
+    title:
+      "Billing reads the synchronized subscription and retries summary failures without syncing again",
+    tier: "premium",
+    role: "owner",
+    route: "/admin/profile",
+    apiOptions: {
+      failures: [
+        {
+          method: "POST",
+          path: BILLING_SYNC,
+          ...providerUnavailable("Checkout synchronization unavailable"),
+        },
+        {
+          method: "GET",
+          path: BILLING_READ,
+          ...providerUnavailable("Billing summary unavailable"),
+        },
+      ],
+    },
+    async run({ page, api, origin, expect }) {
+      await expect(page).toHaveTitle("Profile | HAF Bot");
+      const returnUrl = new URL(
+        "/admin/billing?plan=premium_plus&frequency=monthly#assignments",
+        origin,
+      );
+      const cleanUrl = returnUrl.href;
+      returnUrl.searchParams.set("checkout", "success");
+      returnUrl.searchParams.set("session_id", checkoutSessionId);
+      await page.goto(returnUrl.href);
+
+      await expect(page).toHaveTitle("Billing | HAF Bot");
+      const retry = page.getByRole("button", { name: "Retry", exact: true });
+      await expect(
+        page.getByText("Checkout synchronization unavailable", { exact: true }),
+      ).toBeVisible();
+      await expect(page).toHaveURL(returnUrl.href);
+      assert.deepEqual(reads(api, BILLING_READ), []);
+
+      await retry.click();
+      await expect(page.getByText("Billing summary unavailable", { exact: true })).toBeVisible();
+      await expect(page).toHaveURL(cleanUrl);
+      assert.deepEqual(
+        api.requests
+          .filter(({ path }) => [BILLING_SYNC, BILLING_READ].includes(path))
+          .map(({ method, status }) => [method, status]),
+        [
+          ["POST", 503],
+          ["POST", 200],
+          ["GET", 503],
+        ],
+      );
+      assert.deepEqual(
+        writes(api, BILLING_SYNC).map(({ body }) => body),
+        [{ checkoutSessionId }, { checkoutSessionId }],
+      );
+
+      await retry.click();
+      const currentPlan = page.getByText("Current plan", { exact: true }).locator("../..");
+      const plan = currentPlan.getByRole("heading", { name: "Premium Plus", exact: true });
+      await expect(plan).toBeVisible();
+      await expect(currentPlan.getByText(/^Billed monthly$/)).toBeVisible();
+      assert.equal(api.snapshot(BILLING_READ).subscription.plan, "premium_plus");
+      assert.deepEqual(
+        reads(api, BILLING_READ).map(({ status }) => status),
+        [503, 200],
+      );
+
+      await page.goBack();
+      await expect(page).toHaveTitle("Profile | HAF Bot");
+      await page.goForward();
+      await expect(page).toHaveURL(cleanUrl);
+      await expect(plan).toBeVisible();
+      assert.deepEqual(
+        featureWrites(api).map(({ path }) => path),
+        [BILLING_SYNC, BILLING_SYNC],
+      );
+    },
+  },
+  {
+    id: "commerce-seller-return",
+    title: "Commerce keeps a failed onboarding return retryable and reads the refreshed seller",
+    tier: "premium",
+    role: "owner",
+    route: "/admin/profile",
+    apiOptions: {
+      responses: { [COMMERCE_READ]: createCommerceOnboardingFixture() },
+      failures: [
+        {
+          method: "POST",
+          path: COMMERCE_REFRESH,
+          ...providerUnavailable("Stripe status unavailable"),
+        },
+      ],
+    },
+    async run({ page, api, origin, expect }) {
+      await expect(page).toHaveTitle("Profile | HAF Bot");
+      const returnUrl = new URL(
+        `/admin/${GUILD}/commerce?workspaceId=${WORKSPACE}&tab=seller#seller`,
+        origin,
+      );
+      const cleanUrl = returnUrl.href;
+      returnUrl.searchParams.set("commerceConnect", "return");
+      await page.goto(returnUrl.href);
+
+      await expect(page).toHaveTitle("Commerce · Northstar Gaming | HAF Bot");
+      const seller = page.getByText("Seller", { exact: true }).locator("..");
+      const retry = page.getByRole("button", { name: "Retry Stripe status refresh" });
+      await expect(retry).toBeVisible();
+      await expect(seller).toContainText("onboarding_incomplete");
+      await expect(page).toHaveURL(returnUrl.href);
+      assert.deepEqual(
+        writes(api, COMMERCE_REFRESH).map(({ status }) => status),
+        [503],
+      );
+
+      await retry.click();
+      await expect(seller.getByText("active", { exact: true })).toBeVisible();
+      await expect(page).toHaveURL(cleanUrl);
+      await expect(page.getByRole("tab", { name: "Seller & finance" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      const refreshes = writes(api, COMMERCE_REFRESH);
+      assert.deepEqual(
+        refreshes.map(({ status }) => status),
+        [503, 200],
+      );
+      assert.deepEqual(refreshes[1].body, { guildId: GUILD, workspaceId: WORKSPACE });
+      assert.ok(
+        api.requests
+          .slice(api.requests.indexOf(refreshes[1]) + 1)
+          .some(
+            ({ method, path, status }) =>
+              method === "GET" && path === COMMERCE_READ && status === 200,
+          ),
+      );
+
+      await page.goBack();
+      await expect(page).toHaveTitle("Profile | HAF Bot");
+      await page.goForward();
+      await expect(page).toHaveURL(cleanUrl);
+      await expect(seller.getByText("active", { exact: true })).toBeVisible();
+      assert.deepEqual(
+        featureWrites(api).map(({ path }) => path),
+        [COMMERCE_REFRESH, COMMERCE_REFRESH],
+      );
     },
   },
   {
@@ -603,6 +820,12 @@ function reads(api, path) {
 }
 function writes(api, path) {
   return api.requests.filter((request) => request.method === "POST" && request.path === path);
+}
+function providerUnavailable(error) {
+  return {
+    status: 503,
+    json: { error, code: "provider_unavailable", correlationId: "qa-return", retryable: true },
+  };
 }
 function featureWrites(api) {
   return api.requests.filter(

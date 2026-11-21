@@ -11,7 +11,7 @@ import {
   buildManagedMediaStorageKey,
   parseManagedMediaPath,
 } from "../src/managed-media";
-import { createPublicRoutes } from "../src/routes/public-routes";
+import { createPublicWebRoutes } from "./helpers/runtime-endpoint-requests";
 import { createAdminApiHandler } from "./helpers/admin-api";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { createSqlitePublicManagedMediaStore } from "./support/sqlite/runtime/sqlite-public-managed-media-store";
@@ -212,7 +212,7 @@ test("public routes serve managed images with immutable cache headers", async ()
     contentType: "image/png",
     sizeBytes: 4,
   });
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     publicManagedMedia: store,
   });
@@ -232,7 +232,7 @@ test("public routes serve managed images with immutable cache headers", async ()
 });
 
 test("public routes do not serve missing or non-image managed objects", async () => {
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     publicManagedMedia: {
       async putImage() {},
@@ -259,7 +259,7 @@ test("public routes cancel managed media streams for HEAD and rejected content t
     ["GET", "text/html", 404, true],
   ] as const) {
     let cancelled = false;
-    const routes = createPublicRoutes({
+    const routes = createPublicWebRoutes({
       features: ALL_FEATURES_ENABLED,
       publicManagedMedia: {
         putImage: async () => {},
@@ -288,7 +288,7 @@ test("public routes cancel managed media streams for HEAD and rejected content t
 
 test("public routes cannot read Managed Media through the Evidence Vault blob capability", async () => {
   let evidenceRead = false;
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     evidenceVaultBlobs: {
       async putImage() {},
@@ -317,7 +317,10 @@ test("deleted public Managed Media returns the same generic 404 as a missing obj
     sizeBytes: 4,
   });
   await store.deleteImage({ guildId: "guild-1", filename: `${IMAGE_ID}.png` });
-  const routes = createPublicRoutes({ features: ALL_FEATURES_ENABLED, publicManagedMedia: store });
+  const routes = createPublicWebRoutes({
+    features: ALL_FEATURES_ENABLED,
+    publicManagedMedia: store,
+  });
 
   const response = await routes(
     new Request(`https://hafbot.xyz/managed-media/guild-1/${IMAGE_ID}.png`),

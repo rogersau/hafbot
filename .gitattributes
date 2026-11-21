@@ -1,1 +1,3 @@
 * text=auto eol=lf
+src/web/routeTree.gen.ts linguist-generated=true
+src/web/routes/admin/api/** linguist-generated=true

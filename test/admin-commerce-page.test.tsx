@@ -8,6 +8,7 @@ import {
   createBrowserHistory,
   createMemoryHistory,
   createRootRoute,
+  createRoute,
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
@@ -15,6 +16,7 @@ import { renderToString } from "react-dom/server";
 import { act } from "react";
 import { JSDOM } from "jsdom";
 import { changeValue } from "./support/admin-dom-events";
+import { adminErrorResponse } from "./support/admin-error-response";
 
 import {
   AdminCommercePage,
@@ -27,7 +29,7 @@ import AdminCommerceSupportSettings, {
 } from "../src/admin/components/admin-commerce-support-settings";
 import { ToastProvider } from "../src/admin/components/toast";
 import type { CommerceLoaderData } from "../src/admin/lib/admin-route-loaders";
-import type { CommerceTab } from "../src/admin/lib/admin-route-state";
+import { getCommerceTabFromSearch, type CommerceTab } from "../src/admin/lib/admin-route-state";
 import type { AdminRouterContext } from "../src/admin/routes/context";
 import { AdminRouteContextProvider } from "../src/admin/routes/page-context";
 
@@ -246,12 +248,14 @@ test("Storefront edits survive tab switches and warn before unloading until save
     routeTree: rootRoute,
     history: createBrowserHistory({ window: dom.window }),
   });
-  // Node resolves TanStack's server entry, which reads snapshots without subscribing.
-  // Re-render the app context after navigation, as the browser App does for route changes.
   const renderPage = () =>
     root.render(
       <AdminRouteContextProvider
-        value={{ ...context, currentSearch: router.state.location.searchStr }}
+        value={{
+          ...context,
+          currentSearch: router.state.location.searchStr,
+          commerceTab: getCommerceTabFromSearch(router.state.location.searchStr),
+        }}
       >
         <RouterProvider router={router} />
       </AdminRouteContextProvider>,
@@ -281,14 +285,14 @@ test("Storefront edits survive tab switches and warn before unloading until save
     await change("commerce-sales-panel-description", "Pick a membership");
     assert.equal(unloadIsBlocked(), true);
     await act(async () => {
-      await router.navigate({ to: "/?tab=support" });
+      await router.navigate({ href: "/?tab=support" });
       await router.load();
       renderPage();
     });
     assert.equal(router.state.location.searchStr, "?tab=support");
     assert.ok(container.querySelector("#commerce-branding-tagline") === null);
     await act(async () => {
-      await router.navigate({ to: "/?tab=storefront" });
+      await router.navigate({ href: "/?tab=storefront" });
       await router.load();
       renderPage();
     });
@@ -335,6 +339,129 @@ test("Storefront edits survive tab switches and warn before unloading until save
     Object.assign(globalThis, previous);
     actEnvironment.IS_REACT_ACT_ENVIRONMENT = previousAct;
     dom.window.close();
+  }
+});
+
+test("Commerce retries the seller status read and preserves the return route until it succeeds", async () => {
+  const path = "/admin/guild-1/commerce";
+  const query = "workspaceId=workspace-1&tab=seller";
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
+    url: `https://example.test${path}?${query}&commerceConnect=refresh#status`,
+  });
+  const { window } = dom;
+  const previous = {
+    window: globalThis.window,
+    document: globalThis.document,
+    self: globalThis.self,
+    fetch: globalThis.fetch,
+    IS_REACT_ACT_ENVIRONMENT: Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT"),
+  };
+  let refreshes = 0;
+  let reads = 0;
+  Object.assign(globalThis, {
+    window,
+    document: window.document,
+    self: window,
+    IS_REACT_ACT_ENVIRONMENT: true,
+    fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        assert.equal(input, "/admin/api/commerce/seller/refresh");
+        assert.deepEqual(JSON.parse(String(init.body)), {
+          workspaceId: "workspace-1",
+          guildId: "guild-1",
+        });
+        refreshes++;
+        return Response.json({});
+      }
+      assert.equal(input, "/admin/api/commerce?workspaceId=workspace-1&guildId=guild-1");
+      reads++;
+      return reads === 1 ? adminErrorResponse("Commerce unavailable", 500) : Response.json(data);
+    },
+  });
+  const { createRoot } = await import("react-dom/client");
+  const container = window.document.getElementById("root")!;
+  const root = createRoot(container);
+  const context = {
+    currentPath: path,
+    currentSearch: `?${query}`,
+    selectedWorkspaceId: "workspace-1",
+    selectedGuildId: "guild-1",
+    pathGuildId: "guild-1",
+    commerceTab: "seller",
+  } as AdminRouterContext;
+  const rootRoute = createRootRoute();
+  const commerceRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/admin/$guildId/commerce",
+    component: () => (
+      <AdminCommercePage
+        selectedWorkspaceId="workspace-1"
+        selectedGuildId="guild-1"
+        initialData={data}
+      />
+    ),
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([commerceRoute]),
+    history: createMemoryHistory({
+      initialEntries: [`${path}?${query}&commerceConnect=refresh#status`],
+    }),
+    isServer: false,
+  });
+  const returnHref = `${path}?${query}&commerceConnect=return#status`;
+  const sellerReturn = {
+    to: commerceRoute.fullPath,
+    params: { guildId: "guild-1" },
+    search: { workspaceId: "workspace-1", tab: "seller", commerceConnect: "return" },
+    hash: "status",
+  };
+
+  try {
+    await act(async () => {
+      root.render(
+        <ToastProvider>
+          <AdminRouteContextProvider value={context}>
+            <RouterProvider router={router} />
+          </AdminRouteContextProvider>
+        </ToastProvider>,
+      );
+    });
+    assert.match(container.textContent ?? "", /onboarding link expired/);
+    assert.equal(refreshes, 0);
+    assert.equal(reads, 0);
+
+    await act(async () => {
+      await router.preloadRoute(sellerReturn);
+    });
+    assert.equal(refreshes, 0);
+
+    await act(async () => {
+      await router.navigate(sellerReturn);
+    });
+    assert.equal(refreshes, 1);
+    assert.equal(reads, 1);
+    assert.equal(router.state.location.href, returnHref);
+    assert.match(container.textContent ?? "", /Commerce unavailable/);
+    const retry = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Retry Stripe status refresh",
+    );
+    assert.ok(retry);
+    await act(async () => retry.click());
+    assert.equal(refreshes, 1);
+    assert.equal(reads, 2);
+    assert.equal(router.state.location.href, `${path}?${query}#status`);
+    assert.match(container.textContent ?? "", /Stripe onboarding status refreshed/);
+
+    await act(async () => {
+      await router.navigate(sellerReturn);
+    });
+    assert.equal(refreshes, 2);
+    assert.equal(reads, 3);
+    assert.equal(router.state.location.href, `${path}?${query}#status`);
+  } finally {
+    await act(async () => root.unmount());
+    Object.assign(globalThis, previous);
+    window.close();
   }
 });
 

@@ -7,7 +7,6 @@ import type {
 import { defaultCommerceBranding, type CommercePublicBranding } from "../commerce/branding";
 import { escapeHtml, renderCommercePage } from "./commerce-branding";
 import type { CustomerSession } from "../runtime/auth/customer-session";
-import type { RouteHandler } from "./public-routes";
 
 const OFFERING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PURCHASE_STATE_TTL_MS = 30 * 60 * 1_000;
@@ -44,16 +43,15 @@ export interface CommerceBuyerRoutesOptions {
   createId?: () => string;
 }
 
-export function createCommerceBuyerRoutes(options: CommerceBuyerRoutesOptions): RouteHandler {
+export function createCommerceBuyerEndpoints(options: CommerceBuyerRoutesOptions) {
   const now = options.now ?? Date.now;
   const createId = options.createId ?? (() => crypto.randomUUID());
   const baseUrl = normalizedBaseUrl(options.publicBaseUrl);
 
-  return async (request: Request): Promise<Response | null> => {
-    const url = new URL(request.url);
-    const storeMatch = /^\/commerce\/stores\/([^/]+)$/.exec(url.pathname);
-    if (storeMatch && request.method === "GET") {
-      const guildId = decodeURIComponent(storeMatch[1] ?? "");
+  return {
+    methodNotAllowed: () =>
+      new Response("Method not allowed", { status: 405, headers: { allow: "GET, POST" } }),
+    commerceStore: async (guildId: string): Promise<Response> => {
       if (!validGuildId(guildId)) return renderError("This storefront link is invalid.", 404);
       try {
         const [storefronts, guildPresentation] = await Promise.all([
@@ -88,10 +86,9 @@ export function createCommerceBuyerRoutes(options: CommerceBuyerRoutesOptions): 
       } catch (error) {
         return renderError(publicError(error), 404);
       }
-    }
-    const offerMatch = /^\/commerce\/offers\/([^/]+)$/.exec(url.pathname);
-    if (offerMatch && request.method === "GET") {
-      const offeringId = decodeURIComponent(offerMatch[1] ?? "");
+    },
+    commerceOffering: async (request: Request, offeringId: string): Promise<Response> => {
+      const url = new URL(request.url);
       if (!OFFERING_ID.test(offeringId)) return renderError("This offering link is invalid.", 404);
       try {
         const storefront = await options.service.storefront(offeringId);
@@ -144,9 +141,8 @@ export function createCommerceBuyerRoutes(options: CommerceBuyerRoutesOptions): 
       } catch (error) {
         return renderError(publicError(error), 404);
       }
-    }
-
-    if (url.pathname === "/commerce/checkout" && request.method === "POST") {
+    },
+    commerceCheckout: async (request: Request): Promise<Response> => {
       if (!sameOrigin(request, baseUrl))
         return renderError("The checkout request was rejected.", 403);
       const session = await options.readSession(request);
@@ -201,9 +197,9 @@ export function createCommerceBuyerRoutes(options: CommerceBuyerRoutesOptions): 
       } catch (error) {
         return renderError(publicError(error), errorStatus(error));
       }
-    }
-
-    if (url.pathname === "/commerce/return" && request.method === "GET") {
+    },
+    commerceReturn: async (request: Request): Promise<Response> => {
+      const url = new URL(request.url);
       const session = await options.readSession(request);
       if (!session)
         return Response.redirect(signInUrl(baseUrl, null, url.pathname + url.search), 302);
@@ -240,9 +236,8 @@ export function createCommerceBuyerRoutes(options: CommerceBuyerRoutesOptions): 
       } catch (error) {
         return renderError(publicError(error), errorStatus(error));
       }
-    }
-
-    if (url.pathname === "/commerce/portal" && request.method === "POST") {
+    },
+    commercePortal: async (request: Request): Promise<Response> => {
       if (!sameOrigin(request, baseUrl))
         return renderError("The portal request was rejected.", 403);
       const session = await options.readSession(request);
@@ -271,16 +266,7 @@ export function createCommerceBuyerRoutes(options: CommerceBuyerRoutesOptions): 
       } catch (error) {
         return renderError(publicError(error), errorStatus(error));
       }
-    }
-
-    if (
-      url.pathname === "/commerce/checkout" ||
-      url.pathname === "/commerce/return" ||
-      url.pathname === "/commerce/portal"
-    ) {
-      return new Response("Method not allowed", { status: 405, headers: { allow: "GET, POST" } });
-    }
-    return null;
+    },
   };
 }
 

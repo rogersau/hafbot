@@ -2,7 +2,7 @@ import { ConfigurationAvailabilityActions } from "./configuration-availability-a
 import { useState } from "react";
 
 import type { EvidenceFieldDefinition, EvidenceFieldType } from "../../types";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { AdvancedSection, FormField, SectionHeader, SettingsBlock } from "./admin-form-layout";
 import { AdminBottomActionBar, areAdminActionSnapshotsEqual } from "./admin-bottom-action-bar";
 import { ChannelSelect, MultiRoleSelect } from "./guild-resource-select";
@@ -23,11 +23,8 @@ import { useGuildResources } from "../hooks/use-guild-resources";
 import type { EntitlementInfo } from "../hooks/use-entitlement";
 import { createAdminLoaderClient } from "../lib/admin-loader-client";
 import { AdminRefreshNotice } from "./admin-refresh-notice";
-import {
-  adminRefreshWarning,
-  reconcileAdminMutation,
-  refreshAdminRouteData,
-} from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
+import { adminRefreshWarning, reconcileAdminMutation } from "../lib/mutation-reconciliation";
 import type { EvidenceVaultLoaderData } from "../lib/admin-route-loaders";
 
 type EvidenceVaultAutoSaveKey = "subjectsEnabled";
@@ -47,19 +44,25 @@ export function AdminEvidenceVaultPage({
 }) {
   const trimmedGuildId = selectedGuildId.trim();
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Evidence Vault"
+      description="Configure evidence audit storage and delegated access roles for this guild."
+      readinessFeature="evidence-vault"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-data space-y-6">
-      <AdminPageHeader
-        title="Evidence Vault"
-        description="Configure evidence audit storage and delegated access roles for this guild."
-        readinessFeature="evidence-vault"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="Evidence Vault" />
       ) : (
         <EvidenceVaultEditor
+          renderHeader={renderHeader}
           selectedWorkspaceId={selectedWorkspaceId}
           selectedGuildId={trimmedGuildId}
           entitlement={entitlement}
@@ -72,12 +75,14 @@ export function AdminEvidenceVaultPage({
 }
 
 function EvidenceVaultEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   entitlement,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   entitlement: EntitlementInfo | null;
@@ -107,6 +112,7 @@ function EvidenceVaultEditor({
   const [refreshError, setRefreshError] = useState<unknown>(null);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const autoSave = useAutoSaveToggle<EvidenceVaultAutoSaveKey>({
     onSave: async (_key, nextValue) => {
       const { refreshError: nextRefreshError } = await reconcileAdminMutation(
@@ -246,7 +252,7 @@ function EvidenceVaultEditor({
     }
   }
 
-  return (
+  const content = (
     <div className="space-y-5">
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardChanges} />
       <AdminRefreshNotice
@@ -622,6 +628,13 @@ function EvidenceVaultEditor({
         ]}
       />
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 
   function updateEvidenceField(index: number, patch: Partial<EvidenceFieldDefinition>) {

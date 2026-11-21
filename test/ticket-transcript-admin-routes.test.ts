@@ -5,9 +5,9 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createPublicRoutes } from "../src/routes/public-routes";
+import { createPublicRoutes } from "./helpers/runtime-endpoint-requests";
 import { allowAllAdminAccess } from "./helpers/admin-api";
-import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import { createTicketAdminRoutes } from "../src/runtime/admin-routes/tickets";
 import { createSqliteTicketTranscriptCapabilityStore } from "./support/sqlite/runtime/sqlite-ticket-transcript-capability-store";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";

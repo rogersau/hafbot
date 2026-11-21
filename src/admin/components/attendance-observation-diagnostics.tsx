@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useAdminRead } from "../hooks/use-admin-read";
 import type { PublicTarget } from "../../wardogs/model";
 import type { redactedReport } from "../../server-levels/observations/model";
 import { Button } from "./ui/button";
@@ -25,27 +26,17 @@ export default function AttendanceObservationDiagnostics({
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [ready, setReady] = useState<boolean | null>(null);
-  const generation = targets.find((t) => t.id === targetId)?.generation;
-  // eslint-disable-next-line custom/no-use-effect -- Readiness follows the selected Guild target and generation; cancel stale requests.
-  useEffect(() => {
-    setReady(null);
-    if (!targetId) return;
-    const controller = new AbortController();
-    void fetch(
-      `/admin/api/wardogs/observations/readiness?${new URLSearchParams({ guildId, workspaceId, targetId })}`,
-      { signal: controller.signal },
-    )
-      .then(async (result) => {
-        if (!result.ok) throw new Error("Observation readiness is unavailable.");
-        const state = (await result.json()) as { ready: boolean };
-        if (!controller.signal.aborted) setReady(state.ready);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setReady(false);
-      });
-    return () => controller.abort();
-  }, [guildId, workspaceId, targetId, generation]);
+  const generation = targets.find((target) => target.id === targetId)?.generation;
+  const readiness = useAdminRead(
+    targetId ? JSON.stringify([guildId, workspaceId, targetId, generation]) : null,
+    async () => {
+      const params = new URLSearchParams({ guildId, workspaceId, targetId });
+      const result = await fetch(`/admin/api/wardogs/observations/readiness?${params}`);
+      if (!result.ok) throw new Error("Observation readiness is unavailable.");
+      return (await result.json()) as { ready: boolean };
+    },
+  );
+  const ready = readiness.error ? false : (readiness.data?.ready ?? null);
   async function refresh() {
     const result = await fetch(
       `/admin/api/wardogs/observations?${new URLSearchParams({ guildId, workspaceId })}`,

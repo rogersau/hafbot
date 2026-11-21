@@ -1,5 +1,6 @@
 import { transitionRestore, restoreIsCommitted } from "../lib/restore-workflow";
-import { useEffect, useReducer, useState } from "react";
+import { useReducer, useState } from "react";
+import { useAdminRead } from "../hooks/use-admin-read";
 import { useAdminApi } from "../hooks/use-admin-api";
 
 import type { ConfigurationFeatureKey } from "../../configuration-revisions";
@@ -42,12 +43,10 @@ export function ConfigurationHistoryCard({
   onRestoreCompleted?: () => Promise<void>;
   onReconciliationPendingChange?: (pending: boolean) => void;
 }) {
-  const [revisions, setRevisions] = useState<Revision[]>([]);
-  const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [selected, setSelected] = useState<Revision | null>(null);
   const [diff, setDiff] = useState<Diff>([]);
-  const [listLoading, setListLoading] = useState(enabled);
-  const [listError, setListError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [paginationError, setPaginationError] = useState<string | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
   const [restoreState, sendRestore] = useReducer(transitionRestore<RestorePreview>, {
@@ -65,70 +64,54 @@ export function ConfigurationHistoryCard({
   const [secretReplacements, setSecretReplacements] = useState<Record<string, string>>({});
   const [omittedSecretSlots, setOmittedSecretSlots] = useState<string[]>([]);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
-  const [refreshVersion, setRefreshVersion] = useState(0);
   const { dialog, confirm } = useConfirmDialog();
   const toast = useToast();
 
-  // eslint-disable-next-line custom/no-use-effect -- Revision history follows the selected Guild resource.
-  useEffect(() => {
-    if (!enabled || !guildId) {
-      setListLoading(false);
-      setRevisions([]);
-      setNextCursor(null);
-      return;
-    }
-    let active = true;
-    setListLoading(true);
-    setListError(null);
-    void configurationRevisionsClient
-      .list({
-        guildId,
-        workspaceId: workspaceId || undefined,
-        feature,
-        resourceKey,
-        limit: "20",
-      })
-      .then((page) => {
-        if (active) {
-          setRevisions(page.revisions);
-          setNextCursor(page.nextCursor);
-        }
-      })
-      .catch((reason: unknown) => {
-        if (active)
-          setListError(reason instanceof Error ? reason.message : "History failed to load.");
-      })
-      .finally(() => {
-        if (active) setListLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [enabled, feature, guildId, refreshVersion, resourceKey, workspaceId]);
+  const historyQuery = {
+    guildId,
+    workspaceId: workspaceId || undefined,
+    feature,
+    resourceKey,
+    limit: "20",
+  };
+  const { read, data, loading, error } = useAdminRead(
+    enabled && guildId ? JSON.stringify(historyQuery) : null,
+    () => configurationRevisionsClient.list(historyQuery),
+  );
+  const revisions = data?.revisions ?? [];
+  const nextCursor = data?.nextCursor ?? null;
+  const listLoading = loading || loadingMore;
+  const listError =
+    paginationError ??
+    (error instanceof Error ? error.message : error ? "History failed to load." : null);
+
+  function reloadHistory() {
+    setPaginationError(null);
+    void read?.refresh().catch(() => undefined);
+  }
 
   if (!enabled) return null;
 
   async function loadMore() {
-    if (listLoading || nextCursor === null) return;
-    setListLoading(true);
-    setListError(null);
+    if (!read || listLoading || nextCursor === null) return;
+    setLoadingMore(true);
+    setPaginationError(null);
     try {
       const page = await configurationRevisionsClient.list({
-        guildId,
-        workspaceId: workspaceId || undefined,
-        feature,
-        resourceKey,
-        limit: "20",
+        ...historyQuery,
         beforeCreatedAtMs: String(nextCursor),
       });
-      setRevisions((current) => {
-        return mergeConfigurationRevisionPages(current, page.revisions);
+      read.setData({
+        revisions: mergeConfigurationRevisionPages(
+          read.getSnapshot().data?.revisions ?? [],
+          page.revisions,
+        ),
+        nextCursor: page.nextCursor,
       });
-      setNextCursor(page.nextCursor);
     } catch (reason) {
-      setListError(reason instanceof Error ? reason.message : "More history failed to load.");
+      setPaginationError(reason instanceof Error ? reason.message : "More history failed to load.");
     } finally {
-      setListLoading(false);
+      setLoadingMore(false);
     }
   }
 
@@ -232,7 +215,7 @@ export function ConfigurationHistoryCard({
       });
       sendRestore({ type: "restore-committed" });
       toast.success("Configuration revision restored. Refreshing the editor...");
-      setRefreshVersion((version) => version + 1);
+      reloadHistory();
       await reconcileParentEditor();
     } catch (reason) {
       sendRestore({
@@ -327,7 +310,7 @@ export function ConfigurationHistoryCard({
                 size="sm"
                 variant="outline"
                 disabled={listLoading}
-                onClick={() => setRefreshVersion((version) => version + 1)}
+                onClick={reloadHistory}
               >
                 Retry history
               </Button>

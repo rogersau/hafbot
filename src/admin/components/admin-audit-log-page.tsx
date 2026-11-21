@@ -8,7 +8,7 @@ import {
   type AuditEventId,
   type AuditEventStates,
 } from "../../types";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { FormField, SectionHeader, SettingsBlock } from "./admin-form-layout";
 import { AdminBottomActionBar } from "./admin-bottom-action-bar";
 import { ChannelSelect, MultiChannelSelect, MultiRoleSelect } from "./guild-resource-select";
@@ -16,7 +16,7 @@ import { NoGuildSelected } from "./no-guild-selected";
 import { NavigationGuard } from "./navigation-guard";
 import { PageFeedback } from "./page-feedback";
 import { useToast } from "./toast";
-import { refreshAdminRouteData, requireAdminRouteRefresh } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { useConfirmDialog } from "./ui/confirm-dialog";
 import { UnsavedChangesIndicator } from "./unsaved-changes-indicator";
 import { useAdminApi } from "../hooks/use-admin-api";
@@ -56,24 +56,31 @@ export function AdminAuditLogPage({
   onRouteDataRefresh?: () => Promise<void>;
   tier?: GuildEntitlementTier | null;
 }) {
+  const { requireAdminRouteRefresh } = useAdminRouteRefresh();
   const trimmedGuildId = selectedGuildId.trim();
   const [editorGeneration, setEditorGeneration] = useState(0);
   const editorHasUnsavedChanges = useRef(false);
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Guild Audit Log"
+      description="Configure the default Audit Destination and event groups for this guild. Each event group can optionally post to its own channel."
+      readinessFeature="guild-audit-log"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-data space-y-6">
-      <AdminPageHeader
-        title="Guild Audit Log"
-        description="Configure the default Audit Destination and event groups for this guild. Each event group can optionally post to its own channel."
-        readinessFeature="guild-audit-log"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="Guild Audit Log" />
       ) : (
         <>
           <AuditLogEditor
+            renderHeader={renderHeader}
             key={editorGeneration}
             selectedWorkspaceId={selectedWorkspaceId}
             selectedGuildId={trimmedGuildId}
@@ -102,12 +109,14 @@ export function AdminAuditLogPage({
 }
 
 function AuditLogEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   initialData,
   onRouteDataRefresh,
   onUnsavedChangesChange,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: GuildAuditLogLoaderData | null;
@@ -137,6 +146,7 @@ function AuditLogEditor({
   const [saved, setSaved] = useState(false);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { dialog: confirmDialog, confirm } = useConfirmDialog();
   const { resources } = useGuildResources(selectedWorkspaceId, selectedGuildId);
 
@@ -300,7 +310,7 @@ function AuditLogEditor({
     );
   }
 
-  return (
+  const content = (
     <div className="space-y-4">
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardChanges} />
       {confirmDialog}
@@ -594,5 +604,12 @@ function AuditLogEditor({
         />
       ) : null}
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }

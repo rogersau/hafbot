@@ -8,7 +8,7 @@ const ALLOWED_HTML_PRODUCERS = new Set(["src/http/html-response.ts"]);
 test("production HTML is constructed only through the hardened HTML response module", async () => {
   const files = await walk("src");
   const violations: string[] = [];
-  for (const file of files.filter((entry) => entry.endsWith(".ts"))) {
+  for (const file of files.filter((entry) => /\.tsx?$/.test(entry))) {
     if (ALLOWED_HTML_PRODUCERS.has(file)) continue;
     const source = await readFile(file, "utf8");
     if (/content-type["']?\s*:\s*["']text\/html/i.test(source)) violations.push(file);
@@ -16,14 +16,15 @@ test("production HTML is constructed only through the hardened HTML response mod
   assert.deepEqual(violations, []);
 });
 
-test("generated HTML has no Google font dependency or inline Admin script", async () => {
-  const sources = await Promise.all([
-    readFile("src/runtime/admin-shell-template.ts", "utf8"),
-    readFile("scripts/embed-landing-build.mjs", "utf8"),
-    readFile("src/routes/legal-pages.ts", "utf8"),
-  ]);
-  for (const source of sources) assert.doesNotMatch(source, /fonts\.googleapis|fonts\.gstatic/i);
-  assert.doesNotMatch(sources[0]!, /<script>(?!<)/i);
+test("server-rendered documents share the hardened HTML header policy", async () => {
+  const source = await readFile("src/web/start.ts", "utf8");
+  assert.match(source, /import \{ htmlResponseHeaders \} from "\.\.\/http\/html-response"/);
+  assert.match(source, /htmlResponseHeaders\(\{/);
+});
+
+test("legal HTML has no Google font dependency", async () => {
+  const source = await readFile("src/routes/legal-pages.ts", "utf8");
+  assert.doesNotMatch(source, /fonts\.googleapis|fonts\.gstatic/i);
 });
 
 async function walk(directory: string): Promise<string[]> {

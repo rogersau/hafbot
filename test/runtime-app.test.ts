@@ -8,12 +8,10 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { escapeHtmlAttribute } from "../src/runtime/app";
 import { createTestRuntimeApp, type TestRuntimeAppOptions } from "./support/create-runtime-app";
 import { buildTicketOpeningMessage } from "../src/services/tickets/ticket-lifecycle";
 import { createDiscordGuildResourceValidator } from "../src/discord/guild-resource-validator";
 import { isRecord } from "../src/unknown-parse";
-import { renderAdminShell } from "../src/runtime/admin-shell";
 import { createCustomerAuth } from "./support/sqlite/runtime/auth/auth";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { createSqliteTicketTranscriptCapabilityStore } from "./support/sqlite/runtime/sqlite-ticket-transcript-capability-store";
@@ -390,6 +388,8 @@ test("createRuntimeApp resolves suspended guilds from link state and verificatio
   const app = createRuntimeApp({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
+    xboxOAuthClientId: "xbox-client-id",
+    xboxOAuthClientSecret: "xbox-client-secret",
     stores,
     gateway: {} as GatewayController,
     services: {
@@ -411,10 +411,12 @@ test("createRuntimeApp resolves suspended guilds from link state and verificatio
     } as any,
   });
 
+  const attemptId = "12345678-1234-1234-1234-123456789012";
   for (const url of [
     "https://runtime.example/auth/steam/callback?state=opaque",
     "https://runtime.example/auth/xbox/callback?state=opaque",
-    "https://runtime.example/verify/attempt-1?sig=opaque",
+    `https://runtime.example/verify/${attemptId}?sig=opaque`,
+    `https://runtime.example/verify/%31${attemptId.slice(1)}?sig=opaque`,
   ]) {
     const response = await app.fetch(new Request(url));
     assert.equal(response.status, 503);
@@ -422,6 +424,21 @@ test("createRuntimeApp resolves suspended guilds from link state and verificatio
       ((await response.json()) as { error: string }).error,
       "Service unavailable for this server.",
     );
+  }
+
+  for (const path of [
+    "/auth/%73team/callback?state=opaque",
+    "/auth/Steam/callback?state=opaque",
+    "/auth/steam/callback/?state=opaque",
+    "/auth/%78box/callback?state=opaque",
+    "/auth/Xbox/callback?state=opaque",
+    "/auth/xbox/callback/?state=opaque",
+    `/%76erify/${attemptId}?sig=opaque`,
+    `/Verify/${attemptId}?sig=opaque`,
+    `/verify/${attemptId}/?sig=opaque`,
+  ]) {
+    const response = await app.fetch(new Request(`https://runtime.example${path}`));
+    assert.equal(response.status, 404, path);
   }
 });
 
@@ -639,44 +656,6 @@ test("Ticket transcript retention continues after an artifact deletion fails", a
   assert.deepEqual(deletedMetadata, ["purged-object"]);
 });
 
-test("renderAdminShell serves static admin shell references with runtime data", async () => {
-  const response = renderAdminShell(
-    true,
-    "/admin/guild-1/blocklist",
-    '?name="quoted"',
-    "Sign in <now>",
-    {
-      name: `Jane "Discord" Admin`,
-      email: `jane+"discord"@example.com`,
-      image: "https://cdn.discordapp.com/avatars/user/avatar.png?size=64&tag=<x>",
-    },
-  );
-
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /text\/html/);
-
-  const html = await response.text();
-  assert.match(html, /<link rel="stylesheet" href="\/admin\/assets\/admin\.css" \/>/);
-  assert.match(html, /<script type="module" src="\/admin\/assets\/admin\.js"><\/script>/);
-  assert.match(html, /<title>Sign in &lt;now&gt;<\/title>/);
-  assert.match(html, /<div id="admin-root"[^>]*data-authenticated="true"/);
-  const styleNonce = html.match(/data-csp-style-nonce="([^"]+)"/)?.[1];
-  assert.ok(styleNonce);
-  assert.match(
-    response.headers.get("content-security-policy") ?? "",
-    new RegExp(`style-src [^;]*'nonce-${styleNonce}'`),
-  );
-  assert.doesNotMatch(html, /data-global-admin=/);
-  assert.match(html, /data-initial-path="\/admin\/guild-1\/blocklist"/);
-  assert.match(html, /data-initial-search="\?name=&quot;quoted&quot;"/);
-  assert.match(html, /data-user-name="Jane &quot;Discord&quot; Admin"/);
-  assert.match(html, /data-user-email="jane\+&quot;discord&quot;@example\.com"/);
-  assert.match(
-    html,
-    /data-user-image="https:\/\/cdn\.discordapp\.com\/avatars\/user\/avatar\.png\?size=64&amp;tag=&lt;x&gt;"/,
-  );
-});
-
 test("createRuntimeApp signs out customer admins through Better Auth on admin logout", async () => {
   const handledAuthPaths: Array<{ pathname: string; method: string; cookie: string | null }> = [];
   const app = createTestRuntimeApp({
@@ -861,7 +840,7 @@ test("createRuntimeApp logs out real Discord sessions through the browser form b
     );
     assert.equal(login.status, 200);
     assert.equal(login.headers.get("location"), null);
-    assert.doesNotMatch(await login.text(), /data-authenticated="true"/);
+    assert.match(await login.text(), /Sign in with Discord/);
   } finally {
     globalThis.fetch = originalFetch;
     fixture.close();
@@ -882,8 +861,8 @@ test("createRuntimeApp serves authenticated dashboard shells for nested admin pa
 
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /data-authenticated="true"/);
-  assert.match(html, /data-initial-path="\/admin\/guild-1\/tickets"/);
+  assert.match(html, /id="admin-root"/);
+  assert.match(html, /Customer User/);
 });
 
 test("createRuntimeApp redirects unauthenticated nested admin pages to login", async () => {
@@ -899,10 +878,6 @@ test("createRuntimeApp redirects unauthenticated nested admin pages to login", a
 
   assert.equal(response.status, 302);
   assert.equal(response.headers.get("location"), "/admin/login?next=%2Fadmin%2Fguild-1%2Ftickets");
-});
-
-test("escapeHtmlAttribute escapes characters unsafe in HTML attributes", () => {
-  assert.equal(escapeHtmlAttribute(`"/admin?<tag>&'`), "&quot;/admin?&lt;tag&gt;&amp;&#39;");
 });
 
 test("createRuntimeApp handles health checks", async () => {
@@ -5813,7 +5788,7 @@ test("createRuntimeApp rejects a legacy API session when customer auth is not co
   assert.equal(response.status, 401);
 });
 
-test("createRuntimeApp serves admin shell with data-authenticated for authenticated /admin GET", async () => {
+test("createRuntimeApp serves admin shell for authenticated /admin GET", async () => {
   const app = createRuntimeApp({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
@@ -5824,7 +5799,7 @@ test("createRuntimeApp serves admin shell with data-authenticated for authentica
 
   const response = await app.fetch(new Request("https://runtime.example/admin"));
   assert.equal(response.status, 200);
-  assert.match(await response.text(), /data-authenticated="true"/);
+  assert.match(await response.text(), /id="admin-root"/);
 });
 
 test("createRuntimeApp passes customer Discord profile data into the admin shell", async () => {
@@ -5858,12 +5833,9 @@ test("createRuntimeApp passes customer Discord profile data into the admin shell
 
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /data-authenticated="true"/);
-  assert.match(html, /data-user-name="Jane Discord"/);
-  assert.match(
-    html,
-    /data-user-image="https:\/\/cdn\.discordapp\.com\/avatars\/discord-user-1\/avatar\.png"/,
-  );
+  assert.match(html, /id="admin-root"/);
+  assert.match(html, /Jane Discord/);
+  assert.match(html, /discord-user-1\/avatar\.png/);
 });
 
 test("createRuntimeApp does not expose the retired global app config route", async () => {

@@ -80,14 +80,12 @@ test("BlocklistEmojiField makes already-blocked Unicode emoji unavailable", asyn
     const search = grid.getByPlaceholder("Search unicode emojis");
     await search.fill("check mark button");
 
-    const blocked = grid.locator('button[data-unified="2705"]');
-    await blocked.waitFor();
-    await page.waitForFunction(() => {
-      const button = document.querySelector('button[data-unified="2705"]');
-      return button?.hasAttribute("disabled") && button.getAttribute("aria-disabled") === "true";
-    });
-    assert.equal(await blocked.isDisabled(), true);
-    assert.equal(await blocked.getAttribute("aria-disabled"), "true");
+    await grid.locator('button[data-unified="2705"]').waitFor({ state: "detached" });
+    const blocklist = page.getByTestId("blocklist-picker");
+    await blocklist.getByRole("status").filter({ hasText: "Already blocked: ✅" }).waitFor();
+    await search.fill("grinning face");
+    await grid.locator('button[data-unified="1f600"]').click();
+    await blocklist.getByRole("button", { name: "Add 1 emoji" }).waitFor();
   } finally {
     await browser?.close();
     await vite.close();
@@ -217,7 +215,7 @@ test("Reaction Limits stays enabled after save invalidates and remounts the page
       });
     });
 
-    await page.goto(`${testServerUrl(vite)}?view=blocklist`);
+    await page.goto(`${testServerUrl(vite)}?view=blocklist`, { timeout: 30_000 });
     const toggle = page.getByRole("switch", { name: "Toggle reaction limits" });
     await toggle.click();
     await page.getByLabel("Max reactions per message").fill("5");
@@ -255,6 +253,7 @@ async function createEmojiPickerTestServer({ productionCsp = false } = {}) {
   const vite = await createViteServer({
     root: process.cwd(),
     configFile: false,
+    cacheDir: "node_modules/.vite-emoji-picker-test",
     logLevel: "error",
     plugins: [react({ fastRefresh: false }), emojiPickerTestPage({ productionCsp })],
     server: { host: "127.0.0.1", port: 0 },
@@ -340,7 +339,7 @@ function emojiPickerTestPage({ productionCsp }) {
           "content-security-policy",
           productionCsp
             ? "default-src 'none'; img-src 'self' data: https://cdn.jsdelivr.net; " +
-                "connect-src 'self' ws:; script-src 'self' 'unsafe-inline'; " +
+                "font-src 'self'; connect-src 'self' ws:; script-src 'self' 'unsafe-inline'; " +
                 "style-src 'self' 'nonce-emoji-picker-test'; style-src-attr 'unsafe-inline'"
             : "img-src 'self' data: https://cdn.jsdelivr.net",
         );
@@ -462,8 +461,6 @@ function emojiPickerTestPage({ productionCsp }) {
             language: "en",
           },
           applyUserPreferencesPatch: async () => undefined,
-          pageMetadata: null,
-          setPageMetadata: () => undefined,
           isRoutePending: false,
         };
 
@@ -703,6 +700,7 @@ async function createActionFeedbackTestServer() {
   const vite = await createViteServer({
     root: process.cwd(),
     configFile: false,
+    cacheDir: "node_modules/.vite-action-feedback-test",
     logLevel: "error",
     plugins: [react({ fastRefresh: false }), actionFeedbackTestPage()],
     server: { host: "127.0.0.1", port: 0 },

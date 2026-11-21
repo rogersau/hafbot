@@ -4,7 +4,7 @@ import { adminErrorResponse } from "./support/admin-error-response";
 
 import assert from "node:assert/strict";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { routeTree } from "../src/admin/routes/route-tree";
+import { authenticatedAdmin, routeTree } from "./support/admin-app";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
@@ -158,11 +158,17 @@ test("guild route navigation and invalidation share one current entitlement read
       history: createMemoryHistory({
         initialEntries: ["/admin/guild-1?workspaceId=workspace-1"],
       }),
-      context: {} as typeof routeTree.types.routerContext,
+      context: { admin: authenticatedAdmin },
+      isServer: false,
+      origin: "https://example.test",
     });
     const assertEntitlement = (workspaceId: string) => {
-      const shell = router.state.matches.find((match) => match.routeId === "/admin/$guildId");
-      const page = router.state.matches.find((match) => match.routeId === "/admin/$guildId/");
+      const shell = router.state.matches.find(
+        (match) => match.routeId === "/admin/_dashboard/$guildId",
+      );
+      const page = router.state.matches.find(
+        (match) => match.routeId === "/admin/_dashboard/$guildId/",
+      );
       assert.equal(shell?.loaderData?.data.workspaceId, workspaceId);
       assert.equal(shell?.loaderData?.data.entitlement?.tier, tier);
       assert.equal(page?.loaderData?.data.entitlement?.tier, tier);

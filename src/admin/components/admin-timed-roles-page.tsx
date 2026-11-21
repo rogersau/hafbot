@@ -7,7 +7,7 @@ import type {
   TimedRoleAutomationRule,
   TimedRoleAssignment,
 } from "../../types";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import {
   EditorActions,
   FormField,
@@ -24,7 +24,7 @@ import { Textarea } from "./ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { PageFeedback } from "./page-feedback";
 import { useToast } from "./toast";
-import { refreshAdminRouteData } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { useGuildResources } from "../hooks/use-guild-resources";
 import { createAdminLoaderClient } from "../lib/admin-loader-client";
@@ -51,19 +51,25 @@ export function AdminTimedRolesPage({
   onRouteDataRefresh?: () => Promise<void>;
 }) {
   const trimmedGuildId = selectedGuildId.trim();
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Timed Roles"
+      description="Assign roles for a fixed duration and manage active timed assignments."
+      readinessFeature="timed-roles"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-settings space-y-6">
-      <AdminPageHeader
-        title="Timed Roles"
-        description="Assign roles for a fixed duration and manage active timed assignments."
-        readinessFeature="timed-roles"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="timed roles" />
       ) : (
         <TimedRolesEditor
+          renderHeader={renderHeader}
           selectedWorkspaceId={selectedWorkspaceId}
           selectedGuildId={selectedGuildId}
           initialData={initialData}
@@ -75,11 +81,13 @@ export function AdminTimedRolesPage({
 }
 
 function TimedRolesEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: TimedRolesLoaderData | null;
@@ -118,6 +126,7 @@ function TimedRolesEditor({
   const trimmedGuildId = selectedGuildId.trim();
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { dialog: confirmDialog, confirm } = useConfirmDialog();
   const { resources } = useGuildResources(
     selectedWorkspaceId,
@@ -362,7 +371,7 @@ function TimedRolesEditor({
     }
   }
 
-  return (
+  const content = (
     <SettingsPanel>
       <NavigationGuard
         hasChanges={hasUnsavedChanges}
@@ -729,6 +738,13 @@ function TimedRolesEditor({
         </div>
       ) : null}
     </SettingsPanel>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }
 

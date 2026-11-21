@@ -1,10 +1,3 @@
-/**
- * Runs a committed Admin mutation and then reconciles the route data.
- *
- * A route refresh is deliberately not part of the mutation's failure domain:
- * once `mutate` resolves, the server has committed the action and callers must
- * never present a refresh outage as a failed save/publish/delete.
- */
 export type AdminMutationResult<T> =
   | { kind: "refreshed"; data: T; refreshError: null }
   | { kind: "refresh-failed"; data: T; refreshError: unknown };
@@ -24,7 +17,6 @@ export async function reconcileAdminMutation<T>(
   }
 }
 
-/** Retry only the reconciliation request; it can never invoke the mutation. */
 export async function retryAdminRefresh(
   refresh?: (() => Promise<void>) | null,
 ): Promise<{ ok: true } | { ok: false; error: unknown }> {
@@ -37,40 +29,25 @@ export async function retryAdminRefresh(
   }
 }
 
-/** Safely reconcile a route after a mutation when a page does not need local status state. */
 export async function refreshAdminRouteData(
   refresh?: (() => Promise<void>) | null,
   onFailure?: (error: unknown) => void,
 ): Promise<boolean> {
-  const result = await reconcileAdminMutation(async () => undefined, refresh);
-  if (result.kind === "refresh-failed") {
-    const { refreshError } = result;
-    onFailure?.(refreshError);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("admin-refresh-failed", {
-          detail: { error: refreshError, refresh },
-        }),
-      );
-    }
-    return false;
-  }
-  return true;
+  const result = await retryAdminRefresh(refresh);
+  if (!result.ok) onFailure?.(result.error);
+  return result.ok;
 }
 
-/**
- * Require an authoritative route reload before a versioned editor may be remounted.
- * Rejecting keeps configuration history's committed-restore blocker open.
- */
 export async function requireAdminRouteRefresh(
   refresh?: (() => Promise<void>) | null,
+  onFailure?: (error: unknown) => void,
 ): Promise<void> {
   if (!refresh) {
     throw new Error(
       "The restored configuration could not be loaded because refresh is unavailable.",
     );
   }
-  if (!(await refreshAdminRouteData(refresh))) {
+  if (!(await refreshAdminRouteData(refresh, onFailure))) {
     throw new Error("The restored configuration could not be loaded. Retry the editor refresh.");
   }
 }

@@ -14,6 +14,17 @@ import { createAdminRequestContext } from "../admin-errors/admin-request-context
 import { mapAdminFailure, normalizeAdminErrorResponse } from "../admin-errors/admin-error-mapper";
 
 type BillingOperationContract = AdminOperationContract;
+type BillingOperationName = keyof typeof billingContracts;
+const billingOperationNames = Object.keys(billingContracts) as BillingOperationName[];
+const billingOperations = new Map(
+  billingOperationNames.map((name) => {
+    const contract = billingContracts[name];
+    return [contract.operationId, { name, contract }];
+  }),
+);
+
+export type BillingApiHandler = (operationId: string, request: Request) => Promise<Response>;
+
 type BillingAssignmentBody = {
   action: "assign" | "unassign" | "move";
   guildId: string;
@@ -41,12 +52,18 @@ export function createBillingApiHandler(options: {
   support?: ReturnTypeBillingSupport;
   authorizeSupport?(session: CustomerSession): Promise<boolean>;
   readSession(request: Request): Promise<CustomerSession | null>;
-}) {
-  return async (request: Request): Promise<Response | null> => {
-    const path = new URL(request.url).pathname;
-    if (!path.startsWith("/admin/api/billing")) return null;
-    const contract = findBillingContract(request.method, path);
-    if (!contract) return Response.json({ error: "Method not allowed" }, { status: 405 });
+}): BillingApiHandler {
+  return async (operationId, request) => {
+    const selected = billingOperations.get(operationId);
+    const url = new URL(request.url);
+    if (
+      !selected ||
+      selected.contract.method !== request.method ||
+      selected.contract.path !== url.pathname
+    ) {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+    const { name: operation, contract } = selected;
     const adminRequest = createAdminRequestContext(request, contract);
     try {
       const session = await options.readSession(request);
@@ -56,7 +73,11 @@ export function createBillingApiHandler(options: {
           adminRequest,
         );
       }
-      if (path.startsWith("/admin/api/billing-support")) {
+      if (
+        operation === "supportCases" ||
+        operation === "supportCase" ||
+        operation === "supportOperation"
+      ) {
         if (
           !options.support ||
           !options.authorizeSupport ||
@@ -69,7 +90,7 @@ export function createBillingApiHandler(options: {
         }
       }
 
-      const query = await parseBillingQuery(request, contract);
+      const query = await parseBillingQuery(url, contract);
       if (!query.ok)
         return normalizeAdminErrorResponse(parseErrorResponse(query.error), adminRequest);
       const body = await parseBillingBody(request, contract);
@@ -77,130 +98,148 @@ export function createBillingApiHandler(options: {
         return normalizeAdminErrorResponse(parseErrorResponse(body.error), adminRequest);
 
       let response: Response;
-      if (path === "/admin/api/billing-support/cases") {
-        response = Response.json({ cases: await options.support!.listCases() });
-      } else if (path === "/admin/api/billing-support/case") {
-        const supportQuery = query.value as { caseId: string };
-        response = Response.json(await options.support!.inspect(supportQuery.caseId));
-      } else if (path === "/admin/api/billing-support/operation") {
-        const supportBody = body.value as SupportOperationBody;
-        let result: unknown;
-        if (supportBody.action === "reconcile")
-          result = await options.support!.reconcile(supportBody.caseId, session.user.id);
-        else if (supportBody.action === "billing_link")
-          result = await options.support!.billingLink(
-            supportBody.caseId,
-            session.user.id,
-            supportBody.intentId,
-          );
-        else if (supportBody.action === "assignment_move")
-          result = await options.support!.moveAssignment(
-            supportBody.caseId,
-            session.user.id,
-            supportBody.fromGuildId,
-            supportBody.toGuildId,
-          );
-        else if (supportBody.action === "delivery_replay")
-          result = await options.support!.replayDelivery(
-            supportBody.caseId,
-            session.user.id,
-            supportBody.operationId,
-          );
-        else
-          result = await options.support!.setStatus(
-            supportBody.caseId,
-            session.user.id,
-            supportBody.status,
-          );
-        response = Response.json({ result: result ?? null });
-      } else if (path === "/admin/api/billing") {
-        response = Response.json({
-          subscription: await options.service.readSummary(session.user.id),
-          catalog: await options.service.listCatalog(session.user.id),
-          prices: (await options.prices?.read()) ?? [],
-        });
-      } else if (path === "/admin/api/billing/history") {
-        if (!options.history) return unavailableResponse(adminRequest);
-        response = Response.json({
-          events: await options.history.listOwnerHistory(session.user.id),
-        });
-      } else if (path === "/admin/api/billing/checkout") {
-        const checkoutBody = body.value as { priceId: string; intentId: string };
-        response = Response.json(
-          await options.service.startCheckout({
-            ownerId: session.user.id,
-            email: session.user.email ?? null,
-            priceId: checkoutBody.priceId,
-            intentId: checkoutBody.intentId,
-          }),
-        );
-      } else if (path === "/admin/api/billing/assignments") {
-        if (!options.assignments) return unavailableResponse(adminRequest);
-        if (request.method === "GET") {
-          response = Response.json(
-            await options.assignments.read(session.user.id, session.user.discordUserId),
-          );
-        } else {
-          const assignmentBody = body.value as BillingAssignmentBody;
-          if (assignmentBody.action === "assign")
-            await options.assignments.assign(
+      switch (operation) {
+        case "supportCases": {
+          response = Response.json({ cases: await options.support!.listCases() });
+          break;
+        }
+        case "supportCase": {
+          const supportQuery = query.value as { caseId: string };
+          response = Response.json(await options.support!.inspect(supportQuery.caseId));
+          break;
+        }
+        case "supportOperation": {
+          const supportBody = body.value as SupportOperationBody;
+          let result: unknown;
+          if (supportBody.action === "reconcile")
+            result = await options.support!.reconcile(supportBody.caseId, session.user.id);
+          else if (supportBody.action === "billing_link")
+            result = await options.support!.billingLink(
+              supportBody.caseId,
               session.user.id,
-              { discordUserId: session.user.discordUserId, displayName: session.user.name },
-              assignmentBody.guildId,
+              supportBody.intentId,
             );
-          else if (assignmentBody.action === "unassign")
-            await options.assignments.unassign(
+          else if (supportBody.action === "assignment_move")
+            result = await options.support!.moveAssignment(
+              supportBody.caseId,
               session.user.id,
-              { discordUserId: session.user.discordUserId, displayName: session.user.name },
-              assignmentBody.guildId,
+              supportBody.fromGuildId,
+              supportBody.toGuildId,
+            );
+          else if (supportBody.action === "delivery_replay")
+            result = await options.support!.replayDelivery(
+              supportBody.caseId,
+              session.user.id,
+              supportBody.operationId,
             );
           else
-            await options.assignments.move(
+            result = await options.support!.setStatus(
+              supportBody.caseId,
               session.user.id,
-              { discordUserId: session.user.discordUserId, displayName: session.user.name },
-              assignmentBody.fromGuildId!,
-              assignmentBody.guildId,
+              supportBody.status,
             );
+          response = Response.json({ result: result ?? null });
+          break;
+        }
+        case "get": {
+          response = Response.json({
+            subscription: await options.service.readSummary(session.user.id),
+            catalog: await options.service.listCatalog(session.user.id),
+            prices: (await options.prices?.read()) ?? [],
+          });
+          break;
+        }
+        case "history": {
+          if (!options.history) return unavailableResponse(adminRequest);
+          response = Response.json({
+            events: await options.history.listOwnerHistory(session.user.id),
+          });
+          break;
+        }
+        case "checkout": {
+          const checkoutBody = body.value as { priceId: string; intentId: string };
+          response = Response.json(
+            await options.service.startCheckout({
+              ownerId: session.user.id,
+              email: session.user.email ?? null,
+              priceId: checkoutBody.priceId,
+              intentId: checkoutBody.intentId,
+            }),
+          );
+          break;
+        }
+        case "assignmentsGet":
+        case "assignmentsPost": {
+          if (!options.assignments) return unavailableResponse(adminRequest);
+          if (operation === "assignmentsPost") {
+            const assignmentBody = body.value as BillingAssignmentBody;
+            if (assignmentBody.action === "assign")
+              await options.assignments.assign(
+                session.user.id,
+                { discordUserId: session.user.discordUserId, displayName: session.user.name },
+                assignmentBody.guildId,
+              );
+            else if (assignmentBody.action === "unassign")
+              await options.assignments.unassign(
+                session.user.id,
+                { discordUserId: session.user.discordUserId, displayName: session.user.name },
+                assignmentBody.guildId,
+              );
+            else
+              await options.assignments.move(
+                session.user.id,
+                { discordUserId: session.user.discordUserId, displayName: session.user.name },
+                assignmentBody.fromGuildId!,
+                assignmentBody.guildId,
+              );
+          }
           response = Response.json(
             await options.assignments.read(session.user.id, session.user.discordUserId),
           );
+          break;
         }
-      } else if (path === "/admin/api/billing/sync") {
-        const syncBody = body.value as { checkoutSessionId: string };
-        response = Response.json({
-          subscription: await options.service.requestSync(
-            session.user.id,
-            syncBody.checkoutSessionId,
-          ),
-        });
-      } else if (path === "/admin/api/billing/portal") {
-        if (!options.management) return unavailableResponse(adminRequest);
-        const portalBody = body.value as BillingIntentBody;
-        response = Response.json(
-          await options.management.createPortal(session.user.id, portalBody.intentId),
-        );
-      } else if (path === "/admin/api/billing/change-price") {
-        if (!options.management) return unavailableResponse(adminRequest);
-        const changeBody = body.value as { priceId: string; intentId: string };
-        response = Response.json(
-          await options.management.changePrice(
-            session.user.id,
-            changeBody.priceId,
-            changeBody.intentId,
-          ),
-        );
-      } else if (path === "/admin/api/billing/cancellation") {
-        if (!options.management) return unavailableResponse(adminRequest);
-        const cancellationBody = body.value as BillingIntentBody & { cancelAtPeriodEnd: boolean };
-        response = Response.json({
-          subscription: await options.management.setCancellation(
-            session.user.id,
-            cancellationBody.cancelAtPeriodEnd,
-            cancellationBody.intentId,
-          ),
-        });
-      } else {
-        return Response.json({ error: "Method not allowed" }, { status: 405 });
+        case "sync": {
+          const syncBody = body.value as { checkoutSessionId: string };
+          response = Response.json({
+            subscription: await options.service.requestSync(
+              session.user.id,
+              syncBody.checkoutSessionId,
+            ),
+          });
+          break;
+        }
+        case "portal": {
+          if (!options.management) return unavailableResponse(adminRequest);
+          const portalBody = body.value as BillingIntentBody;
+          response = Response.json(
+            await options.management.createPortal(session.user.id, portalBody.intentId),
+          );
+          break;
+        }
+        case "changePrice": {
+          if (!options.management) return unavailableResponse(adminRequest);
+          const changeBody = body.value as { priceId: string; intentId: string };
+          response = Response.json(
+            await options.management.changePrice(
+              session.user.id,
+              changeBody.priceId,
+              changeBody.intentId,
+            ),
+          );
+          break;
+        }
+        case "cancellation": {
+          if (!options.management) return unavailableResponse(adminRequest);
+          const cancellationBody = body.value as BillingIntentBody & { cancelAtPeriodEnd: boolean };
+          response = Response.json({
+            subscription: await options.management.setCancellation(
+              session.user.id,
+              cancellationBody.cancelAtPeriodEnd,
+              cancellationBody.intentId,
+            ),
+          });
+          break;
+        }
       }
       return finalizeBillingResponse(response, contract, adminRequest);
     } catch (error) {
@@ -220,17 +259,9 @@ export function createBillingApiHandler(options: {
   };
 }
 
-function findBillingContract(method: string, path: string): BillingOperationContract | null {
-  return (
-    Object.values(billingContracts).find(
-      (contract) => contract.method === method && contract.path === path,
-    ) ?? null
-  );
-}
-
-async function parseBillingQuery(request: Request, contract: BillingOperationContract) {
+async function parseBillingQuery(url: URL, contract: BillingOperationContract) {
   return contract.query
-    ? parseAdminQuery(new URL(request.url), contract.query)
+    ? parseAdminQuery(url, contract.query)
     : { ok: true as const, value: undefined };
 }
 

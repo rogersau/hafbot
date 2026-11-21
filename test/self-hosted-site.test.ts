@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Env } from "./support/test-env";
-import { createPublicRoutes } from "../src/routes/public-routes";
+import { createPublicWebRoutes } from "./helpers/runtime-endpoint-requests";
 import { createRuntimeApp } from "../src/runtime/app";
 import { createSqliteContext } from "./support/sqlite/runtime/sqlite-context";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
@@ -72,25 +72,34 @@ test("self-hosted links validate HTTPS, credentials, policy loops and bounded op
 });
 
 test("independent home and release routes avoid the hosted catalogue and dashboard", async () => {
-  const routes = createPublicRoutes({
-    features: ALL_FEATURES_ENABLED,
-    selfHostedSite: readSelfHostedSite(environment),
-    landingPriceCatalog: { read: async () => assert.fail("Hosted pricing must not be read") },
-  });
-  for (const method of ["GET", "HEAD"]) {
-    const response = await routes(new Request("https://unexpected-host.example/", { method }));
-    assert.equal(response?.status, 302);
-    assert.equal(response?.headers.get("location"), "https://independent.example/admin");
-    assert.equal(response?.headers.get("cache-control"), "no-store");
+  const database = new SqliteD1Database();
+  try {
+    const app = createRuntimeApp({
+      ...createSqliteContext({
+        ...environment,
+        HAF_DB: database.d1,
+        STAGING_MODE: "true",
+        DISCORD_BOT_TOKEN: "test-token",
+        BOT_USER_ID: "123456789012345678",
+        DISCORD_PUBLIC_KEY: "a".repeat(64),
+      } as Env),
+      landingPriceCatalog: { read: async () => assert.fail("Hosted pricing must not be read") },
+    });
+    for (const method of ["GET", "HEAD"]) {
+      const response = await app.fetch(new Request("https://unexpected-host.example/", { method }));
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get("location"), "https://independent.example/admin");
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    }
+    const response = await app.fetch(new Request("https://independent.example/changelog"));
+    assert.equal(response.headers.get("location"), "https://github.com/rogersau/hafbot/releases");
+  } finally {
+    database.close();
   }
-  assert.equal(
-    (await routes(new Request("https://independent.example/changelog")))?.headers.get("location"),
-    "https://github.com/rogersau/hafbot/releases",
-  );
 });
 
 test("independent policies redirect to operator documents and never accept posted bodies", async () => {
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     selfHostedSite: readSelfHostedSite({
       ...environment,
@@ -111,7 +120,7 @@ test("independent policies redirect to operator documents and never accept poste
 });
 
 test("missing policies identify the independent operator, escape text and retain HTML protections", async () => {
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     selfHostedSite: readSelfHostedSite({
       ...environment,
@@ -134,7 +143,7 @@ test("missing policies identify the independent operator, escape text and retain
 
 test("Microsoft domain verification identifies only a configured independent application", async () => {
   for (const applicationId of [undefined, "own-microsoft-app"]) {
-    const routes = createPublicRoutes({
+    const routes = createPublicWebRoutes({
       features: ALL_FEATURES_ENABLED,
       selfHostedSite: readSelfHostedSite(environment),
       microsoftApplicationId: applicationId,

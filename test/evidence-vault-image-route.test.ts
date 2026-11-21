@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Runtime tests compile under tsconfig.tests.json.
 import test from "node:test";
 
-import { createPublicRoutes } from "../src/routes/public-routes";
+import { createPublicWebRoutes } from "./helpers/runtime-endpoint-requests";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { createEvidenceMediaCapability } from "../src/security/evidence-media-capability";
 
@@ -20,7 +20,7 @@ test("public routes serve Evidence Vault images only with a scoped capability", 
     imageId: "image",
     expiresAtSeconds: 1_600,
   });
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     evidenceMediaCapability: capability,
     evidenceVaultStore: {
@@ -79,7 +79,7 @@ test("public routes serve Evidence Vault images only with a scoped capability", 
 });
 
 test("public routes return safe not found for unknown Evidence Vault images", async () => {
-  const routes = createPublicRoutes({
+  const routes = createPublicWebRoutes({
     features: ALL_FEATURES_ENABLED,
     evidenceVaultStore: { readRecord: async () => null } as never,
     evidenceVaultBlobs: {

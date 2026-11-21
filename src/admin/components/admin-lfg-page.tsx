@@ -2,7 +2,7 @@ import { ConfigurationActions } from "./configuration-actions";
 import { useState } from "react";
 
 import type { LfgConfig, LfgPost } from "../../types";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { FormField, SectionHeader, SettingsBlock } from "./admin-form-layout";
 import { AdminBottomActionBar, areAdminActionSnapshotsEqual } from "./admin-bottom-action-bar";
 import { InfoTooltip } from "./ui/info-tooltip";
@@ -47,19 +47,25 @@ export function AdminLfgPage({
 }) {
   const trimmedGuildId = selectedGuildId.trim();
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="LFG"
+      description="Configure looking-for-group noticeboards, server choices, and active post management."
+      readinessFeature="lfg"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-workflow space-y-6">
-      <AdminPageHeader
-        title="LFG"
-        description="Configure looking-for-group noticeboards, server choices, and active post management."
-        readinessFeature="lfg"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="LFG" />
       ) : (
         <LfgEditor
+          renderHeader={renderHeader}
           selectedWorkspaceId={selectedWorkspaceId}
           selectedGuildId={trimmedGuildId}
           initialData={initialData}
@@ -71,11 +77,13 @@ export function AdminLfgPage({
 }
 
 function LfgEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: LfgLoaderData | null;
@@ -234,15 +242,18 @@ function LfgEditor({
 
   if (!resource) {
     return (
-      <p className="text-sm text-muted-foreground">
-        {api.loading ? "Loading LFG…" : "LFG not loaded."}
-      </p>
+      <>
+        {renderHeader()}
+        <p className="text-sm text-muted-foreground">
+          {api.loading ? "Loading LFG…" : "LFG not loaded."}
+        </p>
+      </>
     );
   }
 
   const hasUnsavedChanges = !areAdminActionSnapshotsEqual(resource.config, savedConfig);
 
-  return (
+  const content = (
     <div className="space-y-5">
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardChanges} />
       <AdminRefreshNotice action="LFG" error={refreshError} refresh={onRouteDataRefresh} />
@@ -645,6 +656,13 @@ function LfgEditor({
         </p>
       ) : null}
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }
 

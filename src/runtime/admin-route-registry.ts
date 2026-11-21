@@ -140,85 +140,79 @@ const DASHBOARD_MUTATIONS: Readonly<Record<string, DashboardMutation>> = {
   },
 };
 
-export async function dispatchAdminRoute(
-  routes: ReadonlyArray<AnyRoute>,
+export async function runAdminRoute(
+  route: AnyRoute,
   request: Request,
+  params: RouteParams,
   options: DispatchOptions,
   url: URL = new URL(request.url),
-): Promise<Response | null> {
-  const method = request.method;
-  for (const route of routes) {
-    if (route.method !== method) continue;
-    const params = matchPath(route.path, url.pathname);
-    if (params === null) continue;
-    const operationId = route.operationId ?? operationIdFor(route.method, route.path);
-    const adminRequest = createAdminRequestContext(
-      request,
-      { operationId, path: route.path },
-      options.environment,
-    );
-    let bodyValue: unknown = undefined;
-    try {
-      const queryResult = route.query ? parseAdminQuery(url, route.query) : null;
-      if (queryResult && !queryResult.ok) {
-        return normalizeAdminErrorResponse(parseErrorResponse(queryResult.error), adminRequest);
-      }
-      if (route.body) {
-        const workspaceId =
-          route.maxBodyBytes === undefined ? await readWorkspaceIdFromBodyClone(request) : null;
-        const bodyResult = await parseAdminBody(request, route.body, {
-          maxBytes: route.maxBodyBytes,
-        });
-        if (!bodyResult.ok) {
-          return normalizeAdminErrorResponse(parseErrorResponse(bodyResult.error), adminRequest);
-        }
-        bodyValue = bodyResult.value;
-        if (workspaceId && isRecord(bodyValue) && !("workspaceId" in bodyValue)) {
-          bodyValue = { ...bodyValue, workspaceId };
-        }
-      }
-      const accessResult = await runAccessGuard(route, request, url, params, options, {
-        query: queryResult?.value,
-        body: bodyValue,
-      });
-      setAuthorisedScope(adminRequest, params, queryResult?.value, bodyValue);
-      if (accessResult.response)
-        return normalizeAdminErrorResponse(accessResult.response, adminRequest);
-      const guardResponse = await runRouteGuards(
-        route,
-        url,
-        params,
-        options,
-        accessResult.requirement,
-      );
-      if (guardResponse) return normalizeAdminErrorResponse(guardResponse, adminRequest);
-      reportDashboardSetupStarted(route, request, bodyValue, options);
-      const response = await route.handler({
-        request,
-        url,
-        params,
-        query: queryResult ? queryResult.value : undefined,
-        body: bodyValue,
-        adminRequest,
-      });
-      const normalized = await normalizeAdminErrorResponse(response, adminRequest);
-      reportDashboardMutation(route, request, bodyValue, normalized, options);
-      const schema = normalized.ok ? route.success : route.errors;
-      if (schema) {
-        const body = await normalized.clone().json();
-        const parsed = schema.safeParse(body);
-        if (!parsed.success) {
-          throw new Error(`Invalid response for ${operationId}: ${parsed.error.message}`);
-        }
-      }
-      return normalized;
-    } catch (error) {
-      const failure = await mapAdminFailure(error, adminRequest);
-      reportDashboardMutation(route, request, bodyValue, failure, options);
-      return failure;
+): Promise<Response> {
+  const operationId = getAdminOperationId(route);
+  const adminRequest = createAdminRequestContext(
+    request,
+    { operationId, path: route.path },
+    options.environment,
+  );
+  let bodyValue: unknown = undefined;
+  try {
+    const queryResult = route.query ? parseAdminQuery(url, route.query) : null;
+    if (queryResult && !queryResult.ok) {
+      return normalizeAdminErrorResponse(parseErrorResponse(queryResult.error), adminRequest);
     }
+    if (route.body) {
+      const workspaceId =
+        route.maxBodyBytes === undefined ? await readWorkspaceIdFromBodyClone(request) : null;
+      const bodyResult = await parseAdminBody(request, route.body, {
+        maxBytes: route.maxBodyBytes,
+      });
+      if (!bodyResult.ok) {
+        return normalizeAdminErrorResponse(parseErrorResponse(bodyResult.error), adminRequest);
+      }
+      bodyValue = bodyResult.value;
+      if (workspaceId && isRecord(bodyValue) && !("workspaceId" in bodyValue)) {
+        bodyValue = { ...bodyValue, workspaceId };
+      }
+    }
+    const accessResult = await runAccessGuard(route, request, url, params, options, {
+      query: queryResult?.value,
+      body: bodyValue,
+    });
+    setAuthorisedScope(adminRequest, params, queryResult?.value, bodyValue);
+    if (accessResult.response)
+      return normalizeAdminErrorResponse(accessResult.response, adminRequest);
+    const guardResponse = await runRouteGuards(
+      route,
+      url,
+      params,
+      options,
+      accessResult.requirement,
+    );
+    if (guardResponse) return normalizeAdminErrorResponse(guardResponse, adminRequest);
+    reportDashboardSetupStarted(route, request, bodyValue, options);
+    const response = await route.handler({
+      request,
+      url,
+      params,
+      query: queryResult ? queryResult.value : undefined,
+      body: bodyValue,
+      adminRequest,
+    });
+    const normalized = await normalizeAdminErrorResponse(response, adminRequest);
+    reportDashboardMutation(route, request, bodyValue, normalized, options);
+    const schema = normalized.ok ? route.success : route.errors;
+    if (schema) {
+      const body = await normalized.clone().json();
+      const parsed = schema.safeParse(body);
+      if (!parsed.success) {
+        throw new Error(`Invalid response for ${operationId}: ${parsed.error.message}`);
+      }
+    }
+    return normalized;
+  } catch (error) {
+    const failure = await mapAdminFailure(error, adminRequest);
+    reportDashboardMutation(route, request, bodyValue, failure, options);
+    return failure;
   }
-  return null;
 }
 
 function reportDashboardMutation(
@@ -423,7 +417,7 @@ export function checkRouteCollisions(routes: ReadonlyArray<AnyRoute>): void {
       );
     }
     seen.set(key, route);
-    const operationId = route.operationId ?? operationIdFor(route.method, route.path);
+    const operationId = getAdminOperationId(route);
     if (!/^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)+$/.test(operationId)) {
       throw new Error(`Invalid admin operation ID: ${operationId}`);
     }
@@ -431,6 +425,10 @@ export function checkRouteCollisions(routes: ReadonlyArray<AnyRoute>): void {
       throw new Error(`Duplicate admin operation ID: ${operationId}`);
     operations.add(operationId);
   }
+}
+
+export function getAdminOperationId(route: Pick<Route, "operationId" | "method" | "path">): string {
+  return route.operationId ?? operationIdFor(route.method, route.path);
 }
 
 function operationIdFor(method: RouteMethod, path: string): string {
@@ -446,31 +444,4 @@ function operationIdFor(method: RouteMethod, path: string): string {
         .join("")
     : "admin";
   return `${resource}.${method.toLowerCase()}`;
-}
-
-export function matchPath(pattern: string, pathname: string): RouteParams | null {
-  if (!pattern.includes(":")) {
-    return pattern === pathname ? {} : null;
-  }
-  const patternParts = pattern.split("/");
-  const pathParts = pathname.split("/");
-  if (patternParts.length !== pathParts.length) {
-    return null;
-  }
-  const params: RouteParams = {};
-  for (let index = 0; index < patternParts.length; index += 1) {
-    const patternPart = patternParts[index] ?? "";
-    const pathPart = pathParts[index] ?? "";
-    if (patternPart.startsWith(":")) {
-      const key = patternPart.slice(1);
-      try {
-        params[key] = decodeURIComponent(pathPart);
-      } catch {
-        params[key] = pathPart;
-      }
-    } else if (patternPart !== pathPart) {
-      return null;
-    }
-  }
-  return params;
 }

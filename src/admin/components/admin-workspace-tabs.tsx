@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useRef } from "react";
+import { useRouter } from "@tanstack/react-router";
+import type { GuildEntitlementTier } from "../../types";
+import { getPaidAdminFeature } from "../dashboard-routes";
 
 import { cn } from "../lib/utils";
+import { useAdminSession, useAdminSessionState } from "../lib/admin-session";
 import { LockIcon, XIcon } from "./ui/icons";
 
 export interface AdminWorkspaceTab {
@@ -9,7 +12,30 @@ export interface AdminWorkspaceTab {
   label: string;
   href: string;
   pinned: boolean;
-  locked?: boolean;
+}
+
+export interface AdminWorkspaceTabHistory {
+  contextKey: string;
+  tabs: AdminWorkspaceTab[];
+  recentIds: string[];
+}
+
+export function adminWorkspaceContextKey(workspaceId: string, guildId: string) {
+  return `${workspaceId || "no-workspace"}:${guildId || "no-guild"}`;
+}
+
+export function recordAdminWorkspaceVisit(
+  history: AdminWorkspaceTabHistory | null,
+  contextKey: string,
+  overviewHref: string,
+  current: AdminWorkspaceTab,
+): AdminWorkspaceTabHistory {
+  const previous = history?.contextKey === contextKey ? history : null;
+  return {
+    contextKey,
+    tabs: upsertAdminWorkspaceTab(previous?.tabs ?? [overviewTab(overviewHref)], current),
+    recentIds: [...(previous?.recentIds.filter((id) => id !== current.id) ?? []), current.id],
+  };
 }
 
 export function upsertAdminWorkspaceTab(
@@ -49,7 +75,7 @@ export function AdminWorkspaceTabs({
   currentPath,
   currentSearch,
   currentLabel,
-  currentLocked,
+  selectedGuildTier,
   selectedGuildId,
   contextKey,
   overviewHref,
@@ -58,80 +84,35 @@ export function AdminWorkspaceTabs({
   currentPath: string;
   currentSearch: string;
   currentLabel: string;
-  currentLocked: boolean;
+  selectedGuildTier?: GuildEntitlementTier | null;
   selectedGuildId: string;
   contextKey: string;
   overviewHref: string;
   showOverview: boolean;
 }) {
-  const navigate = useNavigate();
+  const router = useRouter();
+  const session = useAdminSession();
   const currentId = getAdminWorkspaceRouteId(currentPath, selectedGuildId);
   const currentHref = `${currentPath}${currentSearch}`;
-  const [tabs, setTabs] = useState<AdminWorkspaceTab[]>(() =>
-    buildInitialTabs(
-      showOverview,
-      overviewHref,
-      currentId,
-      currentLabel,
-      currentHref,
-      currentLocked,
-    ),
+  const tabState = useAdminSessionState((state) => state.workspaceTabs);
+  const currentTabState = tabState?.contextKey === contextKey ? tabState : null;
+  const currentTab: AdminWorkspaceTab = {
+    id: currentId,
+    label: currentLabel,
+    href: currentHref,
+    pinned: showOverview && currentId === "overview",
+  };
+  const tabs = upsertAdminWorkspaceTab(
+    currentTabState?.tabs ?? (showOverview ? [overviewTab(overviewHref)] : []),
+    currentTab,
   );
-  const [recentIds, setRecentIds] = useState<string[]>([currentId]);
-  const previousContextKeyRef = useRef(contextKey);
-  const pendingCloseRef = useRef<string | null>(null);
+  const recentIds = currentTabState?.recentIds ?? [currentId];
   const pendingFocusRef = useRef<string | null>(null);
-  const tabRefs = useRef(new Map<string, HTMLButtonElement>());
-
-  // eslint-disable-next-line custom/no-use-effect -- Projects router state into session-local workspace tabs.
-  useEffect(() => {
-    const nextCurrent: AdminWorkspaceTab = {
-      id: currentId,
-      label: currentLabel,
-      href: currentHref,
-      pinned: showOverview && currentId === "overview",
-      locked: currentLocked,
-    };
-
-    if (previousContextKeyRef.current !== contextKey) {
-      previousContextKeyRef.current = contextKey;
-      setTabs(
-        buildInitialTabs(
-          showOverview,
-          overviewHref,
-          currentId,
-          currentLabel,
-          currentHref,
-          currentLocked,
-        ),
-      );
-      setRecentIds([currentId]);
-      pendingCloseRef.current = null;
-      return;
-    }
-
-    setTabs((openTabs) => {
-      const withoutClosed = pendingCloseRef.current
-        ? openTabs.filter((tab) => tab.id !== pendingCloseRef.current)
-        : openTabs;
-      pendingCloseRef.current = null;
-      return upsertAdminWorkspaceTab(withoutClosed, nextCurrent);
-    });
-    setRecentIds((ids) => [...ids.filter((id) => id !== currentId), currentId]);
-  }, [contextKey, currentHref, currentId, currentLabel, currentLocked, overviewHref, showOverview]);
-
-  // eslint-disable-next-line custom/no-use-effect -- Restores predictable tab focus after route navigation.
-  useEffect(() => {
-    const focusId = pendingFocusRef.current;
-    if (!focusId || focusId !== currentId) return;
-    pendingFocusRef.current = null;
-    tabRefs.current.get(focusId)?.focus();
-  }, [currentId]);
 
   const activateTab = (tab: AdminWorkspaceTab) => {
     if (tab.id === currentId) return;
     pendingFocusRef.current = tab.id;
-    void navigate({ to: tab.href });
+    void router.navigate({ to: tab.href });
   };
 
   const moveTabFocus = (tab: AdminWorkspaceTab, key: string) => {
@@ -148,19 +129,30 @@ export function AdminWorkspaceTabs({
     if (nextTab) activateTab(nextTab);
   };
 
-  const closeTab = (tab: AdminWorkspaceTab) => {
+  const closeTab = async (tab: AdminWorkspaceTab) => {
     if (tab.pinned) return;
-    if (tab.id !== currentId) {
-      setTabs((openTabs) => openTabs.filter((openTab) => openTab.id !== tab.id));
-      setRecentIds((ids) => ids.filter((id) => id !== tab.id));
-      return;
+    if (tab.id === currentId) {
+      const target = getAdminWorkspaceCloseTarget(tabs, recentIds, tab.id);
+      if (!target) return;
+      pendingFocusRef.current = target.id;
+      const next = router.buildLocation({ to: target.href });
+      await router.navigate({ to: target.href });
+      if (router.state.resolvedLocation?.href !== next.href) {
+        if (pendingFocusRef.current === target.id) pendingFocusRef.current = null;
+        return;
+      }
     }
-
-    const target = getAdminWorkspaceCloseTarget(tabs, recentIds, tab.id);
-    if (!target) return;
-    pendingCloseRef.current = tab.id;
-    pendingFocusRef.current = target.id;
-    void navigate({ to: target.href });
+    session.update(({ workspaceTabs }) =>
+      workspaceTabs?.contextKey === contextKey
+        ? {
+            workspaceTabs: {
+              ...workspaceTabs,
+              tabs: workspaceTabs.tabs.filter((openTab) => openTab.id !== tab.id),
+              recentIds: workspaceTabs.recentIds.filter((id) => id !== tab.id),
+            },
+          }
+        : {},
+    );
   };
 
   return (
@@ -168,6 +160,7 @@ export function AdminWorkspaceTabs({
       <div className="admin-workspace-tabs" role="tablist" aria-label="Open admin pages">
         {tabs.map((tab) => {
           const active = tab.id === currentId;
+          const locked = selectedGuildTier === "free" && getPaidAdminFeature(`/admin/${tab.id}`);
           return (
             <div
               key={tab.id}
@@ -177,8 +170,10 @@ export function AdminWorkspaceTabs({
               <button
                 id={`admin-workspace-tab-${tab.id}`}
                 ref={(element) => {
-                  if (element) tabRefs.current.set(tab.id, element);
-                  else tabRefs.current.delete(tab.id);
+                  if (element && active && pendingFocusRef.current === tab.id) {
+                    pendingFocusRef.current = null;
+                    element.focus();
+                  }
                 }}
                 type="button"
                 role="tab"
@@ -193,16 +188,16 @@ export function AdminWorkspaceTabs({
                   moveTabFocus(tab, event.key);
                 }}
               >
-                <span className={cn("admin-workspace-tab-state", tab.locked && "is-locked")} />
+                <span className={cn("admin-workspace-tab-state", locked && "is-locked")} />
                 <span>{tab.label}</span>
-                {tab.locked ? <LockIcon className="h-3 w-3" aria-label="Paid feature" /> : null}
+                {locked ? <LockIcon className="h-3 w-3" aria-label="Paid feature" /> : null}
               </button>
               {!tab.pinned ? (
                 <button
                   type="button"
                   className="admin-workspace-tab-close"
                   aria-label={`Close ${tab.label}`}
-                  onClick={() => closeTab(tab)}
+                  onClick={() => void closeTab(tab)}
                 >
                   <XIcon className="h-3 w-3" />
                 </button>
@@ -219,27 +214,11 @@ export function AdminWorkspaceTabs({
   );
 }
 
-function buildInitialTabs(
-  showOverview: boolean,
-  overviewHref: string,
-  currentId: string,
-  currentLabel: string,
-  currentHref: string,
-  currentLocked: boolean,
-): AdminWorkspaceTab[] {
-  const overview: AdminWorkspaceTab = {
+function overviewTab(overviewHref: string): AdminWorkspaceTab {
+  return {
     id: "overview",
     label: "Overview",
     href: overviewHref,
     pinned: true,
   };
-  const current: AdminWorkspaceTab = {
-    id: currentId,
-    label: currentLabel,
-    href: currentHref,
-    pinned: showOverview && currentId === "overview",
-    locked: currentLocked,
-  };
-  if (!showOverview) return [current];
-  return currentId === "overview" ? [overview] : [overview, current];
 }
