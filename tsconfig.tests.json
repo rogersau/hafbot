@@ -3,10 +3,11 @@
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "bundler",
+    "customConditions": ["import"],
     "esModuleInterop": true,
     "outDir": "dist-tests",
     "rootDir": ".",
-    "types": ["@cloudflare/workers-types", "node"],
+    "types": ["@cloudflare/workers-types", "node", "vite/client"],
     "lib": ["ES2022", "DOM"],
     // skipLibCheck required: both @cloudflare/workers-types and node define
     // overlapping globals (console, crypto, URL, etc.) causing type conflicts.
@@ -14,5 +15,5 @@
     "skipLibCheck": true
   },
   "include": ["src/**/*.ts", "test/**/*.test.ts", "test/**/*.test.tsx"],
-  "exclude": ["dist-tests", "src/admin/**", "src/landing/**"]
+  "exclude": ["dist-tests", "src/admin/**", "src/web/**", "src/landing/**"]
 }

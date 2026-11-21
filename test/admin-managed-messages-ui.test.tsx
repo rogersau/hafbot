@@ -7,6 +7,7 @@ import test from "node:test";
 import { act } from "react";
 import { renderToString } from "react-dom/server";
 import { JSDOM } from "jsdom";
+import { withAdminDom } from "./support/admin-dom";
 import { changeValue } from "./support/admin-dom-events";
 
 import {
@@ -29,89 +30,64 @@ test("Save and continue dispatches only to the active editor mutation", async ()
 });
 
 test("Managed Messages editor covers editing, preview, validation, and confirmed lifecycle actions", async () => {
-  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
-    url: "https://example.com/admin/guild-1/managed-messages",
-  });
-  const previousWindow = globalThis.window;
-  const previousDocument = globalThis.document;
-  const previousFetch = globalThis.fetch;
-  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
-  const reactActEnvironment = globalThis as typeof globalThis & {
-    IS_REACT_ACT_ENVIRONMENT?: boolean;
-  };
-  const previousActEnvironment = reactActEnvironment.IS_REACT_ACT_ENVIRONMENT;
-  reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
-  Object.assign(globalThis, {
-    window: dom.window,
-    document: dom.window.document,
-    requestAnimationFrame: () => 0,
-  });
-  const requests: Array<{ url: string; method: string }> = [];
-  let responseMessage: ManagedMessagesLoaderData["messages"][number] | null = null;
-  globalThis.fetch = async (input, init) => {
-    if (String(input).startsWith("/admin/api/permissions/diagnostics")) {
-      return Response.json({ guildId: "guild-1", checksByFeature: { "managed-messages": [] } });
-    }
-    const method = init?.method ?? "GET";
-    requests.push({ url: String(input), method });
-    return method === "DELETE"
-      ? Response.json({ ok: true, deleted: true })
-      : Response.json({ message: responseMessage });
-  };
-  const initialData: ManagedMessagesLoaderData = {
-    guildId: "guild-1",
-    messages: [
-      {
-        id: "managed-1",
-        guildId: "guild-1",
-        internalName: "rules",
-        channelId: "channel-1",
-        messageId: "message-1",
-        embeds: [
-          {
-            description: "Rules",
-            fields: [
-              { name: "First", value: "One", inline: false },
-              { name: "Second", value: "Two", inline: false },
-            ],
-          },
-          { description: "Second embed", fields: [] },
-        ],
-        buttons: [{ label: "Support", url: "https://example.com/support", emoji: "🔗" }],
-        announcement: { roleIds: [], everyone: false, here: false, notifyOnCreate: false },
-        status: "published",
-        createdAtMs: 1,
-        updatedAtMs: 1,
-      },
-    ],
-    entitlement: null,
-    canWrite: true,
-    resources: {
+  await withAdminDom(async ({ container, render }) => {
+    const requests: Array<{ url: string; method: string }> = [];
+    let responseMessage: ManagedMessagesLoaderData["messages"][number] | null = null;
+    globalThis.fetch = async (input, init) => {
+      if (String(input).startsWith("/admin/api/permissions/diagnostics")) {
+        return Response.json({ guildId: "guild-1", checksByFeature: { "managed-messages": [] } });
+      }
+      const method = init?.method ?? "GET";
+      requests.push({ url: String(input), method });
+      return method === "DELETE"
+        ? Response.json({ ok: true, deleted: true })
+        : Response.json({ message: responseMessage });
+    };
+    const initialData: ManagedMessagesLoaderData = {
       guildId: "guild-1",
-      roles: [],
-      categories: [],
-      textChannels: [{ id: "channel-1", name: "rules" }],
-      voiceChannels: [],
-      forumChannels: [],
-    },
-  };
-  responseMessage = initialData.messages[0]!;
-  const container = dom.window.document.querySelector("#root");
-  assert.ok(container);
-  // React DOM must detect the browser environment before its first import.
-  const { createRoot } = await import("react-dom/client");
-  const root = createRoot(container);
-
-  try {
-    await act(async () => {
-      root.render(
-        <AdminManagedMessagesPage
-          selectedWorkspaceId="workspace-1"
-          selectedGuildId="guild-1"
-          initialData={initialData}
-        />,
-      );
-    });
+      messages: [
+        {
+          id: "managed-1",
+          guildId: "guild-1",
+          internalName: "rules",
+          channelId: "channel-1",
+          messageId: "message-1",
+          embeds: [
+            {
+              description: "Rules",
+              fields: [
+                { name: "First", value: "One", inline: false },
+                { name: "Second", value: "Two", inline: false },
+              ],
+            },
+            { description: "Second embed", fields: [] },
+          ],
+          buttons: [{ label: "Support", url: "https://example.com/support", emoji: "🔗" }],
+          announcement: { roleIds: [], everyone: false, here: false, notifyOnCreate: false },
+          status: "published",
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        },
+      ],
+      entitlement: null,
+      canWrite: true,
+      resources: {
+        guildId: "guild-1",
+        roles: [],
+        categories: [],
+        textChannels: [{ id: "channel-1", name: "rules" }],
+        voiceChannels: [],
+        forumChannels: [],
+      },
+    };
+    responseMessage = initialData.messages[0]!;
+    await render(
+      <AdminManagedMessagesPage
+        selectedWorkspaceId="workspace-1"
+        selectedGuildId="guild-1"
+        initialData={initialData}
+      />,
+    );
     assert.match(container.textContent ?? "", /Free tier: 1 of 3 used/);
     assert.match(container.textContent ?? "", /Published/);
     await clickButton(container, "Edit");
@@ -203,18 +179,18 @@ test("Managed Messages editor covers editing, preview, validation, and confirmed
     }
 
     await clickButton(container, "Save");
-    assert.match(dom.window.document.body.textContent ?? "", /Save Managed Message/);
+    assert.match(document.body.textContent ?? "", /Save Managed Message/);
     assert.deepEqual(requests, []);
 
-    await clickButton(dom.window.document.body, "Save changes");
+    await clickButton(document.body, "Save changes");
     assert.deepEqual(requests, [{ url: "/admin/api/managed-messages", method: "POST" }]);
 
     await clickButton(container, "Existing Messages");
     await clickButton(container, "Delete");
-    assert.match(dom.window.document.body.textContent ?? "", /Delete Managed Message/);
+    assert.match(document.body.textContent ?? "", /Delete Managed Message/);
     assert.equal(requests.length, 1);
 
-    await clickLastButton(dom.window.document.body, "Delete");
+    await clickLastButton(document.body, "Delete");
     assert.deepEqual(requests[1], { url: "/admin/api/managed-messages", method: "DELETE" });
 
     await clickButton(container, "New Managed Message");
@@ -236,17 +212,7 @@ test("Managed Messages editor covers editing, preview, validation, and confirmed
     assert.ok(container.querySelector('input[type="datetime-local"]'));
     await clickButton(container, "Save Draft");
     assert.match(container.textContent ?? "", /Internal name is required/);
-  } finally {
-    await act(async () => root.unmount());
-    Object.assign(globalThis, {
-      window: previousWindow,
-      document: previousDocument,
-      fetch: previousFetch,
-      requestAnimationFrame: previousRequestAnimationFrame,
-    });
-    reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
-    dom.window.close();
-  }
+  });
 });
 
 test("Managed Messages viewer sees Missing status without mutation controls", () => {

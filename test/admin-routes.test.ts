@@ -12,16 +12,13 @@ import {
   createAdminApiHandler as createBaseAdminApiHandler,
   type AdminApiHandlerOptions,
 } from "../src/runtime/admin-api";
-import { createAdminSpaRoutes } from "../src/runtime/admin-spa-routes";
 import { createAdminApiHandler as createTestAdminApiHandler } from "./helpers/admin-api";
 import type { AdminAccessRequirement } from "../src/runtime/admin-access";
-import type { AdminSpaRouteOptions } from "../src/runtime/admin-spa-routes";
 import { QuantityLimitError } from "../src/runtime/entitlement-checks";
 import { createPermissiveGuildResourceValidator } from "./helpers/guild-resource-validator";
 import { allowAllAdminAccess } from "./helpers/admin-api";
 
-type TestAdminRouteOptions = AdminSpaRouteOptions &
-  Partial<Omit<AdminApiHandlerOptions, "services">>;
+type TestAdminRouteOptions = Partial<Omit<AdminApiHandlerOptions, "services">>;
 
 function createAdminRoutes(options: TestAdminRouteOptions) {
   const api = createTestAdminApiHandler({
@@ -31,10 +28,10 @@ function createAdminRoutes(options: TestAdminRouteOptions) {
     adminAccess: options.adminAccess ?? allowAllAdminAccess,
     guildResources: options.guildResources ?? createPermissiveGuildResourceValidator(),
   });
-  const spa = createAdminSpaRoutes(options);
+
   return (request: Request) => {
     const url = new URL(request.url);
-    return url.pathname.startsWith("/admin/api/") ? api(request, url) : spa(request);
+    return api(request, url);
   };
 }
 
@@ -89,20 +86,45 @@ test("worker returns 404 for an unknown admin API", async () => {
   );
 
   assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: "Not found" });
+});
+
+test("Admin API rejects unsupported methods and path aliases", async () => {
+  const env = createEnv();
+  for (const [method, path] of [
+    ["HEAD", "/admin/api/member-verification?guildId=100"],
+    ["OPTIONS", "/admin/api/member-verification?guildId=100"],
+    ["GET", "/admin/api/member-verification/?guildId=100"],
+    ["GET", "/admin/api/MEMBER-VERIFICATION?guildId=100"],
+  ] as const) {
+    const response = await worker.fetch(
+      new Request(`https://worker.example${path}`, { method }),
+      env,
+      {} as ExecutionContext,
+    );
+    assert.equal(response.status, 404, `${method} ${path}`);
+    if (method !== "HEAD") assert.deepEqual(await response.json(), { error: "Not found" });
+  }
+});
+
+test("Admin API passes decoded Guild path parameters to authorization", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://worker.example/admin/api/guilds/%31%30%30/channel-permission-copy/resources",
+    ),
+    createEnv(),
+    {} as ExecutionContext,
+  );
+
+  assert.equal(response.status, 401);
+  const body = (await response.json()) as { code: string };
+  assert.equal(body.code, "authentication_required");
 });
 
 test("Admin API requires registry dependencies at construction", () => {
-  const spaOptions: AdminSpaRouteOptions = {
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
-  };
-
   assert.throws(
     () =>
       createBaseAdminApiHandler({
-        ...spaOptions,
         discordBotToken: "test-token",
         adminAccess: allowAllAdminAccess,
       } as never),
@@ -111,7 +133,6 @@ test("Admin API requires registry dependencies at construction", () => {
   assert.throws(
     () =>
       createBaseAdminApiHandler({
-        ...spaOptions,
         stores: {} as never,
         discordBotToken: "",
         adminAccess: allowAllAdminAccess,
@@ -121,7 +142,6 @@ test("Admin API requires registry dependencies at construction", () => {
   assert.throws(
     () =>
       createBaseAdminApiHandler({
-        ...spaOptions,
         stores: {} as never,
         discordBotToken: "test-token",
       } as never),
@@ -231,10 +251,6 @@ test("POST /admin/api/blocklist validates JSON before calling the blocklist work
       } as never,
       timedRoleService: {} as never,
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -261,10 +277,6 @@ test("GET /admin/api/overview passes refresh requests to the overview service", 
       blocklistService: {} as never,
       timedRoleService: {} as never,
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(new Request("https://example.com/admin/api/overview?refresh=1"));
@@ -290,10 +302,6 @@ test("GET /admin/api/overview delegates read access through the admin access sea
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(new Request("https://example.com/admin/api/overview"));
@@ -327,10 +335,6 @@ test("GET /admin/api/overview preserves denied responses from the admin access s
         });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(new Request("https://example.com/admin/api/overview"));
@@ -354,10 +358,6 @@ test("GET /admin/api/workspaces returns the current user's workspaces", async ()
         ],
       }),
     } as never,
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(new Request("https://example.com/admin/api/workspaces"));
@@ -381,10 +381,6 @@ test("POST /admin/api/workspace-guilds requires an owner or admin", async () => 
     workspaceApi: {
       linkGuild: async () => adminErrorResponse("Forbidden", 403),
     } as never,
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -557,10 +553,6 @@ test("GET /admin/api/blocklist requires linked guild access", async () => {
         });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -592,10 +584,6 @@ test("viewer cannot mutate blocklist", async () => {
           : Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -634,10 +622,6 @@ test("GET /admin/api/blocklist returns the guild channel filter", async () => {
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -683,10 +667,6 @@ test("POST /admin/api/blocklist-channel-filter validates and saves the filter", 
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -731,10 +711,6 @@ test("POST /admin/api/blocklist delegates write access through the admin access 
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -770,10 +746,6 @@ test("POST /admin/api/blocklist preserves denied write responses from the admin 
         });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -804,10 +776,6 @@ test("POST /admin/api/blocklist-channel-filter rejects invalid channelMode", asy
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -845,10 +813,6 @@ test("POST /admin/api/timed-roles/new-member-config saves a full multi-rule list
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -902,10 +866,6 @@ test("POST /admin/api/timed-roles/manual-assignment-config rejects duplicate rol
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -951,10 +911,6 @@ test("POST /admin/api/blocklist adds each emoji from one add input", async () =>
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -999,10 +955,6 @@ test("POST /admin/api/blocklist accepts a bounded batch emoji payload", async ()
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -1050,10 +1002,6 @@ test("POST /admin/api/blocklist rejects a batch over the emoji bound before muta
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -1100,10 +1048,6 @@ test("POST /admin/api/blocklist returns the free-tier batch limit without readin
         return Promise.resolve({ ok: true as const });
       },
     },
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 
   const response = await route(
@@ -1162,9 +1106,5 @@ function createWorkspaceTestRoute(workspaceApi?: unknown) {
       timedRoleService: {} as never,
     },
     ...(workspaceApi === undefined ? {} : { workspaceApi: workspaceApi as never }),
-    redirect: (location) => new Response(null, { status: 302, headers: { location } }),
-    getAdminLoginLocation: () => "/admin/login",
-    renderAdminShell: () => new Response("ok"),
-    isAdminUiAuthorized: async () => true,
   });
 }

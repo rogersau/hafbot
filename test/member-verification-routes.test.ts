@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- Test compiled via tsconfig.tests.json.
 import test from "node:test";
 
-import { createMemberVerificationRoutes } from "../src/routes/member-verification-routes";
+import { createMemberVerificationRoutes } from "./helpers/runtime-endpoint-requests";
 import {
   MemberVerificationService,
   type MemberVerificationServiceOptions,

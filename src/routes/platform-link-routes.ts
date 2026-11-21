@@ -13,13 +13,16 @@ export interface PlatformLinkRouteOptions {
 
 const PENDING_LINK_TTL_MS = 15 * 60 * 1000;
 
-export function createPlatformLinkRoutes(options: PlatformLinkRouteOptions) {
+export function createPlatformLinkEndpoints(options: PlatformLinkRouteOptions) {
   const { platformConfig } = options;
   const platform = platformConfig.platformName;
   const displayName = platformConfig.displayName;
 
-  return async (request: Request): Promise<Response | null> => {
-    const url = new URL(request.url);
+  async function handleLink(
+    request: Request,
+    url: URL,
+    stage: "start" | "callback",
+  ): Promise<Response> {
     const publicUrl = url.origin;
     let trustedGuildId: string | undefined;
     let savedLink = false;
@@ -40,8 +43,7 @@ export function createPlatformLinkRoutes(options: PlatformLinkRouteOptions) {
       );
 
     try {
-      const isStartRoute = url.pathname === `/auth/${platform}/start`;
-      if (request.method === "GET" && isStartRoute) {
+      if (stage === "start") {
         const state = String(url.searchParams.get("state") || "");
         if (!state) {
           return failure(
@@ -85,165 +87,161 @@ export function createPlatformLinkRoutes(options: PlatformLinkRouteOptions) {
         return Response.redirect(authUrl.toString(), 302);
       }
 
-      if (request.method === "GET" && url.pathname === `/auth/${platform}/callback`) {
-        const state = String(url.searchParams.get("state") || "");
-        if (!state) {
+      const state = String(url.searchParams.get("state") || "");
+      if (!state) {
+        return failure(
+          400,
+          "Link request missing",
+          "Missing state parameter.",
+          `Open Discord and click the ${displayName} link button to start a new request.`,
+        );
+      }
+
+      const pending = await options.platformLinkService.readPendingLink(state);
+      if (!pending || pending.platform !== platform) {
+        return failure(
+          400,
+          "Link request unavailable",
+          `Invalid or expired ${displayName} login. Go back to Discord and click the ${displayName} link button again.`,
+          "Use the newest link from the server where you want to link your account.",
+        );
+      }
+      trustedGuildId = pending.guildId;
+
+      if (Date.now() - pending.createdAtMs > PENDING_LINK_TTL_MS) {
+        await options.platformLinkService.deletePendingLink(state);
+        return failure(
+          400,
+          "Link request expired",
+          `This ${displayName} login link has expired. Go back to Discord and click the ${displayName} link button again.`,
+          "Login links last 15 minutes. Start a new request and finish signing in promptly.",
+        );
+      }
+
+      try {
+        verifying = true;
+        const platformId = await platformConfig.verifyAssertion(request);
+        verifying = false;
+        if (!platformId) {
           return failure(
-            400,
-            "Link request missing",
-            "Missing state parameter.",
-            `Open Discord and click the ${displayName} link button to start a new request.`,
+            401,
+            `${displayName} login incomplete`,
+            `${displayName} login failed or was cancelled.`,
+            `Start a new request in Discord, sign in to the intended ${displayName} account, and approve the login.`,
           );
         }
 
-        const pending = await options.platformLinkService.readPendingLink(state);
-        if (!pending || pending.platform !== platform) {
+        const config = await options.platformLinkService.readConfig(pending.guildId, platform);
+        if (!config || config.enabled === false) {
           return failure(
             400,
-            "Link request unavailable",
-            `Invalid or expired ${displayName} login. Go back to Discord and click the ${displayName} link button again.`,
-            "Use the newest link from the server where you want to link your account.",
+            "Server setup needed",
+            `This server has not been configured for ${displayName} linking.`,
+            "Ask a server administrator to finish Play Link setup, then start a new request.",
           );
         }
-        trustedGuildId = pending.guildId;
 
-        if (Date.now() - pending.createdAtMs > PENDING_LINK_TTL_MS) {
-          await options.platformLinkService.deletePendingLink(state);
+        const existingLinks = await options.platformLinkService.getLinksByUser(
+          pending.guildId,
+          pending.userId,
+        );
+        const existingPlatformLinks = existingLinks.filter((l) => l.platform === platform);
+        const existingMatch = existingPlatformLinks.find((l) => l.platformId === platformId);
+
+        if (existingMatch?.active) {
           return failure(
-            400,
-            "Link request expired",
-            `This ${displayName} login link has expired. Go back to Discord and click the ${displayName} link button again.`,
-            "Login links last 15 minutes. Start a new request and finish signing in promptly.",
+            409,
+            "Account already linked",
+            `That ${displayName} account is already linked to your Discord account.`,
+            "Return to Discord to view your linked accounts with /playlink. You can close this window.",
           );
+        }
+
+        const duplicate = await options.platformLinkService.getLinkByPlatformId(
+          pending.guildId,
+          platform,
+          platformId,
+        );
+        if (duplicate && duplicate.userId !== pending.userId) {
+          return failure(
+            409,
+            "Account linked to someone else",
+            `This ${displayName} account is already linked to another Discord account in this server.`,
+            `Sign out of ${displayName} and start a new request with your own account. If this is your account, ask a server administrator to review the existing link.`,
+          );
+        }
+
+        if (!existingMatch && !config.allowMultipleLinks && existingPlatformLinks.length > 0) {
+          if (!config.allowRelink) {
+            return failure(
+              409,
+              "Account replacement disabled",
+              `Your Discord account is already linked and relinking is disabled.`,
+              "Your current link is unchanged. Ask a server administrator if you need to replace it.",
+            );
+          }
+        }
+
+        let needsFollowUp = false;
+        try {
+          await options.platformLinkService.saveLink(
+            {
+              guildId: pending.guildId,
+              userId: pending.userId,
+              platform,
+              platformId,
+              linkedAtMs: Date.now(),
+              manual: false,
+              actionedByUserId: null,
+              metadataJson: null,
+              active: true,
+            },
+            !existingMatch && !config.allowMultipleLinks && existingPlatformLinks.length > 0,
+          );
+          savedLink = true;
+        } catch (error) {
+          if (error instanceof PlatformLinkFinalizationError) {
+            savedLink = true;
+            needsFollowUp = true;
+          } else if (error instanceof QuantityLimitError) {
+            return failure(
+              409,
+              "Server link limit reached",
+              error.message,
+              "Ask a server administrator to remove unused links or upgrade the server plan, then start a new request.",
+            );
+          } else throw error;
         }
 
         try {
-          verifying = true;
-          const platformId = await platformConfig.verifyAssertion(request);
-          verifying = false;
-          if (!platformId) {
-            return failure(
-              401,
-              `${displayName} login incomplete`,
-              `${displayName} login failed or was cancelled.`,
-              `Start a new request in Discord, sign in to the intended ${displayName} account, and approve the login.`,
-            );
-          }
-
-          const config = await options.platformLinkService.readConfig(pending.guildId, platform);
-          if (!config || config.enabled === false) {
-            return failure(
-              400,
-              "Server setup needed",
-              `This server has not been configured for ${displayName} linking.`,
-              "Ask a server administrator to finish Play Link setup, then start a new request.",
-            );
-          }
-
-          const existingLinks = await options.platformLinkService.getLinksByUser(
+          await options.platformLinkService.assignLinkedRole(
             pending.guildId,
             pending.userId,
+            platform,
           );
-          const existingPlatformLinks = existingLinks.filter((l) => l.platform === platform);
-          const existingMatch = existingPlatformLinks.find((l) => l.platformId === platformId);
-
-          if (existingMatch?.active) {
-            return failure(
-              409,
-              "Account already linked",
-              `That ${displayName} account is already linked to your Discord account.`,
-              "Return to Discord to view your linked accounts with /playlink. You can close this window.",
-            );
-          }
-
-          const duplicate = await options.platformLinkService.getLinkByPlatformId(
-            pending.guildId,
+        } catch {
+          needsFollowUp = true;
+        }
+        try {
+          await options.platformLinkService.sendLogEmbed(pending.guildId, "linked", {
+            discordId: pending.userId,
             platform,
             platformId,
-          );
-          if (duplicate && duplicate.userId !== pending.userId) {
-            return failure(
-              409,
-              "Account linked to someone else",
-              `This ${displayName} account is already linked to another Discord account in this server.`,
-              `Sign out of ${displayName} and start a new request with your own account. If this is your account, ask a server administrator to review the existing link.`,
-            );
-          }
-
-          if (!existingMatch && !config.allowMultipleLinks && existingPlatformLinks.length > 0) {
-            if (!config.allowRelink) {
-              return failure(
-                409,
-                "Account replacement disabled",
-                `Your Discord account is already linked and relinking is disabled.`,
-                "Your current link is unchanged. Ask a server administrator if you need to replace it.",
-              );
-            }
-          }
-
-          let needsFollowUp = false;
-          try {
-            await options.platformLinkService.saveLink(
-              {
-                guildId: pending.guildId,
-                userId: pending.userId,
-                platform,
-                platformId,
-                linkedAtMs: Date.now(),
-                manual: false,
-                actionedByUserId: null,
-                metadataJson: null,
-                active: true,
-              },
-              !existingMatch && !config.allowMultipleLinks && existingPlatformLinks.length > 0,
-            );
-            savedLink = true;
-          } catch (error) {
-            if (error instanceof PlatformLinkFinalizationError) {
-              savedLink = true;
-              needsFollowUp = true;
-            } else if (error instanceof QuantityLimitError) {
-              return failure(
-                409,
-                "Server link limit reached",
-                error.message,
-                "Ask a server administrator to remove unused links or upgrade the server plan, then start a new request.",
-              );
-            } else throw error;
-          }
-
-          try {
-            await options.platformLinkService.assignLinkedRole(
-              pending.guildId,
-              pending.userId,
-              platform,
-            );
-          } catch {
-            needsFollowUp = true;
-          }
-          try {
-            await options.platformLinkService.sendLogEmbed(pending.guildId, "linked", {
-              discordId: pending.userId,
-              platform,
-              platformId,
-            });
-          } catch {
-            needsFollowUp = true;
-          }
-
-          if (needsFollowUp) return followUpFailure();
-
-          return htmlResponse({
-            profile: "platform-link-result",
-            html: buildSuccessHtml(platformConfig, platformId),
-            requestUrl: url,
           });
-        } finally {
-          await options.platformLinkService.deletePendingLink(state);
+        } catch {
+          needsFollowUp = true;
         }
-      }
 
-      return null;
+        if (needsFollowUp) return followUpFailure();
+
+        return htmlResponse({
+          profile: "platform-link-result",
+          html: buildSuccessHtml(platformConfig, platformId),
+          requestUrl: url,
+        });
+      } finally {
+        await options.platformLinkService.deletePendingLink(state);
+      }
     } catch (error) {
       if (savedLink || error instanceof PlatformLinkFinalizationError) {
         return followUpFailure();
@@ -257,6 +255,11 @@ export function createPlatformLinkRoutes(options: PlatformLinkRouteOptions) {
         `Return to Discord and check /playlink, then click the ${displayName} link button to start a new request. If this keeps happening, ask a server administrator for help.`,
       );
     }
+  }
+
+  return {
+    start: (request: Request) => handleLink(request, new URL(request.url), "start"),
+    callback: (request: Request) => handleLink(request, new URL(request.url), "callback"),
   };
 }
 

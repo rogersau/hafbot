@@ -1,9 +1,9 @@
+import { createCommerceBuyerRoutes } from "./helpers/runtime-endpoint-requests";
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { CommerceBuyerCheckoutService } from "../src/commerce/buyer-checkout";
 import {
-  createCommerceBuyerRoutes,
   signCommercePurchaseState,
   verifyCommercePurchaseState,
 } from "../src/routes/commerce-buyer-routes";

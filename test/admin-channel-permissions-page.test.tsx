@@ -1,9 +1,6 @@
 import { adminErrorResponse } from "./support/admin-error-response";
-/// <reference types="node/assert" />
-/// <reference types="node/assert/strict" />
 
 import assert from "node:assert/strict";
-// @ts-ignore -- Tests compile via tsconfig.tests.json; admin React is excluded from the runtime test build.
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { act, StrictMode } from "react";
@@ -66,10 +63,15 @@ for (const obsolete of ["success", "failure"] as const) {
         new Promise<Response>((resolve, reject) => {
           pending.push({ resolve, reject });
         });
-      // Strict Mode replays mount setup/cleanup, leaving the first network read in flight.
       await render(
         <StrictMode>
           <AdminChannelPermissionsPage selectedWorkspaceId="" selectedGuildId="guild-1" />
+        </StrictMode>,
+      );
+      assert.equal(pending.length, 1);
+      await render(
+        <StrictMode>
+          <AdminChannelPermissionsPage selectedWorkspaceId="" selectedGuildId="guild-2" />
         </StrictMode>,
       );
       assert.equal(pending.length, 2);
@@ -174,7 +176,6 @@ for (const failure of ["resources", "route", "apply"] as const) {
   });
 }
 
-// Characterize the current recovery boundary; these are not durable recovery guarantees.
 for (const checkpoint of ["applying", "refreshing", "refresh-failed"] as const) {
   test(`permission copy remount at ${checkpoint} loses local recovery without replaying apply`, async () => {
     await withAdminDom(async ({ render, click, container }) => {
@@ -229,7 +230,6 @@ for (const checkpoint of ["applying", "refreshing", "refresh-failed"] as const) 
         assert.match(container.textContent ?? "", /Permissions copied/);
       if (checkpoint === "refresh-failed") assert.ok(findButton(container, "Retry refresh"));
 
-      // A changed React key destroys the original instance, as route remounts do.
       await render(page("replacement"));
       assert.equal(container.querySelector("#target-confirmation"), null);
       assert.doesNotMatch(container.textContent ?? "", /Permissions copied|Retry refresh/);
@@ -242,7 +242,6 @@ for (const checkpoint of ["applying", "refreshing", "refresh-failed"] as const) 
         await act(async () => {
           finish!(Response.json(resources));
         });
-        // The detached continuation still refreshes route data; its state is not recovered.
         assert.equal(routeRefreshes, 1);
         assert.doesNotMatch(container.textContent ?? "", /Permissions copied|Retry refresh/);
         assert.equal(findButton(container, "Preview changes").disabled, false);

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createBanAppealAdminRoutes } from "../src/moderation-appeals/routes";
 import { BanAppealService, type BanAppealDiscord } from "../src/moderation-appeals/service";
 import {
   BanAppealError,
@@ -8,11 +9,8 @@ import {
   type BanAppealOperation,
   type BanAppealStore,
 } from "../src/moderation-appeals/types";
-import {
-  createBanAppealAdminRoutes,
-  createBanAppealPublicRoutes,
-} from "../src/moderation-appeals/routes";
-import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
+import { createBanAppealPublicRoutes } from "./helpers/runtime-endpoint-requests";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { DiscordApiError } from "../src/discord/client";
 

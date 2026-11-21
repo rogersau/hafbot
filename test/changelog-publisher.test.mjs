@@ -2,19 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  assertGeneratedBundleFresh,
   buildDiscordPayload,
   getLatestRelease,
   validateChangelog,
 } from "../scripts/changelog-format.mjs";
-
-test("changelog freshness check rejects a generated bundle without the latest version", () => {
-  assert.doesNotThrow(() => assertGeneratedBundleFresh("release 2026.07.17.2", "2026.07.17.2"));
-  assert.throws(
-    () => assertGeneratedBundleFresh("release 2026.07.17.1", "2026.07.17.2"),
-    /Generated landing bundle is stale/,
-  );
-});
 
 const changelog = {
   releases: [

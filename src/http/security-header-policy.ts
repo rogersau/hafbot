@@ -12,6 +12,7 @@ type Directives = Record<string, readonly string[]>;
 
 export interface ContentSecurityPolicyOptions {
   styleNonce?: string;
+  scriptNonce?: string;
 }
 
 const COMMON: Directives = {
@@ -119,6 +120,12 @@ export function contentSecurityPolicy(
   options: ContentSecurityPolicyOptions = {},
 ): string {
   const directives: Directives = { ...COMMON, ...PROFILES[profile] };
+  if (options.scriptNonce) {
+    directives["script-src"] = [
+      ...(directives["script-src"] ?? []),
+      `'nonce-${options.scriptNonce}'`,
+    ];
+  }
   if (options.styleNonce) {
     directives["style-src"] = [...(directives["style-src"] ?? []), `'nonce-${options.styleNonce}'`];
   }

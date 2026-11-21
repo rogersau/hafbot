@@ -2,7 +2,7 @@ import { ConfigurationAvailabilityActions } from "./configuration-availability-a
 import { useState, type ReactNode } from "react";
 
 import type { PlatformLink, PlatformLinkConfig } from "../../runtime/contracts/platform-link-store";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { DiscordMessagePreview } from "./discord-message-preview";
 import {
   EditorPanel,
@@ -17,7 +17,7 @@ import { NoGuildSelected } from "./no-guild-selected";
 import { NavigationGuard } from "./navigation-guard";
 import { PageFeedback } from "./page-feedback";
 import { useToast } from "./toast";
-import { refreshAdminRouteData } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { useAutoSaveToggle } from "../hooks/use-auto-save-toggle";
 import { Switch } from "./ui/switch";
 import { Button } from "./ui/button";
@@ -76,11 +76,6 @@ interface PlayerLinkDraft {
 
 type PlatformLinkMetadata = (typeof PLATFORM_METADATA)[PlayerLinkPlatform];
 
-/**
- * Builds the full config POST body for /admin/api/player-link/config. Shared by
- * the manual Save button and the auto-save toggles so both send an identical
- * payload.
- */
 export function buildPlatformLinkSavePayload(
   draft: PlayerLinkDraft,
   activePlatform: PlayerLinkPlatform,
@@ -230,19 +225,25 @@ export function AdminPlatformLinkPage({
 }) {
   const trimmedGuildId = selectedGuildId.trim();
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Player Link"
+      description="Configure platform linking, role assignment, logging, and member-facing panels."
+      readinessFeature="player-link"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-settings space-y-6">
-      <AdminPageHeader
-        title="Player Link"
-        description="Configure platform linking, role assignment, logging, and member-facing panels."
-        readinessFeature="player-link"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="Player Link settings" />
       ) : (
         <PlayerLinkEditor
+          renderHeader={renderHeader}
           selectedWorkspaceId={selectedWorkspaceId}
           selectedGuildId={trimmedGuildId}
           entitlement={entitlement}
@@ -256,6 +257,7 @@ export function AdminPlatformLinkPage({
 }
 
 function PlayerLinkEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   entitlement,
@@ -263,6 +265,7 @@ function PlayerLinkEditor({
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   entitlement?: EntitlementInfo | null;
@@ -298,6 +301,7 @@ function PlayerLinkEditor({
   const [refreshError, setRefreshError] = useState<unknown>(null);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const autoSave = useAutoSaveToggle<PlatformLinkAutoSaveKey>({
     onSave: async (key, nextValue) => {
       const nextDraft = { ...draft, [key]: nextValue };
@@ -442,7 +446,7 @@ function PlayerLinkEditor({
     savedDraftSnapshot,
   );
 
-  return (
+  const content = (
     <SettingsPanel>
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardChanges} />
       <AdminRefreshNotice
@@ -575,6 +579,13 @@ function PlayerLinkEditor({
         </p>
       ) : null}
     </SettingsPanel>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }
 

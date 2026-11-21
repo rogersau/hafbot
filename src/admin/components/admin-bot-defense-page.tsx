@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode } from "react";
 
 import { getBotDefenseHoneypotChannelLimitError } from "../../bot-defense-config";
 import type { BotDefenseConfig } from "../../types";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { FormField, SectionHeader, SettingsBlock } from "./admin-form-layout";
 import { AdminBottomActionBar, areAdminActionSnapshotsEqual } from "./admin-bottom-action-bar";
 import { ChannelSelect, MultiChannelSelect, MultiRoleSelect } from "./guild-resource-select";
@@ -15,7 +15,6 @@ import { Checkbox } from "./ui/checkbox";
 import { AlertTriangleIcon, CheckIcon, InfoIcon, ShieldIcon } from "./ui/icons";
 import { Button } from "./ui/button";
 import { useToast } from "./toast";
-import { refreshAdminRouteData, requireAdminRouteRefresh } from "../lib/mutation-reconciliation";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { useGuildResources } from "../hooks/use-guild-resources";
 import type { EntitlementInfo } from "../hooks/use-entitlement";
@@ -23,6 +22,7 @@ import { createAdminLoaderClient } from "../lib/admin-loader-client";
 import type { BotDefenseLoaderData } from "../lib/admin-route-loaders";
 import { resetGuildResourcesCache } from "../lib/guild-resources-cache";
 import { ConfigurationHistoryCard } from "./configuration-history-card";
+import { useAdminRouteRefresh, useOptionalAdminSession } from "../lib/admin-session";
 
 interface BotDefenseConfigSnapshot {
   honeypotEnabled: boolean;
@@ -69,24 +69,31 @@ export function AdminBotDefensePage({
   initialData?: BotDefenseLoaderData | null;
   onRouteDataRefresh?: () => Promise<void>;
 }) {
+  const { requireAdminRouteRefresh } = useAdminRouteRefresh();
   const trimmedGuildId = selectedGuildId.trim();
   const [editorGeneration, setEditorGeneration] = useState(0);
   const editorHasUnsavedChanges = useRef(false);
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Bot Defense"
+      description="Detect automated accounts with honeypot and repeated-message signals, then review flags in a mod queue."
+      readinessFeature="bot-defense"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-settings admin-bot-defense-page space-y-6">
-      <AdminPageHeader
-        title="Bot Defense"
-        description="Detect automated accounts with honeypot and repeated-message signals, then review flags in a mod queue."
-        readinessFeature="bot-defense"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="Bot Defense" />
       ) : (
         <>
           <BotDefenseEditor
+            renderHeader={renderHeader}
             key={editorGeneration}
             selectedWorkspaceId={selectedWorkspaceId}
             selectedGuildId={trimmedGuildId}
@@ -183,6 +190,7 @@ async function postBotDefenseConfig(
 }
 
 function BotDefenseEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   paidFeaturesAvailable,
@@ -190,6 +198,7 @@ function BotDefenseEditor({
   onRouteDataRefresh,
   onUnsavedChangesChange,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   paidFeaturesAvailable: boolean;
@@ -238,6 +247,8 @@ function BotDefenseEditor({
   const [saved, setSaved] = useState(false);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
+  const resourcesCache = useOptionalAdminSession()?.guildResourcesCache;
   const { resources } = useGuildResources(selectedWorkspaceId, selectedGuildId);
 
   const [savedConfig, setSavedConfig] = useState<BotDefenseConfigSnapshot>(() =>
@@ -339,7 +350,7 @@ function BotDefenseEditor({
           : [...current.honeypotChannelIds, result.channel.id],
       }));
       setHoneypotEnabled(true);
-      resetGuildResourcesCache();
+      resetGuildResourcesCache(resourcesCache);
       toast.success(
         result.created
           ? "Created and selected #do-not-post. Save to activate it."
@@ -365,7 +376,7 @@ function BotDefenseEditor({
     ),
   ];
 
-  return (
+  const content = (
     <div className="admin-bot-defense-editor space-y-5">
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardChanges} />
       <UnsavedChangesIndicator hasChanges={hasUnsavedChanges} />
@@ -681,6 +692,13 @@ function BotDefenseEditor({
         ]}
       />
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }
 

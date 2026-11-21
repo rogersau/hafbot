@@ -1,9 +1,12 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import type { AdminPermissionFeature } from "../../runtime/admin-types";
 import { copyTextToClipboard } from "../lib/clipboard";
-import { FeatureReadiness } from "./feature-readiness";
 import { useToast } from "./toast";
 import { Button } from "./ui/button";
+
+const FeatureReadiness = lazy(() =>
+  import("./feature-readiness").then((module) => ({ default: module.FeatureReadiness })),
+);
 
 export interface AdminPageHeaderProps {
   title: string;
@@ -12,7 +15,10 @@ export interface AdminPageHeaderProps {
   readinessFeature?: AdminPermissionFeature;
   selectedGuildId?: string;
   selectedWorkspaceId?: string;
+  hasUnsavedChanges?: boolean;
 }
+
+export type AdminPageHeaderRenderer = (hasUnsavedChanges?: boolean) => ReactNode;
 
 export function AdminPageHeader({
   title,
@@ -21,6 +27,7 @@ export function AdminPageHeader({
   readinessFeature,
   selectedGuildId = "",
   selectedWorkspaceId = "",
+  hasUnsavedChanges = false,
 }: AdminPageHeaderProps) {
   const toast = useToast();
 
@@ -41,12 +48,15 @@ export function AdminPageHeader({
         {description ? <p>{description}</p> : null}
       </div>
       <div className="admin-page-header-actions flex flex-wrap items-center justify-end gap-3">
-        {readinessFeature ? (
-          <FeatureReadiness
-            feature={readinessFeature}
-            selectedGuildId={selectedGuildId}
-            selectedWorkspaceId={selectedWorkspaceId}
-          />
+        {readinessFeature && selectedGuildId ? (
+          <Suspense fallback={null}>
+            <FeatureReadiness
+              feature={readinessFeature}
+              selectedGuildId={selectedGuildId}
+              selectedWorkspaceId={selectedWorkspaceId}
+              hasUnsavedChanges={hasUnsavedChanges}
+            />
+          </Suspense>
         ) : null}
         <Button type="button" variant="secondary" size="sm" onClick={() => void copyPageLink()}>
           Copy page link

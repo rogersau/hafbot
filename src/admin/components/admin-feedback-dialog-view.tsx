@@ -1,5 +1,5 @@
 import { transitionFeedback } from "../lib/feedback-workflow";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useReducer, useRef, useState } from "react";
 import { feedbackClient } from "../generated/admin-client/feedback";
 import { AdminApiError } from "../lib/api";
 import { copyTextToClipboard } from "../lib/clipboard";
@@ -102,18 +102,18 @@ export function parseFeedbackUserAgent(userAgent: string): { browser: string; os
 export default function AdminFeedbackDialog({
   open,
   snapshot,
-  onOpenChange,
+  onClose,
   submitFeedback = feedbackClient.create,
   copyReceipt = copyTextToClipboard,
 }: {
   open: boolean;
-  snapshot: FeedbackSnapshot | null;
-  onOpenChange: (open: boolean) => void;
+  snapshot: FeedbackSnapshot;
+  onClose: (discard: boolean) => void;
   submitFeedback?: SubmitFeedback;
   copyReceipt?: (value: string) => Promise<void>;
 }) {
-  const [category, setCategory] = useState<Category>("other");
-  const [summary, setSummary] = useState("");
+  const [category, setCategory] = useState<Category>(snapshot.category ?? "other");
+  const [summary, setSummary] = useState(snapshot.summary ?? "");
   const [description, setDescription] = useState("");
   const [includeDiagnostics, setIncludeDiagnostics] = useState(false);
   const [submission, sendSubmission] = useReducer(transitionFeedback, {
@@ -123,41 +123,15 @@ export default function AdminFeedbackDialog({
   const pending = submission.kind === "submitting";
   const error = submission.kind === "editing" ? submission.error : null;
   const receipt = submission.kind === "received" ? submission.reference : null;
-  const [draftSnapshot, setDraftSnapshot] = useState<FeedbackSnapshot | null>(null);
   const [copyStatus, setCopyStatus] = useState<"copied" | "failed" | null>(null);
   const submitGuard = useRef(createFeedbackSubmitGuard()).current;
 
-  useEffect(() => {
-    if (!open || !snapshot || draftSnapshot || receipt) return;
-    setDraftSnapshot({ ...snapshot });
-    setCategory(snapshot.category ?? "other");
-    setSummary(snapshot.summary ?? "");
-    setDescription("");
-    setIncludeDiagnostics(false);
-    sendSubmission({ type: "reset" });
-    setCopyStatus(null);
-  }, [open, snapshot, draftSnapshot, receipt]);
-
   const close = () => {
-    if (pending) return;
-    onOpenChange(false);
-    if (submission.kind === "received") sendSubmission({ type: "reset" });
-    setCopyStatus(null);
-  };
-
-  const resetDraft = () => {
-    setDraftSnapshot(null);
-    setCategory("other");
-    setSummary("");
-    setDescription("");
-    setIncludeDiagnostics(false);
-    sendSubmission({ type: "reset" });
+    if (!pending) onClose(submission.kind === "received");
   };
 
   const discardDraft = () => {
-    if (pending) return;
-    resetDraft();
-    close();
+    if (!pending) onClose(true);
   };
 
   const copy = async () => {
@@ -175,7 +149,6 @@ export default function AdminFeedbackDialog({
   const diagnostics = includeDiagnostics ? parseFeedbackUserAgent(userAgent) : null;
 
   const submit = async () => {
-    if (!draftSnapshot) return;
     if (pending || !submitGuard.tryStart()) return;
     const validationError = validateFeedback(summary, description);
     if (validationError) {
@@ -186,13 +159,8 @@ export default function AdminFeedbackDialog({
     sendSubmission({ type: "submitted" });
     try {
       const result = await submitFeedback(
-        createFeedbackPayload(draftSnapshot, category, summary, description, diagnostics),
+        createFeedbackPayload(snapshot, category, summary, description, diagnostics),
       );
-      setDraftSnapshot(null);
-      setCategory("other");
-      setSummary("");
-      setDescription("");
-      setIncludeDiagnostics(false);
       sendSubmission({ type: "received", reference: result.reference });
     } catch (cause) {
       sendSubmission({ type: "failed", error: formatFeedbackFailure(cause) });
@@ -202,7 +170,12 @@ export default function AdminFeedbackDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close();
+      }}
+    >
       <DialogContent aria-describedby="admin-feedback-description">
         <DialogHeader>
           <DialogTitle>{receipt ? "Feedback received" : "Send feedback"}</DialogTitle>
@@ -280,17 +253,17 @@ export default function AdminFeedbackDialog({
               <p className="font-medium">Context that will be sent</p>
               <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
                 <dt>Route</dt>
-                <dd>{draftSnapshot?.route ?? "Not available"}</dd>
+                <dd>{snapshot.route}</dd>
                 <dt>Page</dt>
-                <dd>{draftSnapshot?.pageLabel ?? "Not available"}</dd>
+                <dd>{snapshot.pageLabel ?? "Not available"}</dd>
                 <dt>Guild</dt>
-                <dd>{draftSnapshot?.guildId ?? "Not available"}</dd>
+                <dd>{snapshot.guildId ?? "Not available"}</dd>
                 <dt>Correlation</dt>
-                <dd>{draftSnapshot?.correlationId ?? "Not available"}</dd>
+                <dd>{snapshot.correlationId ?? "Not available"}</dd>
                 <dt>Error code</dt>
-                <dd>{draftSnapshot?.errorCode ?? "Not available"}</dd>
+                <dd>{snapshot.errorCode ?? "Not available"}</dd>
                 <dt>Worker</dt>
-                <dd>{draftSnapshot?.workerVersion ?? "Not available"}</dd>
+                <dd>{snapshot.workerVersion ?? "Not available"}</dd>
               </dl>
             </div>
             {diagnostics ? (

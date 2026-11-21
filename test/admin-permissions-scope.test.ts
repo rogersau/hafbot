@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { AdminAccess, AdminAccessRequirement } from "../src/runtime/admin-access";
-import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import { createPermissionsAdminRoutes } from "../src/runtime/admin-routes/permissions";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import type { AdminPermissionCheckResponse } from "../src/runtime/admin-types";

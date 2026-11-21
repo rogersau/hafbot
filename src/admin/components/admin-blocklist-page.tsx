@@ -24,7 +24,8 @@ import { Switch } from "./ui/switch";
 import { InfoTooltip } from "./ui/info-tooltip";
 import { PageFeedback } from "./page-feedback";
 import { useToast } from "./toast";
-import { refreshAdminRouteData, adminRefreshWarning } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
+import { adminRefreshWarning } from "../lib/mutation-reconciliation";
 import { useConfirmDialog } from "./ui/confirm-dialog";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { useDebouncedValue } from "../hooks/use-debounced-value";
@@ -126,6 +127,7 @@ export function AdminBlocklistPage({
   const [saved, setSaved] = useState(false);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { resources, loading: resourcesLoading } = useGuildResources(
     selectedWorkspaceId,
     selectedGuildId,
@@ -248,8 +250,6 @@ export function AdminBlocklistPage({
       currentSavingSection = section;
       setSavingSection(section);
       await request();
-      // Reconcile each independent mutation before attempting the next one. A later
-      // failure must not cause an already-persisted section to be retried.
       markSectionSaved(section);
     };
 
@@ -454,6 +454,7 @@ export function AdminBlocklistPage({
         readinessFeature="blocklist"
         selectedGuildId={selectedGuildId}
         selectedWorkspaceId={selectedWorkspaceId}
+        hasUnsavedChanges={hasUnsavedChanges}
       />
       {!trimmedGuildId ? (
         <NoGuildSelected feature="blocklist" />

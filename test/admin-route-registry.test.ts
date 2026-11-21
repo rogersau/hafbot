@@ -8,11 +8,11 @@ import test from "node:test";
 
 import {
   defineRoute,
-  dispatchAdminRoute,
   PUBLIC_ADMIN_ROUTE_ACCESS,
   type Route,
   checkRouteCollisions,
 } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import { createAdminRoutes } from "../src/runtime/admin-routes";
 import { createAdminApiHandler as createRuntimeAdminApiHandler } from "../src/runtime/admin-api";
 import { createServiceFactory } from "../src/runtime/service-factory";
@@ -331,12 +331,6 @@ test("dispatcher parses multiple path parameters", async () => {
   );
 
   assert.equal(await response?.text(), "g1:c2");
-});
-
-test("matchPath returns null when path parameter count does not match", () => {
-  const { matchPath } = require("../src/runtime/admin-route-registry");
-  assert.equal(matchPath("/admin/api/blocklist/:id", "/admin/api/blocklist"), null);
-  assert.equal(matchPath("/admin/api/blocklist/:id", "/admin/api/blocklist/a/b"), null);
 });
 
 test("dispatcher does not match paths that differ in a non-parameter segment", async () => {

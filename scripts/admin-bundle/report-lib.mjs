@@ -31,7 +31,6 @@ export function packageName(moduleId) {
 }
 
 export function logicalId(facadeModuleId) {
-  if (facadeModuleId === "src/admin/main.tsx") return "admin-entry";
   const name = facadeModuleId?.match(/src\/admin\/components\/(.+)\.tsx$/)?.[1];
   if (name === "emoji-picker-implementation") return "interaction.unicodeEmojiPicker";
   if (name === "discord-message-preview-implementation") return "interaction.discordPreview";

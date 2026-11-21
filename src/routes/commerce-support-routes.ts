@@ -6,7 +6,6 @@ import type {
 import { defaultCommerceBranding, type CommercePublicBranding } from "../commerce/branding";
 import { escapeHtml, renderCommercePage } from "./commerce-branding";
 import type { CustomerSession } from "../runtime/auth/customer-session";
-import type { RouteHandler } from "./public-routes";
 
 const STATE_TTL_MS = 30 * 60 * 1_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -34,15 +33,14 @@ export interface CommerceSupportRoutesOptions {
   createId?: () => string;
 }
 
-export function createCommerceSupportRoutes(options: CommerceSupportRoutesOptions): RouteHandler {
+export function createCommerceSupportEndpoints(options: CommerceSupportRoutesOptions) {
   const now = options.now ?? Date.now;
   const createId = options.createId ?? (() => crypto.randomUUID());
   const baseUrl = normalizedBaseUrl(options.publicBaseUrl);
-  return async (request: Request): Promise<Response | null> => {
-    const url = new URL(request.url);
-    const pageMatch = /^\/commerce\/support\/(\d{2,24})$/.exec(url.pathname);
-    if (pageMatch && request.method === "GET") {
-      const guildId = pageMatch[1] ?? "";
+  return {
+    methodNotAllowed: () => new Response("Method not allowed", { status: 405 }),
+    commerceSupportPage: async (request: Request, guildId: string): Promise<Response> => {
+      const url = new URL(request.url);
       try {
         const [support, session, guildName] = await Promise.all([
           options.service.page(guildId),
@@ -73,9 +71,8 @@ export function createCommerceSupportRoutes(options: CommerceSupportRoutesOption
       } catch (error) {
         return renderError(publicError(error), 404);
       }
-    }
-
-    if (url.pathname === "/commerce/support/checkout" && request.method === "POST") {
+    },
+    commerceSupportCheckout: async (request: Request): Promise<Response> => {
       if (!sameOrigin(request, baseUrl))
         return renderError("The checkout request was rejected.", 403);
       const session = await options.readSession(request);
@@ -116,9 +113,9 @@ export function createCommerceSupportRoutes(options: CommerceSupportRoutesOption
       } catch (error) {
         return renderError(publicError(error), errorStatus(error));
       }
-    }
-
-    if (url.pathname === "/commerce/support/return" && request.method === "GET") {
+    },
+    commerceSupportReturn: async (request: Request): Promise<Response> => {
+      const url = new URL(request.url);
       const session = await options.readSession(request);
       if (!session) {
         return Response.redirect(signInUrl(baseUrl, "", url.pathname + url.search), 302);
@@ -152,16 +149,7 @@ export function createCommerceSupportRoutes(options: CommerceSupportRoutesOption
       } catch (error) {
         return renderError(publicError(error), errorStatus(error));
       }
-    }
-
-    if (
-      url.pathname === "/commerce/support/checkout" ||
-      url.pathname === "/commerce/support/return" ||
-      pageMatch
-    ) {
-      return new Response("Method not allowed", { status: 405 });
-    }
-    return null;
+    },
   };
 }
 

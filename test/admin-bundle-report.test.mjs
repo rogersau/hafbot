@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
+import { JSDOM } from "jsdom";
 import {
   compressedSizes,
   findInlineDataUrls,
@@ -8,6 +9,7 @@ import {
   packageName,
   staticClosure,
 } from "../scripts/admin-bundle/report-lib.mjs";
+import { serveAdmin } from "../scripts/admin-qa/server.mjs";
 
 test("static closure is deterministic and counts shared chunks once", () => {
   const chunks = {
@@ -19,7 +21,6 @@ test("static closure is deterministic and counts shared chunks once", () => {
 });
 
 test("logical bundle IDs do not depend on generated chunk names", () => {
-  assert.equal(logicalId("src/admin/main.tsx"), "admin-entry");
   assert.equal(
     logicalId("src/admin/components/admin-managed-messages-page.tsx"),
     "route.managedMessages",
@@ -32,6 +33,37 @@ test("logical bundle IDs do not depend on generated chunk names", () => {
     logicalId("src/admin/components/discord-message-preview-implementation.tsx"),
     "interaction.discordPreview",
   );
+});
+
+test("the built Start admin document uses its reported client assets and nonce", async (t) => {
+  const server = await serveAdmin();
+  t.after(() => server.close());
+  const report = JSON.parse(await readFile("artifacts/admin-bundle-report.json", "utf8"));
+  const response = await fetch(`${server.origin}/admin/docs-guild`);
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  const dom = new JSDOM(html);
+  t.after(() => dom.window.close());
+  const { document } = dom.window;
+  const css = document.querySelector('link[rel="stylesheet"]')?.getAttribute("href");
+  const nonce = document.querySelector('meta[property="csp-nonce"]')?.content;
+  assert.ok(nonce, "Start exposes the per-request nonce");
+  const inlineScripts = [...document.scripts].filter((script) => script.textContent.trim());
+  assert.ok(inlineScripts.some((script) => script.textContent.includes("prefers-color-scheme")));
+  for (const script of inlineScripts) assert.equal(script.nonce, nonce);
+  assert.ok(report.css.some(({ file }) => `/${file}` === css));
+  assert.ok(html.includes(`/${report.entry.entryFile}`));
+
+  const [script, stylesheet] = await Promise.all([
+    fetch(`${server.origin}/${report.entry.entryFile}`),
+    fetch(`${server.origin}${css}`),
+  ]);
+  assert.equal(script.status, 200);
+  assert.match(script.headers.get("content-type"), /javascript/);
+  assert.equal(stylesheet.status, 200);
+  assert.match(stylesheet.headers.get("content-type"), /text\/css/);
+  assert.doesNotMatch(html + (await stylesheet.text()), /fonts\.googleapis|fonts\.gstatic/i);
+  await script.body.cancel();
 });
 
 test("compression, package attribution, and inline data measurement are stable", () => {

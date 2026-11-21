@@ -1,22 +1,20 @@
 import { adminErrorResponse } from "./support/admin-error-response";
-/// <reference types="node/assert" />
-/// <reference types="node/assert/strict" />
 
 import assert from "node:assert/strict";
-// @ts-ignore -- Runtime tests compile via tsconfig.tests.json.
 import test from "node:test";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
-
-import { AdminBillingPage } from "../src/admin/components/admin-billing-page";
-import { ToastProvider } from "../src/admin/components/toast";
+import { RouterProvider } from "@tanstack/react-router";
+import { DEFAULT_USER_PREFERENCES } from "../src/runtime/admin-types";
+import { createFixtureRouter } from "./support/admin-app";
+import "./support/admin-page-test-loader";
 
 type Env = {
   dom: JSDOM;
   root: ReturnType<typeof createRoot>;
   container: HTMLElement;
-  restore(): void;
+  restore(): Promise<void>;
 };
 
 const subscription = (
@@ -110,26 +108,34 @@ const billing = (
 });
 
 function createDom(search = ""): Env {
-  const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", {
     url: `https://example.test/admin/billing${search}`,
   });
   const previousWindow = globalThis.window;
   const previousDocument = globalThis.document;
+  const previousSelf = globalThis.self;
   const reactEnv = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
   const previousAct = reactEnv.IS_REACT_ACT_ENVIRONMENT;
   reactEnv.IS_REACT_ACT_ENVIRONMENT = true;
-  Object.assign(globalThis, { window: dom.window, document: dom.window.document });
-  const container = dom.window.document.querySelector("#root");
-  assert.ok(container);
-  const rootContainer = container as HTMLElement;
-  const root = createRoot(rootContainer);
+  Object.assign(globalThis, {
+    window: dom.window,
+    document: dom.window.document,
+    self: dom.window,
+  });
+  const root = createRoot(dom.window.document);
   return {
     dom,
     root,
-    container: rootContainer,
+    get container() {
+      return dom.window.document.body;
+    },
     async restore() {
       await act(async () => root.unmount());
-      Object.assign(globalThis, { window: previousWindow, document: previousDocument });
+      Object.assign(globalThis, {
+        window: previousWindow,
+        document: previousDocument,
+        self: previousSelf,
+      });
       reactEnv.IS_REACT_ACT_ENVIRONMENT = previousAct;
       dom.window.close();
     },
@@ -152,25 +158,76 @@ function errorResponse(message = "Billing unavailable") {
 }
 function installFetch(handler: (input: string) => Promise<Response>): () => void {
   const previous = globalThis.fetch;
-  globalThis.fetch = handler as typeof fetch;
+  globalThis.fetch = (input) => {
+    const path = String(input);
+    if (path.startsWith("/admin/api/billing")) return handler(path);
+    if (path.startsWith("/admin/api/guilds")) return Promise.resolve(response({ guilds: [] }));
+    if (path === "/admin/api/profile/preferences") {
+      return Promise.resolve(response(DEFAULT_USER_PREFERENCES));
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  };
   return () => {
     globalThis.fetch = previous;
   };
 }
 async function render(env: Env) {
+  const { pathname, search, hash } = env.dom.window.location;
+  const router = createFixtureRouter(`${pathname}${search}${hash}`);
   await act(async () => {
-    env.root.render(
-      <ToastProvider>
-        <AdminBillingPage />
-      </ToastProvider>,
-    );
+    env.root.render(<RouterProvider router={router} />);
   });
+  return router;
 }
 async function settle() {
   await act(async () => {
     await Promise.resolve();
   });
 }
+
+test("Billing retries failed secondary sections independently of the subscription", async () => {
+  const requests: string[] = [];
+  const attempts = new Map<string, number>();
+  const restoreFetch = installFetch(async (input) => {
+    const path = String(input);
+    requests.push(path);
+    attempts.set(path, (attempts.get(path) ?? 0) + 1);
+    if (path.endsWith("/billing")) return response(billing("premium", "monthly"));
+    if (path.endsWith("/billing/history")) {
+      return attempts.get(path) === 1
+        ? errorResponse("History unavailable")
+        : response({ events: [] });
+    }
+    assert.ok(path.endsWith("/billing/assignments"), path);
+    return attempts.get(path) === 1
+      ? errorResponse("Assignments unavailable")
+      : response({ assignments: [], eligibleGuilds: [], capacity: 1 });
+  });
+  const env = createDom();
+  try {
+    await render(env);
+    await settle();
+    assert.match(env.container.textContent ?? "", /Assignments unavailable/);
+    assert.match(env.container.textContent ?? "", /History unavailable/);
+    const retry = (label: string) => {
+      const button = [...env.container.querySelectorAll("button")].find(
+        (element) => element.textContent?.trim() === label,
+      );
+      assert.ok(button, label);
+      return act(async () => button.click());
+    };
+    await retry("Retry guild assignments");
+    assert.doesNotMatch(env.container.textContent ?? "", /Assignments unavailable/);
+    assert.match(env.container.textContent ?? "", /No eligible Discord servers/);
+    assert.match(env.container.textContent ?? "", /History unavailable/);
+    await retry("Retry recent billing activity");
+    assert.doesNotMatch(env.container.textContent ?? "", /History unavailable/);
+    assert.equal(requests.filter((path) => path.endsWith("/billing")).length, 1);
+  } finally {
+    restoreFetch();
+    await env.restore();
+  }
+});
 
 test("Billing explains unavailable current prices without showing retired launch terms", async () => {
   const data = { ...billing("premium", "monthly"), catalog: [] };
@@ -206,19 +263,27 @@ test("Billing explains unavailable current prices without showing retired launch
 });
 
 test("Billing keeps initial loading separate from loaded and error states", async () => {
-  let resolve!: (value: Response) => void;
-  const pending = new Promise<Response>((r) => {
-    resolve = r;
+  let resolveSummary!: (value: Response) => void;
+  let resolveHistory!: (value: Response) => void;
+  const summary = new Promise<Response>((resolve) => {
+    resolveSummary = resolve;
   });
-  const restoreFetch = installFetch(async () => pending);
+  const history = new Promise<Response>((resolve) => {
+    resolveHistory = resolve;
+  });
+  const restoreFetch = installFetch((path) => (path.endsWith("/billing") ? summary : history));
   const env = createDom();
   try {
     await render(env);
     assert.match(env.container.textContent ?? "", /Loading Billing/);
-    resolve(response(billing()));
+    resolveSummary(response(billing()));
     await settle();
     assert.doesNotMatch(env.container.textContent ?? "", /Loading Billing/);
     assert.match(env.container.textContent ?? "", /Current plan/);
+    assert.match(env.container.textContent ?? "", /Loading billing activity/);
+    resolveHistory(response({ events: [] }));
+    await settle();
+    assert.doesNotMatch(env.container.textContent ?? "", /Loading billing activity/);
   } finally {
     restoreFetch();
     await env.restore();
@@ -231,7 +296,14 @@ test("Billing failure exposes safe retry, prevents duplicates, and recovers", as
   const retry = new Promise<Response>((r) => {
     resolveRetry = r;
   });
-  const restoreFetch = installFetch(async () => (++calls === 1 ? errorResponse() : retry));
+  const restoreFetch = installFetch(async (path) => {
+    if (path.endsWith("/billing/history")) return response({ events: [] });
+    if (path.endsWith("/billing/assignments")) {
+      return response({ assignments: [], eligibleGuilds: [], capacity: 1 });
+    }
+    assert.ok(path.endsWith("/billing"), path);
+    return ++calls === 1 ? errorResponse() : retry;
+  });
   const env = createDom();
   try {
     await render(env);
@@ -291,6 +363,74 @@ test("Billing preserves requested plan/frequency and recovers checkout sync fail
         .querySelector('[aria-label="Billing frequency"] button[aria-pressed="true"]')
         ?.textContent?.includes("monthly"),
     );
+  } finally {
+    restoreFetch();
+    await env.restore();
+  }
+});
+
+test("Billing syncs a checkout on navigation and retries a failed read without posting again", async () => {
+  let syncCalls = 0;
+  let summaryCalls = 0;
+  const restoreFetch = installFetch(async (input) => {
+    const path = String(input);
+    if (path.endsWith("/billing/sync")) {
+      syncCalls++;
+      return response({ subscription: subscription("premium_plus", "monthly") });
+    }
+    if (path.endsWith("/billing/history")) return response({ events: [] });
+    if (path.endsWith("/billing/assignments")) {
+      return response({ assignments: [], eligibleGuilds: [], capacity: 1 });
+    }
+    assert.ok(path.endsWith("/billing"), path);
+    summaryCalls++;
+    if (summaryCalls === 2) return errorResponse("Summary unavailable");
+    return response(syncCalls ? billing("premium_plus", "monthly") : billing());
+  });
+  const env = createDom();
+  try {
+    const router = await render(env);
+    await settle();
+    assert.equal(summaryCalls, 1);
+    const checkout = {
+      to: "/admin/billing" as const,
+      search: {
+        checkout: "success",
+        session_id: "s1",
+        plan: "premium_plus",
+        frequency: "monthly",
+        workspaceId: "workspace-1",
+      },
+      hash: "assignments",
+    };
+    await act(async () => {
+      await router.preloadRoute(checkout);
+    });
+    assert.equal(syncCalls, 0);
+    assert.equal(summaryCalls, 1);
+
+    await act(async () => {
+      await router.navigate(checkout);
+    });
+    await settle();
+    assert.equal(syncCalls, 1);
+    assert.equal(summaryCalls, 2);
+    assert.match(env.container.textContent ?? "", /Summary unavailable/);
+    assert.deepEqual(
+      { ...router.state.location.search },
+      { plan: "premium_plus", frequency: "monthly", workspaceId: "workspace-1" },
+    );
+    assert.equal(router.state.location.hash, "assignments");
+
+    const retry = [...env.container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Retry",
+    );
+    assert.ok(retry);
+    await act(async () => retry.click());
+    await settle();
+    assert.equal(summaryCalls, 3);
+    assert.equal(syncCalls, 1);
+    assert.match(env.container.textContent ?? "", /Premium Plus/);
   } finally {
     restoreFetch();
     await env.restore();

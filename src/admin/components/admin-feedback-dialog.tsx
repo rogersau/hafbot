@@ -5,9 +5,9 @@ import {
   useCallback,
   useContext,
   useRef,
-  useState,
   type ReactNode,
 } from "react";
+import { AdminSessionProvider, useAdminSession, useAdminSessionState } from "../lib/admin-session";
 
 export type FeedbackSnapshot = {
   route: string;
@@ -57,32 +57,50 @@ export function AdminFeedbackProvider({
   context: FeedbackSnapshot;
   children: ReactNode;
 }) {
-  const [snapshot, setSnapshot] = useState<FeedbackSnapshot | null>(null);
-  const [open, setOpen] = useState(false);
+  return (
+    <AdminSessionProvider>
+      <AdminFeedbackHost context={context}>{children}</AdminFeedbackHost>
+    </AdminSessionProvider>
+  );
+}
+
+function AdminFeedbackHost({
+  context,
+  children,
+}: {
+  context: FeedbackSnapshot;
+  children: ReactNode;
+}) {
+  const session = useAdminSession();
+  const feedback = useAdminSessionState((state) => state.feedback);
   const triggerRef = useRef<HTMLElement | null>(null);
   const openFeedback = useCallback(
     (input: FeedbackOpenInput = {}) => {
       const { returnFocus, ...snapshotInput } = input;
       triggerRef.current = resolveFeedbackReturnFocus(returnFocus, document.activeElement);
-      setSnapshot({ ...context, ...snapshotInput });
-      setOpen(true);
+      session.update(({ feedback }) => ({
+        feedback: { snapshot: feedback?.snapshot ?? { ...context, ...snapshotInput }, open: true },
+      }));
     },
-    [context],
+    [context, session],
   );
 
   return (
     <FeedbackOpenContext.Provider value={openFeedback}>
       {children}
-      <Suspense fallback={null}>
-        <FeedbackDialog
-          open={open}
-          snapshot={snapshot}
-          onOpenChange={(next) => {
-            setOpen(next);
-            if (!next) queueMicrotask(() => triggerRef.current?.focus());
-          }}
-        />
-      </Suspense>
+      {feedback ? (
+        <Suspense fallback={null}>
+          <FeedbackDialog
+            open={feedback.open}
+            snapshot={feedback.snapshot}
+            onClose={(discard) => {
+              const trigger = triggerRef.current;
+              session.update({ feedback: discard ? null : { ...feedback, open: false } });
+              queueMicrotask(() => trigger?.focus());
+            }}
+          />
+        </Suspense>
+      ) : null}
     </FeedbackOpenContext.Provider>
   );
 }

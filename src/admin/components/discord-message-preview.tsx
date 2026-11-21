@@ -1,4 +1,4 @@
-import { createElement, useEffect, useState, type ComponentType } from "react";
+import { createElement, useState, type ComponentType } from "react";
 import { Button } from "./ui/button";
 import {
   loadDiscordMessagePreviewImplementation,
@@ -33,17 +33,16 @@ export function DiscordMessagePreview(props: DiscordMessagePreviewProps) {
     useState<ComponentType<DiscordMessagePreviewProps> | null>(null);
   const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
-    if (!active || implementation || loadError) return;
-    let current = true;
-    void loadDiscordMessagePreviewImplementation().then(
-      (component) => current && setImplementation(() => component),
-      () => current && setLoadError(true),
-    );
-    return () => {
-      current = false;
-    };
-  }, [active, implementation, loadError]);
+  async function loadPreview() {
+    setActive(true);
+    setLoadError(false);
+    try {
+      const component = await loadDiscordMessagePreviewImplementation();
+      setImplementation(() => component);
+    } catch {
+      setLoadError(true);
+    }
+  }
 
   function preloadPreview() {
     void preloadDiscordMessagePreviewImplementation().catch(() => undefined);
@@ -51,7 +50,7 @@ export function DiscordMessagePreview(props: DiscordMessagePreviewProps) {
 
   function retryPreview() {
     resetDiscordMessagePreviewImplementation();
-    setLoadError(false);
+    void loadPreview();
   }
 
   if (implementation) return createElement(implementation, props);
@@ -79,7 +78,7 @@ export function DiscordMessagePreview(props: DiscordMessagePreviewProps) {
           <p className="text-sm text-muted-foreground">
             Load the Discord-styled preview when you are ready to review this message.
           </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => setActive(true)}>
+          <Button type="button" variant="outline" size="sm" onClick={() => void loadPreview()}>
             Load message preview
           </Button>
         </div>

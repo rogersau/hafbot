@@ -362,6 +362,7 @@ export function AdminServerLevelsPage({
         readinessFeature="server-levels"
         selectedGuildId={selectedGuildId}
         selectedWorkspaceId={selectedWorkspaceId}
+        hasUnsavedChanges={hasUnsavedChanges}
       />
       <PageFeedback error={api.error} />
       <UnsavedChangesIndicator hasChanges={hasUnsavedChanges} />

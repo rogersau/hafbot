@@ -12,15 +12,13 @@ function run(command, args) {
 if (prebuilt) {
   for (const path of [
     "dist-admin/.vite/manifest.json",
-    "dist-admin/admin/assets/admin.js",
-    "dist-landing/home.js",
-    "src/runtime/landing-bundle.ts",
+    "dist-admin/.vite/admin-bundle-metadata.json",
+    "dist/server/server.js",
   ]) {
     if (!existsSync(path)) throw new Error(`Missing public build artifact: ${path}`);
   }
 } else {
-  run("pnpm", ["run", "build:admin"]);
-  run("pnpm", ["run", "build:landing"]);
+  run("pnpm", ["run", "build:web"]);
 }
 run(process.execPath, ["scripts/run-build-tests.mjs"]);
 run("pnpm", ["run", "build:test"]);

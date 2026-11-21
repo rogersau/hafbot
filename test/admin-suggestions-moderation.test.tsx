@@ -1,6 +1,3 @@
-/// <reference types="node/assert" />
-/// <reference types="node/assert/strict" />
-
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToString } from "react-dom/server";
@@ -16,6 +13,7 @@ import {
   type ConsideredReply,
   type Suggestion,
 } from "../src/suggestions";
+import { withAdminDom } from "./support/admin-dom";
 
 const suggestion: Suggestion = {
   id: "suggestion-1",
@@ -88,6 +86,47 @@ test("Suggestions cards are decision-ready and expose one contextual transition 
   assert.match(html, />Change status</);
   assert.match(html, />View details</);
   assert.doesNotMatch(html, /Public outcome summary/);
+});
+
+test("Suggestions retains a confirmed projection repair after refresh fails and accepts fresh loader rows", async () => {
+  await withAdminDom(async ({ render, click, container }) => {
+    const original = { ...suggestion, projectionError: "Discord unavailable" };
+    let repairs = 0;
+    const refresh = async () => {
+      throw new Error("Refresh unavailable");
+    };
+    const show = (row: Suggestion) =>
+      render(
+        <AdminSuggestionsPage
+          selectedWorkspaceId="workspace-1"
+          selectedGuildId="guild-1"
+          onRouteDataRefresh={refresh}
+          initialData={{
+            guildId: "guild-1",
+            config: defaultSuggestionsConfig("guild-1"),
+            suggestions: [row],
+            collapsedReplies: [],
+            readiness: { state: "ready", checks: {} },
+          }}
+        />,
+      );
+
+    globalThis.fetch = async (input) => {
+      if (String(input) === "/admin/api/suggestions/repair") {
+        repairs++;
+        return Response.json({ suggestion });
+      }
+      return Response.json({ roles: [], channels: [] });
+    };
+
+    await show(original);
+    await click("Repair projection");
+    assert.equal(repairs, 1);
+    assert.match(container.textContent ?? "", /Projection: Healthy/);
+    assert.match(container.textContent ?? "", /Refresh unavailable/);
+    await show({ ...suggestion, title: "Onboarding follow-up", revision: suggestion.revision + 1 });
+    assert.match(container.textContent ?? "", /Onboarding follow-up/);
+  });
 });
 
 test("collapsed replies render as a linked read-only moderation queue", () => {

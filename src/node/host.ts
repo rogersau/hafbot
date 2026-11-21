@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { BackgroundTaskTracker } from "./background-tasks";
 import { createFetchRequestListener } from "./http-adapter";
 import { getRoleCapabilities, type HafRole, type NodeComponentName } from "./runtime-role";
-import { createDynamicFirstHandler, type FetchHandler } from "./static-assets";
+import { createAssetHandler, type FetchHandler } from "./static-assets";
 
 export interface ManagedNodeComponent {
   start(): Promise<void>;
@@ -91,7 +91,7 @@ export function createNodeHost(options: NodeHostOptions): NodeHost {
       state = "starting";
       try {
         runtime = await options.createRuntime({ waitUntil: tasks.waitUntil });
-        const applicationHandler = createDynamicFirstHandler({
+        const applicationHandler = createAssetHandler({
           dynamic: runtime.fetch,
           staticRoot: options.staticRoot,
         });

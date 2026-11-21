@@ -10,7 +10,7 @@ import { createUserProfileAdminRoutes } from "../src/runtime/admin-routes/profil
 import { createSqliteUserPreferencesStore } from "./support/sqlite/runtime/sqlite-user-preferences-store";
 import { DEFAULT_USER_PREFERENCES, type UserPreferences } from "../src/runtime/admin-types";
 import { allowAllAdminAccess } from "./helpers/admin-api";
-import { dispatchAdminRoute } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import type { CustomerSession } from "../src/runtime/auth/customer-session";
 import { SqliteD1Database } from "./support/sqlite-d1-database";
 

@@ -1,16 +1,15 @@
-import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, extname, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "@playwright/test";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 
+import { serveAdmin } from "../admin-qa/server.mjs";
 import { commonResponses, scenarios } from "./scenarios.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const assetRoot = resolve(root, "dist-admin");
 const artifactRoot = resolve(root, ".artifacts/admin-docs");
 const mode = process.argv.includes("--check") ? "check" : "update";
 const scenarioArgument = process.argv.find((argument) => argument.startsWith("--scenario="));
@@ -21,17 +20,10 @@ const selectedScenarios = scenarioName
 if (scenarioName && selectedScenarios.length === 0) {
   throw new Error(`Unknown Admin documentation scenario: ${scenarioName}`);
 }
-const server = createServer(handleRequest);
-
-await new Promise((resolveListen, reject) => {
-  server.once("error", reject);
-  server.listen(0, "127.0.0.1", resolveListen);
+const server = await serveAdmin({
+  userProfile: { name: "Alex Morgan", email: "alex@example.invalid" },
 });
-
-const address = server.address();
-if (!address || typeof address === "string")
-  throw new Error("Unable to determine capture server port");
-const baseUrl = `http://127.0.0.1:${address.port}`;
+const baseUrl = server.origin;
 
 let browser;
 try {
@@ -95,14 +87,17 @@ try {
       await page.getByRole("button", { name: "Open navigation menu" }).click();
       await page.getByRole("dialog", { name: "Admin navigation" }).waitFor();
     }
-    await page.addStyleTag({
-      content: `
+    await page.evaluate(() => {
+      const style = document.createElement("style");
+      style.nonce = document.querySelector('meta[property="csp-nonce"]').content;
+      style.textContent = `
         *, *::before, *::after {
           animation-duration: 0s !important;
           caret-color: transparent !important;
           transition-duration: 0s !important;
         }
-      `,
+      `;
+      document.head.append(style);
     });
     await page.evaluate(() => document.fonts.ready);
     if (scenario.focusTargetText) {
@@ -166,7 +161,7 @@ try {
   );
 } finally {
   await browser?.close();
-  await new Promise((resolveClose) => server.close(resolveClose));
+  await server.close();
 }
 
 async function addAnnotations(page, annotations) {
@@ -221,75 +216,4 @@ async function addAnnotations(page, annotations) {
 
     document.body.append(layer);
   }, positioned);
-}
-
-async function handleRequest(request, response) {
-  const url = new URL(request.url ?? "/", "http://localhost");
-  if (
-    url.pathname.startsWith("/admin/assets/") ||
-    url.pathname === "/favicon.ico" ||
-    url.pathname === "/logo.png"
-  ) {
-    const relativePath = url.pathname.replace(/^\//, "");
-    const filePath = resolve(assetRoot, relativePath);
-    if (!filePath.startsWith(`${assetRoot}${sep}`)) {
-      response.writeHead(403).end();
-      return;
-    }
-    try {
-      response.writeHead(200, { "content-type": contentType(filePath) });
-      response.end(await readFile(filePath));
-    } catch {
-      response.writeHead(404).end();
-    }
-    return;
-  }
-
-  if (url.pathname.startsWith("/admin")) {
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    response.end(renderShell(url.pathname, url.search));
-    return;
-  }
-
-  response.writeHead(404).end();
-}
-
-function renderShell(pathname, search) {
-  return `<!doctype html>
-<html lang="en" class="dark">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HAF Bot documentation capture</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/admin/assets/admin.css" />
-</head>
-<body>
-  <div id="admin-root"
-    data-authenticated="true"
-    data-initial-path="${escapeAttribute(pathname)}"
-    data-initial-search="${escapeAttribute(search)}"
-    data-user-name="Alex Morgan"
-    data-user-email="alex@example.invalid"></div>
-  <script type="module" src="/admin/assets/admin.js"></script>
-</body>
-</html>`;
-}
-
-function escapeAttribute(value) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function contentType(filePath) {
-  if (extname(filePath) === ".js") return "text/javascript; charset=utf-8";
-  if (extname(filePath) === ".css") return "text/css; charset=utf-8";
-  if (extname(filePath) === ".png") return "image/png";
-  if (extname(filePath) === ".ico") return "image/x-icon";
-  return "application/octet-stream";
 }

@@ -2,7 +2,7 @@ import { ConfigurationAvailabilityActions } from "./configuration-availability-a
 import { useMemo, useState } from "react";
 
 import type { PlayerCountServer } from "../../types/player-count";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { FormField, SectionHeader, SettingsBlock, SettingsPanel } from "./admin-form-layout";
 import { AdminBottomActionBar, areAdminActionSnapshotsEqual } from "./admin-bottom-action-bar";
 import { ChannelSelect } from "./guild-resource-select";
@@ -24,7 +24,7 @@ import {
 } from "./ui/dialog";
 import { PageFeedback } from "./page-feedback";
 import { useToast } from "./toast";
-import { refreshAdminRouteData } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { UnsavedChangesIndicator } from "./unsaved-changes-indicator";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { useGuildResources } from "../hooks/use-guild-resources";
@@ -115,19 +115,25 @@ export function AdminPlayerCountPage({
 }) {
   const trimmedGuildId = selectedGuildId.trim();
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Player Count"
+      description="Keep live server counts synced to Discord channel names."
+      readinessFeature="player-count"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-workflow space-y-6">
-      <AdminPageHeader
-        title="Player Count"
-        description="Keep live server counts synced to Discord channel names."
-        readinessFeature="player-count"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="Player Count" />
       ) : (
         <PlayerCountEditor
+          renderHeader={renderHeader}
           selectedWorkspaceId={selectedWorkspaceId}
           selectedGuildId={trimmedGuildId}
           initialData={initialData}
@@ -139,11 +145,13 @@ export function AdminPlayerCountPage({
 }
 
 function PlayerCountEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: PlayerCountLoaderData | null;
@@ -164,6 +172,7 @@ function PlayerCountEditor({
   const [showNeedsAttention, setShowNeedsAttention] = useState(false);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { dialog: confirmDialog, confirm } = useConfirmDialog();
   const { resources } = useGuildResources(selectedWorkspaceId, selectedGuildId);
 
@@ -181,7 +190,6 @@ function PlayerCountEditor({
     setSaveAttempted(true);
     api.setError(null);
 
-    // Validate provider-specific fields
     if (editing.provider === "steam-web" && !editing.steamHost?.trim()) {
       api.setError("Steam query host is required.");
       return false;
@@ -443,13 +451,16 @@ function PlayerCountEditor({
 
   if (!resource) {
     return (
-      <p className="text-sm text-muted-foreground">
-        {api.loading ? "Loading player count servers…" : "Player count servers not loaded."}
-      </p>
+      <>
+        {renderHeader()}
+        <p className="text-sm text-muted-foreground">
+          {api.loading ? "Loading player count servers…" : "Player count servers not loaded."}
+        </p>
+      </>
     );
   }
 
-  return (
+  const content = (
     <SettingsPanel>
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={cancelEdit} />
       {confirmDialog}
@@ -824,6 +835,13 @@ function PlayerCountEditor({
         />
       ) : null}
     </SettingsPanel>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }
 

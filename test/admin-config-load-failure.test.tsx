@@ -4,21 +4,18 @@
 import assert from "node:assert/strict";
 // @ts-ignore -- Tests compile via tsconfig.tests.json; admin React is excluded from the runtime test build.
 import test from "node:test";
-import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { renderToString } from "react-dom/server";
 
 import "./support/admin-page-test-loader";
 
 import type { AdminRouterContext } from "../src/admin/routes/context";
-import { AdminRouteContextProvider } from "../src/admin/routes/page-context";
-import { routeTree } from "../src/admin/routes/route-tree";
+import { createFixtureRouter, renderAdminRouteFixture } from "./support/admin-app";
 import { AdminApiError } from "../src/admin/lib/api";
 import { getGuildEntitlementLimits } from "../src/types";
 
 const affectedPages = [
   {
     name: "Evidence Vault",
-    routeId: "/admin/$guildId/evidence-vault",
+    routeId: "/admin/_dashboard/$guildId/evidence-vault",
     path: "/admin/guild-1/evidence-vault",
     configPath: "/admin/api/evidence-vault",
     editorMarker: 'id="ev-audit-channel"',
@@ -31,7 +28,7 @@ const affectedPages = [
   },
   {
     name: "Image Rules",
-    routeId: "/admin/$guildId/image-rules",
+    routeId: "/admin/_dashboard/$guildId/image-rules",
     path: "/admin/guild-1/image-rules",
     configPath: "/admin/api/image-rules",
     editorMarker: 'id="ir-topic-description"',
@@ -39,7 +36,7 @@ const affectedPages = [
   },
   {
     name: "Bot Defense",
-    routeId: "/admin/$guildId/bot-defense",
+    routeId: "/admin/_dashboard/$guildId/bot-defense",
     path: "/admin/guild-1/bot-defense",
     configPath: "/admin/api/bot-defense",
     editorMarker: 'aria-label="Enable Honeypot Detector"',
@@ -47,7 +44,7 @@ const affectedPages = [
   },
   {
     name: "Member Verification",
-    routeId: "/admin/$guildId/member-verification",
+    routeId: "/admin/_dashboard/$guildId/member-verification",
     path: "/admin/guild-1/member-verification",
     configPath: "/admin/api/member-verification",
     editorMarker: 'id="delivery-mode"',
@@ -91,7 +88,7 @@ test("failed configuration loaders render the shared route error and retry UI in
         }) as typeof fetch;
 
         const context = createFixtureContext(page.path);
-        const router = createFixtureRouter(context);
+        const router = createFixtureRouter(`${context.currentPath}?workspaceId=workspace-1`);
         await router.load();
 
         const match = router.state.matches.find((candidate) => candidate.routeId === page.routeId);
@@ -103,7 +100,7 @@ test("failed configuration loaders render the shared route error and retry UI in
         assert.ok(match?.error instanceof AdminApiError);
         assert.equal(match.error.status, failure.status);
 
-        const html = renderFixtureRouter(router, context);
+        const html = renderAdminRouteFixture(router, context);
         assert.match(html, /role="alert"/);
         assert.match(html, />Retry</);
         assert.match(html, /configuration is unavailable/);
@@ -137,7 +134,7 @@ test("malformed configuration responses also stop at the shared route error boun
       }) as typeof fetch;
 
       const context = createFixtureContext(page.path);
-      const router = createFixtureRouter(context);
+      const router = createFixtureRouter(`${context.currentPath}?workspaceId=workspace-1`);
       await router.load();
 
       const match = router.state.matches.find((candidate) => candidate.routeId === page.routeId);
@@ -148,7 +145,7 @@ test("malformed configuration responses also stop at the shared route error boun
       );
       assert.ok(match?.error instanceof SyntaxError);
 
-      const html = renderFixtureRouter(router, context);
+      const html = renderAdminRouteFixture(router, context);
       assert.match(html, /role="alert"/);
       assert.match(html, />Retry</);
       assert.doesNotMatch(
@@ -175,13 +172,13 @@ test("successful first-run configuration:null still renders the normal setup edi
       }) as typeof fetch;
 
       const context = createFixtureContext(page.path);
-      const router = createFixtureRouter(context);
+      const router = createFixtureRouter(`${context.currentPath}?workspaceId=workspace-1`);
       await router.load();
 
       const match = router.state.matches.find((candidate) => candidate.routeId === page.routeId);
       assert.equal(match?.status, "success", `${page.name} first run must load successfully`);
 
-      const html = renderFixtureRouter(router, context);
+      const html = renderAdminRouteFixture(router, context);
       assert.match(html, new RegExp(page.editorMarker));
       assert.doesNotMatch(html, /role="alert"/);
     }
@@ -203,27 +200,6 @@ function premiumEntitlementResponse() {
       lastReconciledAtMs: null,
     },
   });
-}
-
-function createFixtureRouter(context: AdminRouterContext) {
-  return createRouter({
-    routeTree,
-    history: createMemoryHistory({
-      initialEntries: [`${context.currentPath}?workspaceId=workspace-1`],
-    }),
-    context,
-  });
-}
-
-function renderFixtureRouter(
-  router: ReturnType<typeof createFixtureRouter>,
-  context: AdminRouterContext,
-) {
-  return renderToString(
-    <AdminRouteContextProvider value={context}>
-      <RouterProvider router={router} context={context} />
-    </AdminRouteContextProvider>,
-  );
 }
 
 function createFixtureContext(currentPath: string): AdminRouterContext {
@@ -260,8 +236,6 @@ function createFixtureContext(currentPath: string): AdminRouterContext {
       language: "en",
     },
     applyUserPreferencesPatch: async () => undefined,
-    pageMetadata: null,
-    setPageMetadata: () => {},
     isRoutePending: false,
   };
 }

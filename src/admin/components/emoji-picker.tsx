@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useState, type ComponentType } from "react";
+import { createElement, useMemo, useRef, useState, type ComponentType } from "react";
 import { cn } from "../lib/utils";
 import {
   loadEmojiPickerImplementation,
@@ -28,7 +28,6 @@ interface EmojiPickerProps {
   disabled?: boolean;
   multiSelect?: boolean;
   disabledValues?: readonly string[];
-  /** Restrict the picker to Unicode emoji when custom markup is not valid input. */
   unicodeOnly?: boolean;
 }
 
@@ -55,18 +54,32 @@ export function EmojiPicker({
   const [unicodePicker, setUnicodePicker] =
     useState<ComponentType<EmojiPickerImplementationProps> | null>(null);
   const [unicodePickerError, setUnicodePickerError] = useState(false);
+  const unicodeLoadPending = useRef(false);
 
-  useEffect(() => {
-    if (!open || activeTab !== "unicode" || unicodePicker || unicodePickerError) return;
-    let current = true;
-    void loadEmojiPickerImplementation().then(
-      (component) => current && setUnicodePicker(() => component),
-      () => current && setUnicodePickerError(true),
-    );
-    return () => {
-      current = false;
-    };
-  }, [activeTab, open, unicodePicker, unicodePickerError]);
+  async function loadUnicodePicker() {
+    if (unicodePicker || unicodeLoadPending.current) return;
+    unicodeLoadPending.current = true;
+    setUnicodePickerError(false);
+    try {
+      const component = await loadEmojiPickerImplementation();
+      setUnicodePicker(() => component);
+    } catch {
+      setUnicodePickerError(true);
+    } finally {
+      unicodeLoadPending.current = false;
+    }
+  }
+
+  function changeOpen(nextOpen: boolean) {
+    if (disabled) return;
+    setOpen(nextOpen);
+    if (nextOpen && activeTab === "unicode" && !unicodePickerError) void loadUnicodePicker();
+  }
+
+  function changeTab(nextTab: string) {
+    setActiveTab(nextTab);
+    if (nextTab === "unicode" && !unicodePickerError) void loadUnicodePicker();
+  }
 
   const filtered = useMemo(() => {
     const term = filter.trim().toLowerCase();
@@ -84,8 +97,10 @@ export function EmojiPicker({
   }, [emojis, selectedValue]);
 
   const disabledValuesSet = new Set(disabledValues.map(normalizePickerEmojiValue));
+  const disabledUnicode = [...disabledValuesSet].filter((value) => !/^[^:>\s]+:\d+$/.test(value));
 
   function handleUnicodeSelect(emoji: string) {
+    if (disabledValuesSet.has(normalizePickerEmojiValue(emoji))) return;
     onSelect({ type: "unicode", value: emoji, display: emoji });
     if (!multiSelect) setOpen(false);
   }
@@ -96,7 +111,7 @@ export function EmojiPicker({
 
   function retryUnicodePicker() {
     resetEmojiPickerImplementation();
-    setUnicodePickerError(false);
+    void loadUnicodePicker();
   }
 
   function handleCustomSelect(emoji: GuildEmojiResource) {
@@ -107,7 +122,7 @@ export function EmojiPicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={(nextOpen) => !disabled && setOpen(nextOpen)}>
+    <Popover open={open} onOpenChange={changeOpen}>
       <div data-unified-emoji-picker="true">
         <PopoverTrigger asChild>
           <Button
@@ -162,9 +177,10 @@ export function EmojiPicker({
                 unicodePickerError={unicodePickerError}
                 onSelect={handleUnicodeSelect}
                 onRetry={retryUnicodePicker}
+                disabledUnicode={disabledUnicode}
               />
             ) : (
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <Tabs value={activeTab} onValueChange={changeTab}>
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="unicode">Unicode</TabsTrigger>
                   <TabsTrigger value="server">Server</TabsTrigger>
@@ -176,6 +192,7 @@ export function EmojiPicker({
                     unicodePickerError={unicodePickerError}
                     onSelect={handleUnicodeSelect}
                     onRetry={retryUnicodePicker}
+                    disabledUnicode={disabledUnicode}
                   />
                 </TabsContent>
 
@@ -253,11 +270,13 @@ function UnicodePickerContent({
   unicodePickerError,
   onSelect,
   onRetry,
+  disabledUnicode,
 }: {
   unicodePicker: ComponentType<EmojiPickerImplementationProps> | null;
   unicodePickerError: boolean;
   onSelect: (emoji: string) => void;
   onRetry: () => void;
+  disabledUnicode: readonly string[];
 }) {
   if (unicodePicker) {
     return (
@@ -265,7 +284,7 @@ function UnicodePickerContent({
         data-emoji-picker-unicode="true"
         className="h-[340px] overflow-hidden rounded-md border border-border"
       >
-        {createElement(unicodePicker, { onSelect })}
+        {createElement(unicodePicker, { onSelect, disabledUnicode })}
       </div>
     );
   }

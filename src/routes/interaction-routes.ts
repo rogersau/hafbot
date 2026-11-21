@@ -46,29 +46,19 @@ export interface InteractionRouteOptions {
   ) => Promise<Response>;
 }
 
-export interface RouteHandler {
-  (request: Request): Promise<Response | null>;
-}
-
-export function createInteractionRoutes(options: InteractionRouteOptions): RouteHandler {
-  return async (request: Request): Promise<Response | null> => {
-    const url = new URL(request.url);
-
-    if (request.method === "POST" && url.pathname === "/interactions") {
-      try {
-        return await options.handleInteractionRequest(request, options);
-      } catch (error) {
-        if (isDiscordRateLimitError(error)) {
-          return Response.json(
-            buildEphemeralMessage(
-              "Discord is temporarily rate limiting this action. Try again shortly.",
-            ),
-          );
-        }
-        throw error;
+export function createInteractionRoutes(options: InteractionRouteOptions) {
+  return async (request: Request): Promise<Response> => {
+    try {
+      return await options.handleInteractionRequest(request, options);
+    } catch (error) {
+      if (isDiscordRateLimitError(error)) {
+        return Response.json(
+          buildEphemeralMessage(
+            "Discord is temporarily rate limiting this action. Try again shortly.",
+          ),
+        );
       }
+      throw error;
     }
-
-    return null;
   };
 }

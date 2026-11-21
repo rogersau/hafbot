@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import * as Modal from "@radix-ui/react-dialog";
 
 import type { WebhookProxyConfig, WebhookProxyForwardLog } from "../../types";
 import type { EntitlementInfo } from "../hooks/use-entitlement";
 import { cn } from "../lib/utils";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import {
   EditorActions,
   FormField,
@@ -21,7 +22,7 @@ import { Input } from "./ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { PageFeedback } from "./page-feedback";
 import { useToast } from "./toast";
-import { refreshAdminRouteData } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { useAdminApi } from "../hooks/use-admin-api";
 import type { WebhooksLoaderData } from "../lib/admin-route-loaders";
 import { copyTextToClipboard } from "../lib/clipboard";
@@ -112,6 +113,15 @@ interface PendingWebhookAction {
   continueAction: () => void | Promise<void>;
 }
 
+type WebhookLogView = {
+  config: AdminWebhookConfig;
+  returnFocus: HTMLButtonElement;
+  result:
+    | { kind: "loading" }
+    | { kind: "ready"; logs: WebhookProxyForwardLog[] }
+    | { kind: "error"; message: string };
+};
+
 export function AdminWebhooksPage({
   selectedWorkspaceId,
   selectedGuildId,
@@ -127,15 +137,20 @@ export function AdminWebhooksPage({
 }) {
   const trimmedGuildId = selectedGuildId.trim();
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Webhooks"
+      description="Create and manage inbound webhook proxy URLs and Discord delivery routes."
+      readinessFeature="webhooks"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-workflow space-y-6">
-      <AdminPageHeader
-        title="Webhooks"
-        description="Create and manage inbound webhook proxy URLs and Discord delivery routes."
-        readinessFeature="webhooks"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId && !(entitlement && entitlement.tier === "free") ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="webhooks" />
       ) : entitlement && entitlement.tier === "free" ? (
@@ -146,6 +161,7 @@ export function AdminWebhooksPage({
         />
       ) : (
         <WebhookProxyEditor
+          renderHeader={renderHeader}
           selectedWorkspaceId={selectedWorkspaceId}
           selectedGuildId={trimmedGuildId}
           historyEnabled={Boolean(entitlement && entitlement.tier !== "free")}
@@ -158,12 +174,14 @@ export function AdminWebhooksPage({
 }
 
 function WebhookProxyEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   historyEnabled,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   historyEnabled: boolean;
@@ -179,10 +197,7 @@ function WebhookProxyEditor({
   const [savedDraft, setSavedDraft] = useState<EditableWebhookConfig>(() =>
     createBlankConfig(selectedGuildId),
   );
-  const [logs, setLogs] = useState<WebhookProxyForwardLog[]>([]);
-  const [logsConfig, setLogsConfig] = useState<AdminWebhookConfig | null>(null);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [logsOpen, setLogsOpen] = useState(false);
+  const [logsView, setLogsView] = useState<WebhookLogView | null>(null);
   const [selectedPublicId, setSelectedPublicId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -193,6 +208,7 @@ function WebhookProxyEditor({
   const [pendingWebhookActionBusy, setPendingWebhookActionBusy] = useState(false);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { dialog: confirmDialog, confirm } = useConfirmDialog();
 
   const configs = resource?.configs ?? [];
@@ -218,12 +234,10 @@ function WebhookProxyEditor({
     );
   }
 
-  async function loadLogs(config: AdminWebhookConfig) {
-    api.setError(null);
-    setLogsConfig(config);
-    setLogs([]);
-    setLogsLoading(true);
-    setLogsOpen(true);
+  async function loadLogs(config: AdminWebhookConfig, returnFocus: HTMLButtonElement) {
+    const request: WebhookLogView = { config, returnFocus, result: { kind: "loading" } };
+    setLogsView(request);
+    let result: WebhookLogView["result"];
     try {
       const data = await webhookProxyClient.logs({
         workspaceId: selectedWorkspaceId,
@@ -231,14 +245,14 @@ function WebhookProxyEditor({
         publicId: config.publicId,
         limit: "20",
       });
-      setLogs(data.logs);
+      result = { kind: "ready", logs: data.logs };
     } catch (loadError) {
-      api.setError(
-        loadError instanceof Error ? loadError.message : "Failed to load delivery logs.",
-      );
-    } finally {
-      setLogsLoading(false);
+      result = {
+        kind: "error",
+        message: loadError instanceof Error ? loadError.message : "Failed to load delivery logs.",
+      };
     }
+    setLogsView((current) => (current === request ? { ...request, result } : current));
   }
 
   async function saveConfig(): Promise<boolean> {
@@ -292,12 +306,7 @@ function WebhookProxyEditor({
         setDraft(blank);
         setSavedDraft(blank);
       }
-      if (logsConfig?.publicId === config.publicId) {
-        setLogs([]);
-        setLogsConfig(null);
-        setLogsOpen(false);
-      }
-      setLogs([]);
+      setLogsView((current) => (current?.config.publicId === config.publicId ? null : current));
       await refreshAdminRouteData(onRouteDataRefresh);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete webhook.");
@@ -309,9 +318,7 @@ function WebhookProxyEditor({
     setDraft(blank);
     setSavedDraft(blank);
     setSelectedPublicId(null);
-    setLogs([]);
-    setLogsConfig(null);
-    setLogsOpen(false);
+    setLogsView(null);
     setSaved(false);
     setSaveAttempted(false);
     api.setError(null);
@@ -381,7 +388,7 @@ function WebhookProxyEditor({
     normalizeWebhookDraftForSnapshot(savedDraft),
   );
 
-  return (
+  const content = (
     <SettingsPanel>
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardWebhookChanges} />
       {confirmDialog}
@@ -437,7 +444,7 @@ function WebhookProxyEditor({
         onCreate={startNewWebhook}
         onEdit={editConfig}
         onDelete={(config) => void deleteConfig(config)}
-        onLogs={(config) => void loadLogs(config)}
+        onLogs={(config, trigger) => void loadLogs(config, trigger)}
       />
       <WebhookConfigForm
         selectedWorkspaceId={selectedWorkspaceId}
@@ -452,13 +459,13 @@ function WebhookProxyEditor({
         onDiscard={discardWebhookChanges}
         onSave={() => void saveConfig()}
       />
-      <WebhookLogsDialog
-        open={logsOpen}
-        config={logsConfig ?? selectedConfig}
-        logs={logs}
-        loading={logsLoading}
-        onClose={() => setLogsOpen(false)}
-      />
+      {logsView && (
+        <WebhookLogsDialog
+          view={logsView}
+          onClose={() => setLogsView(null)}
+          onRetry={() => void loadLogs(logsView.config, logsView.returnFocus)}
+        />
+      )}
       {selectedPublicId ? (
         <ConfigurationHistoryCard
           guildId={selectedGuildId}
@@ -492,109 +499,100 @@ function WebhookProxyEditor({
       <PageFeedback error={api.error} />
     </SettingsPanel>
   );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
+  );
 }
 
 function WebhookLogsDialog({
-  open,
-  config,
-  logs,
-  loading,
+  view,
   onClose,
+  onRetry,
 }: {
-  open: boolean;
-  config: AdminWebhookConfig | null;
-  logs: WebhookProxyForwardLog[];
-  loading: boolean;
+  view: WebhookLogView;
   onClose: () => void;
+  onRetry: () => void;
 }) {
-  // Synchronizes the modal with browser body scrolling and global Escape handling.
-  // oxlint-disable-next-line custom/no-use-effect
-  useEffect(() => {
-    if (!open || typeof document === "undefined") {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open, onClose]);
-
-  if (!open || !config) {
-    return null;
-  }
-
+  const { config, result, returnFocus } = view;
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="webhook-logs-title"
-        className="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
-          <div className="min-w-0 space-y-1">
-            <h3 id="webhook-logs-title" className="text-base font-semibold text-foreground">
-              Delivery logs
-            </h3>
-            <p className="text-sm text-muted-foreground">{config.name}</p>
-            <p className="break-all font-mono text-xs text-muted-foreground">
-              {buildInboundPath(config.publicId)}
-            </p>
+    <Modal.Root open onOpenChange={(open) => !open && onClose()}>
+      <Modal.Portal>
+        <Modal.Overlay className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" />
+        <Modal.Content
+          className="fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
+          onCloseAutoFocus={(event) => {
+            if (returnFocus.isConnected) {
+              event.preventDefault();
+              returnFocus.focus();
+            }
+          }}
+        >
+          <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
+            <div className="min-w-0 space-y-1">
+              <Modal.Title className="text-base font-semibold text-foreground">
+                Delivery logs
+              </Modal.Title>
+              <Modal.Description className="text-sm text-muted-foreground">
+                {config.name}
+              </Modal.Description>
+              <p className="break-all font-mono text-xs text-muted-foreground">
+                {buildInboundPath(config.publicId)}
+              </p>
+            </div>
+            <Modal.Close asChild>
+              <Button type="button" size="sm" variant="outline">
+                Close
+              </Button>
+            </Modal.Close>
           </div>
-          <Button type="button" size="sm" variant="outline" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          {loading ? (
-            <EmptyState>Loading delivery logs…</EmptyState>
-          ) : logs.length === 0 ? (
-            <EmptyState>No delivery logs yet.</EmptyState>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>When</TableHead>
-                  <TableHead>Destination</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Attempt</TableHead>
-                  <TableHead>Error</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell>{new Date(log.timestampMs).toLocaleString()}</TableCell>
-                    <TableCell>{log.destinationId}</TableCell>
-                    <TableCell>
-                      <Badge variant={log.ok ? "success" : "danger"}>
-                        {log.status ?? (log.ok ? "OK" : "Network")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{log.attempt}</TableCell>
-                    <TableCell className="max-w-md truncate">{log.error ?? "—"}</TableCell>
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            {result.kind === "loading" ? (
+              <EmptyState>Loading delivery logs…</EmptyState>
+            ) : result.kind === "error" ? (
+              <div className="space-y-2">
+                <PageFeedback error={result.message} />
+                <Button type="button" size="sm" variant="outline" onClick={onRetry}>
+                  Retry delivery logs
+                </Button>
+              </div>
+            ) : result.logs.length === 0 ? (
+              <EmptyState>No delivery logs yet.</EmptyState>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>When</TableHead>
+                    <TableHead>Destination</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Attempt</TableHead>
+                    <TableHead>Error</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      </div>
-    </div>
+                </TableHeader>
+                <TableBody>
+                  {result.logs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>{new Date(log.timestampMs).toLocaleString()}</TableCell>
+                      <TableCell>{log.destinationId}</TableCell>
+                      <TableCell>
+                        <Badge variant={log.ok ? "success" : "danger"}>
+                          {log.status ?? (log.ok ? "OK" : "Network")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{log.attempt}</TableCell>
+                      <TableCell className="max-w-md truncate">{log.error ?? "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </Modal.Content>
+      </Modal.Portal>
+    </Modal.Root>
   );
 }
 
@@ -656,7 +654,7 @@ function WebhookConfigList({
   onCreate: () => void;
   onEdit: (config: AdminWebhookConfig) => void;
   onDelete: (config: AdminWebhookConfig) => void;
-  onLogs: (config: AdminWebhookConfig) => void;
+  onLogs: (config: AdminWebhookConfig, trigger: HTMLButtonElement) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -684,7 +682,7 @@ function WebhookConfigList({
               selected={config.publicId === selectedPublicId}
               onEdit={() => onEdit(config)}
               onDelete={() => onDelete(config)}
-              onLogs={() => onLogs(config)}
+              onLogs={(event) => onLogs(config, event.currentTarget)}
             />
           ))}
         </div>
@@ -704,7 +702,7 @@ function WebhookConfigCard({
   selected: boolean;
   onEdit: () => void;
   onDelete: () => void;
-  onLogs: () => void;
+  onLogs: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(selected);
@@ -1186,7 +1184,6 @@ function CredentialField({
   const [revealed, setRevealed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Plaintext is deliberately component-local and is cleared after 30 seconds or unmount.
   // oxlint-disable-next-line custom/no-use-effect
   useEffect(() => {
     if (!revealed || typeof window === "undefined") return;
@@ -1630,7 +1627,6 @@ function createBlankConfig(guildId: string): EditableWebhookConfig {
   };
 }
 
-/** Keep secret credential values out of dirty-state snapshots while still detecting replacement. */
 function normalizeWebhookDraftForSnapshot(draft: EditableWebhookConfig): unknown {
   return {
     ...draft,
@@ -1648,7 +1644,6 @@ function normalizeWebhookDraftForSnapshot(draft: EditableWebhookConfig): unknown
   };
 }
 
-// Dirty snapshots may distinguish replacement values but never retain plaintext credentials.
 function secretDraftFingerprint(value: string): string {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -1780,15 +1775,12 @@ function validateRegexPattern(
   }
 
   try {
-    // Validate flags separately so the UI can point at the right field.
-    // eslint-disable-next-line no-new
     new RegExp("", flags);
   } catch {
     return { pattern: null, flags: "Enter valid regex flags such as i, m, s, u, y, or g." };
   }
 
   try {
-    // eslint-disable-next-line no-new
     new RegExp(pattern, flags);
   } catch {
     return { pattern: "Enter a valid regular expression.", flags: null };

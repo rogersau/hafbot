@@ -9,7 +9,7 @@ import {
   buildAdminGuildDirectoryApiPath,
   buildAdminOverviewApiPath,
   buildAdminDashboardHref,
-} from "../src/admin/App";
+} from "../src/admin/lib/dashboard-urls";
 import { buildGuildAdminRoleApiPath } from "../src/admin/components/guild-admin-role-card";
 import {
   ADMIN_GUILD_DASHBOARD_PATHS,

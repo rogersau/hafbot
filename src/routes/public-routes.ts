@@ -10,12 +10,6 @@ import type {
 import type { EvidenceVaultBlobStore, RuntimeStores } from "../runtime/app-types";
 import type { FeatureFlags } from "../runtime/features";
 import {
-  CHANGELOG_HTML,
-  CHANGELOG_FEED,
-  LANDING_ASSETS,
-  LLMS_TXT,
-} from "../runtime/landing-bundle";
-import {
   WebhookProxyNotFoundError,
   WebhookProxyServiceUnavailableError,
   type WebhookProxyService,
@@ -27,8 +21,6 @@ import {
   renderSelfHostedPolicyUnavailable,
 } from "./legal-pages";
 import type { SelfHostedSite } from "../runtime/self-hosted-site";
-import type { LandingPriceCatalog } from "../runtime/billing/landing-catalog";
-import { renderLandingPage } from "../runtime/landing-page";
 import type { EvidenceMediaCapability } from "../security/evidence-media-capability";
 import type { WebhookIngressGuardNamespace } from "../runtime/contracts/webhook-ingress-guard";
 import {
@@ -38,18 +30,14 @@ import {
 import { redactWebhookSecrets } from "../security/webhook-credentials";
 import { htmlResponse } from "../http/html-response";
 import { sensitiveBinaryResponse } from "../http/sensitive-binary-response";
-import { isManagedMediaContentType, parseManagedMediaPath } from "../managed-media";
+import { buildManagedMediaStorageKey, isManagedMediaContentType } from "../managed-media";
 import type { PublicManagedMediaStore } from "../managed-media";
 import {
   browserPrivacySignalEnabled,
   createInsertionId,
-  type ProductAnalyticsEvent,
   type ProductAnalyticsReporter,
 } from "../product-analytics";
-
-export interface RouteHandler {
-  (request: Request): Promise<Response | null>;
-}
+import { report, reportPublicPageView } from "./public-analytics";
 
 export interface PublicRouteOptions {
   selfHostedSite?: SelfHostedSite;
@@ -67,15 +55,10 @@ export interface PublicRouteOptions {
   features: FeatureFlags;
   webhookProxyService?: WebhookProxyService;
   banCaseService?: BanCaseService;
-  landingPriceCatalog?: LandingPriceCatalog;
   productAnalytics?: ProductAnalyticsReporter;
   waitUntil?: (promise: Promise<unknown>) => void;
   serverLevelIngressHandler?: (request: Request) => Promise<Response | null>;
 }
-
-const UTM_SOURCES = new Set(["discord", "github", "google", "reddit", "youtube"]);
-const UTM_MEDIA = new Set(["community", "email", "organic", "referral", "social"]);
-const UTM_CAMPAIGNS = new Set(["launch", "premium", "product_update"]);
 
 const PUBLIC_WEBHOOK_METHOD_HEADERS = {
   allow: "GET, HEAD, POST, OPTIONS",
@@ -109,76 +92,18 @@ function webhookIngressFailureResponse(
   return new Response(null, { status, headers });
 }
 
-export function createPublicRoutes(options: PublicRouteOptions): RouteHandler {
-  return async (request: Request): Promise<Response | null> => {
-    const url = new URL(request.url);
-
-    if (url.pathname.startsWith("/webhooks/server-levels/cftools/")) {
+export function createPublicEndpoints(options: PublicRouteOptions) {
+  return {
+    serverLevelIngress: async (request: Request): Promise<Response | null> => {
       if (!options.serverLevelIngressHandler) {
         return Response.json({ error: "Not found" }, { status: 404 });
       }
       return options.serverLevelIngressHandler(request);
-    }
-
-    if (url.pathname === "/health") {
-      return new Response("OK", { status: 200 });
-    }
-
-    if (options.selfHostedSite) {
-      const site = options.selfHostedSite;
-      if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/") {
-        return new Response(null, {
-          status: 302,
-          headers: {
-            location: new URL("/admin", site.publicUrl ?? url.origin).href,
-            "cache-control": "no-store",
-          },
-        });
-      }
-      if (
-        (request.method === "GET" || request.method === "HEAD") &&
-        url.pathname === "/changelog"
-      ) {
-        return new Response(null, {
-          status: 302,
-          headers: {
-            location: "https://github.com/rogersau/hafbot/releases",
-            "cache-control": "no-store",
-          },
-        });
-      }
-      if (url.pathname === "/terms" || url.pathname === "/privacy") {
-        if (request.method !== "GET" && request.method !== "HEAD") {
-          return new Response("Method not allowed", {
-            status: 405,
-            headers: { allow: "GET, HEAD" },
-          });
-        }
-        const policy = url.pathname === "/terms" ? "terms" : "privacy";
-        const target = policy === "terms" ? site.termsUrl : site.privacyUrl;
-        const targetUrl = target ? new URL(target) : undefined;
-        const loopsToPolicy =
-          targetUrl?.origin === url.origin &&
-          ["/terms", "/privacy"].includes(targetUrl.pathname.replace(/\/+$/, ""));
-        if (target && !loopsToPolicy) {
-          return new Response(null, {
-            status: 302,
-            headers: { location: target, "cache-control": "no-store" },
-          });
-        }
-        const response = htmlResponse({
-          profile: "legal",
-          status: 503,
-          html: renderSelfHostedPolicyUnavailable(site, policy, url.origin),
-          requestUrl: url,
-        });
-        return request.method === "HEAD"
-          ? new Response(null, { status: response.status, headers: response.headers })
-          : response;
-      }
-    }
-
-    if (url.pathname === "/.well-known/microsoft-identity-association.json") {
+    },
+    health: () => new Response("OK", { status: 200 }),
+    terms: (request: Request) => handleLegalPolicy(options, request, "terms"),
+    privacy: (request: Request) => handleLegalPolicy(options, request, "privacy"),
+    microsoftIdentityAssociation: (): Response => {
       const applicationId = options.selfHostedSite
         ? options.microsoftApplicationId
         : "b8574ee2-584c-48d7-893f-9ffe940b2f97";
@@ -195,29 +120,8 @@ export function createPublicRoutes(options: PublicRouteOptions): RouteHandler {
           },
         },
       );
-    }
-
-    if (url.pathname === "/terms") {
-      const response = htmlResponse({
-        profile: "legal",
-        html: TERMS_OF_SERVICE_HTML,
-        requestUrl: url,
-      });
-      reportPublicPageView(options, request, "/terms");
-      return response;
-    }
-
-    if (url.pathname === "/privacy") {
-      const response = htmlResponse({
-        profile: "legal",
-        html: PRIVACY_POLICY_HTML,
-        requestUrl: url,
-      });
-      reportPublicPageView(options, request, "/privacy");
-      return response;
-    }
-
-    if (request.method === "GET" && url.pathname === "/install") {
+    },
+    install: (request: Request): Response => {
       const installUrl = buildDiscordInstallUrl({
         discordApplicationId: options.discordApplicationId,
         discordInstallPermissions: options.discordInstallPermissions,
@@ -231,73 +135,17 @@ export function createPublicRoutes(options: PublicRouteOptions): RouteHandler {
         report(options, { name: "install_started", insertionId: createInsertionId() });
       }
       return Response.redirect(installUrl, 302);
-    }
-
-    if (request.method === "GET" && url.pathname === "/robots.txt") {
-      return new Response("User-agent: *\nAllow: /\nSitemap: https://hafbot.xyz/sitemap.xml\n", {
-        headers: { "content-type": "text/plain; charset=utf-8" },
-      });
-    }
-
-    if (request.method === "GET" && url.pathname === "/sitemap.xml") {
-      return new Response(
-        '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://hafbot.xyz/</loc></url><url><loc>https://hafbot.xyz/changelog</loc></url><url><loc>https://hafbot.xyz/terms</loc></url><url><loc>https://hafbot.xyz/privacy</loc></url></urlset>\n',
-        { headers: { "content-type": "application/xml; charset=utf-8" } },
-      );
-    }
-
-    if (request.method === "GET" && url.pathname === "/llms.txt") {
-      return new Response(LLMS_TXT, {
-        headers: { "content-type": "text/plain; charset=utf-8" },
-      });
-    }
-
-    if (
-      (request.method === "GET" || request.method === "HEAD") &&
-      url.pathname === "/changelog.xml"
-    ) {
-      return new Response(request.method === "HEAD" ? null : CHANGELOG_FEED, {
-        headers: {
-          "content-type": "application/atom+xml; charset=utf-8",
-          "cache-control": "public, max-age=300",
-          "x-content-type-options": "nosniff",
-        },
-      });
-    }
-
-    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/changelog")) {
-      const response = htmlResponse({
-        profile: "landing",
-        html:
-          url.pathname === "/"
-            ? await renderLandingPage(options.landingPriceCatalog)
-            : CHANGELOG_HTML,
-        requestUrl: url,
-      });
-      reportPublicPageView(options, request, url.pathname);
-      return response;
-    }
-
-    if (request.method === "GET" && url.pathname.startsWith("/landing/assets/")) {
-      const filename = url.pathname.slice("/landing/assets/".length);
-      const asset = LANDING_ASSETS[filename];
-      if (!asset) {
-        return new Response("Not found", { status: 404 });
+    },
+    managedMedia: async (
+      request: Request,
+      { guildId, filename }: { guildId: string; filename: string },
+    ): Promise<Response | null> => {
+      try {
+        buildManagedMediaStorageKey(guildId, filename);
+      } catch {
+        return null;
       }
-      return new Response(asset.content, {
-        status: 200,
-        headers: { "content-type": asset.contentType },
-      });
-    }
-
-    const managedMedia = parseManagedMediaPath(url.pathname);
-    if ((request.method === "GET" || request.method === "HEAD") && managedMedia) {
-      const object = options.publicManagedMedia
-        ? await options.publicManagedMedia.getImage({
-            guildId: managedMedia.guildId,
-            filename: managedMedia.filename,
-          })
-        : null;
+      const object = await options.publicManagedMedia?.getImage({ guildId, filename });
       if (!object?.contentType || !isManagedMediaContentType(object.contentType)) {
         if (object?.body instanceof ReadableStream)
           await object.body.cancel().catch(() => undefined);
@@ -310,38 +158,31 @@ export function createPublicRoutes(options: PublicRouteOptions): RouteHandler {
         status: 200,
         headers: {
           "content-type": object.contentType,
-          "content-disposition": `inline; filename="${managedMedia.filename}"`,
+          "content-disposition": `inline; filename="${filename}"`,
           "cache-control": "public, max-age=31536000, immutable",
           "x-content-type-options": "nosniff",
           "x-robots-tag": "noindex, nofollow, noarchive",
         },
       });
-    }
-
-    const webhookMatch = /^\/webhooks\/([^/]+)$/.exec(url.pathname);
-    if (webhookMatch) {
+    },
+    webhookProbe: (product: "webhookProxy" | "banCases", status: 200 | 204 | 405): Response => {
+      const service =
+        product === "webhookProxy" ? options.webhookProxyService : options.banCaseService;
+      if (!options.features[product] || !service) {
+        return Response.json({ error: "Not found" }, { status: 404 });
+      }
+      return status === 405
+        ? Response.json(
+            { error: "Method not allowed" },
+            { status, headers: PUBLIC_WEBHOOK_METHOD_HEADERS },
+          )
+        : new Response(null, { status, headers: PUBLIC_WEBHOOK_METHOD_HEADERS });
+    },
+    webhookProxy: async (request: Request, publicId: string): Promise<Response> => {
       if (!options.features.webhookProxy || !options.webhookProxyService) {
         return Response.json({ error: "Not found" }, { status: 404 });
       }
-      // Provider verification / reachability probes (e.g. CFTools, Discord)
-      // send GET/HEAD/OPTIONS before enabling a webhook. Return a constant 200/204
-      // regardless of whether the publicId is valid so the endpoint cannot be
-      // used to confirm whether a given webhook URL is live.
-      if (request.method === "OPTIONS") {
-        return acceptedWebhookResponse();
-      }
-      if (request.method === "GET" || request.method === "HEAD") {
-        return new Response(null, { status: 200, headers: PUBLIC_WEBHOOK_METHOD_HEADERS });
-      }
-      if (request.method !== "POST") {
-        return Response.json(
-          { error: "Method not allowed" },
-          { status: 405, headers: PUBLIC_WEBHOOK_METHOD_HEADERS },
-        );
-      }
-
       try {
-        const publicId = decodeURIComponent(webhookMatch[1] ?? "");
         if (options.webhookIngressGuard) {
           const admission = await handlePublicWebhookIngress({
             request,
@@ -374,32 +215,12 @@ export function createPublicRoutes(options: PublicRouteOptions): RouteHandler {
         console.error("Webhook proxy request failed", redactWebhookSecrets(error));
         return Response.json({ error: "Internal Server Error" }, { status: 500 });
       }
-    }
-
-    const banCaseMatch = /^\/ban-cases\/([^/]+)$/.exec(url.pathname);
-    if (banCaseMatch) {
+    },
+    banCaseWebhook: async (request: Request, publicId: string): Promise<Response> => {
       if (!options.features.banCases || !options.banCaseService) {
         return Response.json({ error: "Not found" }, { status: 404 });
       }
-      // Provider verification / reachability probes (e.g. game-server ban
-      // webhooks) send GET/HEAD/OPTIONS before enabling delivery. Return a constant
-      // 200/204 regardless of whether the source id is valid so the endpoint
-      // cannot be used to confirm whether a given webhook URL is live.
-      if (request.method === "OPTIONS") {
-        return acceptedWebhookResponse();
-      }
-      if (request.method === "GET" || request.method === "HEAD") {
-        return new Response(null, { status: 200, headers: PUBLIC_WEBHOOK_METHOD_HEADERS });
-      }
-      if (request.method !== "POST") {
-        return Response.json(
-          { error: "Method not allowed" },
-          { status: 405, headers: PUBLIC_WEBHOOK_METHOD_HEADERS },
-        );
-      }
-
       try {
-        const publicId = decodeURIComponent(banCaseMatch[1] ?? "");
         if (options.webhookIngressGuard) {
           await handlePublicWebhookIngress({
             request,
@@ -423,17 +244,24 @@ export function createPublicRoutes(options: PublicRouteOptions): RouteHandler {
         console.error("Ban Case webhook request failed", redactWebhookSecrets(error));
         return acceptedWebhookResponse();
       }
-    }
-
-    const transcriptMediaMatch =
-      options.features.tickets &&
-      /^\/transcripts\/([^/]+)\/([^/]+)\/([^/]+)\/media\/([^/]+)\/(.+)$/.exec(url.pathname);
-    if ((request.method === "GET" || request.method === "HEAD") && transcriptMediaMatch) {
-      const guildId = decodeURIComponent(transcriptMediaMatch[1] ?? "");
-      const channelId = decodeURIComponent(transcriptMediaMatch[2] ?? "");
-      const accessToken = decodeURIComponent(transcriptMediaMatch[3] ?? "");
-      const attachmentId = decodeURIComponent(transcriptMediaMatch[4] ?? "");
-      const filename = decodeURIComponent(transcriptMediaMatch[5] ?? "");
+    },
+    transcriptMedia: async (
+      request: Request,
+      {
+        guildId,
+        channelId,
+        token: accessToken,
+        attachmentId,
+        filename,
+      }: {
+        guildId: string;
+        channelId: string;
+        token: string;
+        attachmentId: string;
+        filename: string;
+      },
+    ): Promise<Response | null> => {
+      if (!options.features.tickets) return null;
       const capability = await authorizeTicketTranscriptRequest(options, request, {
         guildId,
         channelId,
@@ -460,14 +288,13 @@ export function createPublicRoutes(options: PublicRouteOptions): RouteHandler {
       return sensitiveBinaryResponse(request.method === "HEAD" ? null : attachment.body, {
         contentType: attachment.contentType ?? "application/octet-stream",
       });
-    }
-
-    const evidenceImageMatch =
-      options.features.evidenceVault &&
-      /^\/evidence-vault\/images\/([^/]+)\/([^/]+)$/.exec(url.pathname);
-    if ((request.method === "GET" || request.method === "HEAD") && evidenceImageMatch) {
-      const recordId = decodeURIComponent(evidenceImageMatch[1] ?? "");
-      const imageId = decodeURIComponent(evidenceImageMatch[2] ?? "");
+    },
+    evidenceImage: async (
+      request: Request,
+      { recordId, imageId }: { recordId: string; imageId: string },
+    ): Promise<Response | null> => {
+      if (!options.features.evidenceVault) return null;
+      const url = new URL(request.url);
       const accessValues = url.searchParams.getAll("access");
       const record = options.evidenceVaultStore
         ? await options.evidenceVaultStore.readRecord(recordId)
@@ -502,14 +329,17 @@ export function createPublicRoutes(options: PublicRouteOptions): RouteHandler {
           "content-disposition": `inline; filename="${sanitizeFilename(recordImage.filename)}"`,
         },
       });
-    }
-
-    const transcriptMatch =
-      options.features.tickets && /^\/transcripts\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(url.pathname);
-    if ((request.method === "GET" || request.method === "HEAD") && transcriptMatch) {
-      const guildId = decodeURIComponent(transcriptMatch[1] ?? "");
-      const channelId = decodeURIComponent(transcriptMatch[2] ?? "");
-      const accessToken = decodeURIComponent(transcriptMatch[3] ?? "");
+    },
+    transcript: async (
+      request: Request,
+      {
+        guildId,
+        channelId,
+        token: accessToken,
+      }: { guildId: string; channelId: string; token: string },
+    ): Promise<Response | null> => {
+      if (!options.features.tickets) return null;
+      const url = new URL(request.url);
       const capability = await authorizeTicketTranscriptRequest(options, request, {
         guildId,
         channelId,
@@ -532,76 +362,52 @@ export function createPublicRoutes(options: PublicRouteOptions): RouteHandler {
             : hydrateTicketTranscriptHtmlAccessToken(html, accessToken),
         requestUrl: url,
       });
-    }
-
-    return null;
+    },
   };
 }
 
-function reportPublicPageView(
+function handleLegalPolicy(
   options: PublicRouteOptions,
   request: Request,
-  path: Extract<ProductAnalyticsEvent, { name: "public_page_viewed" }>["path"],
-): void {
-  if (request.method !== "GET" || browserPrivacySignalEnabled(request)) return;
-  const userAgent = request.headers.get("user-agent") ?? "";
-  if (/bot|crawler|spider|slurp|preview|headless/i.test(userAgent)) return;
+  policy: "terms" | "privacy",
+): Response {
   const url = new URL(request.url);
-  report(options, {
-    name: "public_page_viewed",
-    insertionId: createInsertionId(),
-    path,
-    referrerDomain: readReferrerDomain(request.headers.get("referer")),
-    utmSource: readCampaignValue(url.searchParams.get("utm_source"), UTM_SOURCES),
-    utmMedium: readCampaignValue(url.searchParams.get("utm_medium"), UTM_MEDIA),
-    utmCampaign: readCampaignValue(url.searchParams.get("utm_campaign"), UTM_CAMPAIGNS),
-    deviceClass: readDeviceClass(userAgent),
-    browserFamily: readBrowserFamily(userAgent),
-    country: readCountry(request.headers.get("cf-ipcountry")),
+  if (options.selfHostedSite) {
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return new Response("Method not allowed", {
+        status: 405,
+        headers: { allow: "GET, HEAD" },
+      });
+    }
+    const target =
+      policy === "terms" ? options.selfHostedSite.termsUrl : options.selfHostedSite.privacyUrl;
+    const targetUrl = target ? new URL(target) : undefined;
+    const loopsToPolicy =
+      targetUrl?.origin === url.origin &&
+      ["/terms", "/privacy"].includes(targetUrl.pathname.replace(/\/+$/, ""));
+    if (target && !loopsToPolicy) {
+      return new Response(null, {
+        status: 302,
+        headers: { location: target, "cache-control": "no-store" },
+      });
+    }
+    const response = htmlResponse({
+      profile: "legal",
+      status: 503,
+      html: renderSelfHostedPolicyUnavailable(options.selfHostedSite, policy, url.origin),
+      requestUrl: url,
+    });
+    return request.method === "HEAD"
+      ? new Response(null, { status: response.status, headers: response.headers })
+      : response;
+  }
+  const response = htmlResponse({
+    profile: "legal",
+    html: policy === "terms" ? TERMS_OF_SERVICE_HTML : PRIVACY_POLICY_HTML,
+    requestUrl: url,
   });
-}
-
-function report(options: PublicRouteOptions, event: ProductAnalyticsEvent): void {
-  if (!options.productAnalytics) return;
-  try {
-    const promise = options.productAnalytics.report(event).catch(() => undefined);
-    if (options.waitUntil) options.waitUntil(promise);
-  } catch {
-    // An injected reporter cannot affect a public response.
-  }
-}
-
-function readReferrerDomain(value: string | null): string | undefined {
-  if (!value) return undefined;
-  try {
-    const hostname = new URL(value).hostname.toLowerCase();
-    return hostname.length <= 253 ? hostname : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function readCampaignValue(value: string | null, allowed: ReadonlySet<string>): string | undefined {
-  const normalized = value?.trim().toLowerCase();
-  return normalized && allowed.has(normalized) ? normalized : undefined;
-}
-
-function readCountry(value: string | null): string | undefined {
-  const normalized = value?.toUpperCase();
-  return normalized && /^[A-Z]{2}$/.test(normalized) ? normalized : undefined;
-}
-
-function readDeviceClass(userAgent: string): "mobile" | "tablet" | "desktop" {
-  if (/ipad|tablet/i.test(userAgent)) return "tablet";
-  return /mobile|iphone|android/i.test(userAgent) ? "mobile" : "desktop";
-}
-
-function readBrowserFamily(userAgent: string): "chrome" | "firefox" | "safari" | "edge" | "other" {
-  if (/edg\//i.test(userAgent)) return "edge";
-  if (/firefox\//i.test(userAgent)) return "firefox";
-  if (/chrome\//i.test(userAgent)) return "chrome";
-  if (/safari\//i.test(userAgent)) return "safari";
-  return "other";
+  reportPublicPageView(options, request, `/${policy}`);
+  return response;
 }
 
 function sensitiveBlobHeaders(): Record<string, string> {

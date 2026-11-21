@@ -247,7 +247,7 @@ for (const stale of [false, true]) {
         await click("Cancel");
       }
       await act(async () => {
-        void router.navigate({ to: "/next" });
+        void router.navigate({ href: "/next" });
       });
       assert.match(
         document.querySelector('[role="alertdialog"]')?.textContent ?? "",
@@ -262,10 +262,9 @@ for (const stale of [false, true]) {
       assert.doesNotMatch(container.textContent ?? "", /Unsaved changes/);
       await change(title, "Another unfinished title");
       await act(async () => {
-        void router.navigate({ to: "/next" });
+        void router.navigate({ href: "/next" });
       });
       await click("Leave");
-      // TanStack's Node entry does not mount the browser history subscriber.
       assert.equal(router.history.location.pathname, "/next");
     });
   });
@@ -553,7 +552,7 @@ test("Server Levels toggles only saved settings, saves channel with saved enable
       /Could not save channel/,
     );
     await act(async () => {
-      void router.navigate({ to: "/next" });
+      void router.navigate({ href: "/next" });
     });
     await click("Stay");
     await click("Discard changes", container);
@@ -681,6 +680,94 @@ test("feedback dismissal and failed send preserve draft and original context; su
   });
 });
 
+test("Start keeps shell state and title on the presented guild until navigation commits", async () => {
+  await withDom(async ({ container, root }) => {
+    const { createFixtureRouter } = await import("./support/admin-app");
+    const { useAdminRouteContext } = await import("../src/admin/routes/page-context");
+    const { getLastSelectedGuildId } = await import("../src/admin/lib/guild-selection-persistence");
+    const router = createFixtureRouter("/admin/guild-1/lfg");
+    const route = router.routesById["/admin/_dashboard/$guildId/lfg"];
+    const originalComponent = route.options.component;
+    const loadingNextGuild = deferred<void>();
+    const loadedNextGuild = deferred<void>();
+    const committed = deferred<void>();
+    const guilds = [
+      { guildId: "guild-1", name: "Alpha", label: "Alpha", icon: null },
+      { guildId: "guild-2", name: "Bravo", label: "Bravo", icon: null },
+    ];
+
+    function GuildEditor() {
+      const [draft, setDraft] = useState("");
+      const context = useAdminRouteContext();
+      return (
+        <>
+          <p>{context.pathGuildId}</p>
+          <button onClick={() => setDraft("Unsaved draft")}>Edit draft</button>
+          <button onClick={() => context.onSelectedGuildChange("guild-2")}>Switch guild</button>
+          <p>{draft}</p>
+        </>
+      );
+    }
+
+    route.options.component = GuildEditor;
+    globalThis.fetch = async (input) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname === "/admin/api/guilds") return Response.json({ guilds });
+      if (url.pathname === "/admin/api/profile/preferences") {
+        return Response.json(DEFAULT_USER_PREFERENCES);
+      }
+      if (url.pathname === "/admin/api/lfg") {
+        if (url.searchParams.get("guildId") === "guild-2") {
+          loadingNextGuild.resolve();
+          await loadedNextGuild.promise;
+        }
+        return Response.json({ config: null, posts: [] });
+      }
+      return Response.json({}, { status: 404 });
+    };
+    const unsubscribe = router.subscribe("onResolved", ({ toLocation }) => {
+      if (toLocation.pathname === "/admin/guild-2/lfg") committed.resolve();
+    });
+    try {
+      await router.load();
+      await act(async () => root.render(<RouterProvider router={router} />));
+      assert.equal(document.title, "LFG · Alpha | HAF Bot");
+      const collapse = container.querySelector<HTMLButtonElement>(
+        '[aria-label="Collapse sidebar"]',
+      );
+      assert.ok(collapse);
+      await act(async () => collapse.click());
+      await click("Edit draft");
+
+      const unblock = router.history.block({ blockerFn: () => true });
+      try {
+        await click("Switch guild");
+        assert.equal(getLastSelectedGuildId(), null);
+        assert.equal(router.state.resolvedLocation?.pathname, "/admin/guild-1/lfg");
+      } finally {
+        unblock();
+      }
+
+      await click("Switch guild");
+      await loadingNextGuild.promise;
+      assert.equal(document.title, "LFG · Alpha | HAF Bot");
+      assert.match(container.textContent ?? "", /guild-1[\s\S]*Unsaved draft/);
+      assert.equal(getLastSelectedGuildId(), null);
+
+      await act(async () => loadedNextGuild.resolve());
+      await committed.promise;
+      assert.equal(document.title, "LFG · Bravo | HAF Bot");
+      assert.match(container.textContent ?? "", /guild-2/);
+      assert.doesNotMatch(container.textContent ?? "", /Unsaved draft/);
+      assert.ok(container.querySelector('[aria-label="Expand sidebar"]'));
+      assert.equal(getLastSelectedGuildId(), "guild-2");
+    } finally {
+      unsubscribe();
+      route.options.component = originalComponent;
+    }
+  });
+});
+
 test(
   "feedback survives mounted shell navigation and scope changes, and clears with the authenticated tree",
   { timeout: 15000 },
@@ -743,13 +830,10 @@ test(
           userProfile: { name: "Alex Morgan", email: "", image: "" },
           userPreferences: DEFAULT_USER_PREFERENCES,
           applyUserPreferencesPatch: async () => {},
-          pageMetadata: null,
-          setPageMetadata: () => {},
           isRoutePending: false,
         };
         root.render(
           <AdminRouteContextProvider value={context}>
-            {/* Node's router entry does not subscribe. Remount its renderer to exercise the shell's route lifetime. */}
             <RouterProvider key={location.href} router={router} />
           </AdminRouteContextProvider>,
         );
@@ -871,7 +955,7 @@ test("feedback receipt stays visible and announces clipboard rejection and succe
         <AdminFeedbackDialog
           open
           snapshot={{ route: "/admin/clans" }}
-          onOpenChange={() => {}}
+          onClose={() => {}}
           submitFeedback={async () => ({ ok: true, reference: "FB-456", receivedAtMs: 1 })}
           copyReceipt={async (value) => {
             if (failCopy) throw new Error("Permission denied");

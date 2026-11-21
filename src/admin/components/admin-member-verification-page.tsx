@@ -5,7 +5,7 @@ import type {
   MemberVerificationDeliveryMode,
   MemberVerificationMethod,
 } from "../../types";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import {
   EditorActions,
   FormField,
@@ -25,7 +25,7 @@ import { NavigationGuard } from "./navigation-guard";
 import { PageFeedback } from "./page-feedback";
 import { UnsavedChangesIndicator } from "./unsaved-changes-indicator";
 import { useToast } from "./toast";
-import { refreshAdminRouteData, requireAdminRouteRefresh } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { useGuildResources } from "../hooks/use-guild-resources";
 import type { EntitlementInfo } from "../hooks/use-entitlement";
@@ -154,26 +154,33 @@ export function AdminMemberVerificationPage({
   initialData?: MemberVerificationLoaderData | null;
   onRouteDataRefresh?: () => Promise<void>;
 }) {
+  const { requireAdminRouteRefresh } = useAdminRouteRefresh();
   const trimmedGuildId = selectedGuildId.trim();
   const [editorGeneration, setEditorGeneration] = useState(0);
   const editorHasUnsavedChanges = useRef(false);
   const turnstileAvailable = initialData?.turnstileAvailable ?? false;
   const steamLinkAvailable = initialData?.steamLinkAvailable ?? false;
 
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Member Verification"
+      description="Welcome new members with a Verify button that grants a Verified Role — delivered as a DM or a channel panel."
+      readinessFeature="member-verification"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-settings space-y-6">
-      <AdminPageHeader
-        title="Member Verification"
-        description="Welcome new members with a Verify button that grants a Verified Role — delivered as a DM or a channel panel."
-        readinessFeature="member-verification"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {trimmedGuildId ? null : renderHeader()}
       {!trimmedGuildId ? (
         <NoGuildSelected feature="Member Verification" />
       ) : (
         <>
           <MemberVerificationEditor
+            renderHeader={renderHeader}
             key={editorGeneration}
             selectedWorkspaceId={selectedWorkspaceId}
             selectedGuildId={trimmedGuildId}
@@ -208,6 +215,7 @@ export function AdminMemberVerificationPage({
 }
 
 function MemberVerificationEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   initialData,
@@ -218,6 +226,7 @@ function MemberVerificationEditor({
   onRouteDataRefresh,
   onUnsavedChangesChange,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: MemberVerificationLoaderData | null;
@@ -268,6 +277,7 @@ function MemberVerificationEditor({
   );
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const { resources, loading: loadingResources } = useGuildResources(
     selectedWorkspaceId,
     selectedGuildId,
@@ -358,9 +368,6 @@ function MemberVerificationEditor({
         { workspaceId: selectedWorkspaceId, guildId: selectedGuildId },
       );
 
-      // The backend publishes/refreshes the channel panel on save and returns
-      // the up-to-date panelMessageId; reconcile so the published indicator
-      // reflects reality rather than the stale local snapshot.
       const nextPanelMessageId = data.config?.panelMessageId ?? config.panelMessageId;
       const reconciled = { ...config, panelMessageId: nextPanelMessageId };
       setConfig(reconciled);
@@ -461,7 +468,7 @@ function MemberVerificationEditor({
     window.location.assign(destination);
   }
 
-  return (
+  const content = (
     <div className="space-y-5">
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardChanges} />
       <UnsavedChangesIndicator hasChanges={hasUnsavedChanges} />
@@ -864,5 +871,12 @@ function MemberVerificationEditor({
         </Button>
       </EditorActions>
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }

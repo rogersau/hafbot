@@ -11,7 +11,7 @@ import type {
   ManagedMessageLinkButton,
   MessageTemplate,
 } from "../../types";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { FormField, SectionHeader, SettingsBlock } from "./admin-form-layout";
 import { ChannelSelect, MultiRoleSelect } from "./guild-resource-select";
 import { NoGuildSelected } from "./no-guild-selected";
@@ -22,27 +22,22 @@ import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "./toast";
-import { refreshAdminRouteData } from "../lib/mutation-reconciliation";
+import { useAdminRouteRefresh } from "../lib/admin-session";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { managedMessagesClient } from "../generated/admin-client/managed-messages";
 import type { ManagedMessagesLoaderData } from "../lib/admin-route-loaders";
 import { DiscordMessagePreview } from "./discord-message-preview";
 import { MarkdownEditor } from "./markdown-editor";
-import { ManagedMediaUpload } from "./managed-media-upload";
 import { NavigationGuard } from "./navigation-guard";
 import { UnsavedChangesIndicator } from "./unsaved-changes-indicator";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
+import type { ProductDialogRequest } from "./managed-message-dialog";
 
+const ManagedMessageDialog = lazy(() => import("./managed-message-dialog"));
 const ManagedMessageLinkButtonEditor = lazy(() => import("./managed-message-link-button-editor"));
+const ManagedMediaUpload = lazy(async () => ({
+  default: (await import("./managed-media-upload")).ManagedMediaUpload,
+}));
 
-/** Dispatches Save and continue to the active editor's mutation. */
 export function saveAndContinueMutation<T>(
   mode: "managed-message" | "template",
   mutations: {
@@ -69,17 +64,6 @@ interface EditorSnapshot {
   scheduledLocal: string;
 }
 
-type ProductDialogRequest =
-  | { kind: "unsaved"; continueAction: () => void }
-  | {
-      kind: "confirm";
-      title: string;
-      description: string;
-      confirmLabel: string;
-      action: () => void;
-    }
-  | { kind: "duplicate"; template: MessageTemplate; name: string; error?: string };
-
 export function AdminManagedMessagesPage({
   selectedWorkspaceId,
   selectedGuildId,
@@ -92,19 +76,25 @@ export function AdminManagedMessagesPage({
   onRouteDataRefresh?: () => Promise<void>;
 }) {
   const guildId = selectedGuildId.trim();
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Managed Messages"
+      description="Publish durable information as bot-owned Discord messages."
+      readinessFeature="managed-messages"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-workflow space-y-6">
-      <AdminPageHeader
-        title="Managed Messages"
-        description="Publish durable information as bot-owned Discord messages."
-        readinessFeature="managed-messages"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
+      {guildId ? null : renderHeader()}
       {!guildId ? (
         <NoGuildSelected feature="Managed Messages" />
       ) : (
         <ManagedMessagesEditor
+          renderHeader={renderHeader}
           selectedWorkspaceId={selectedWorkspaceId}
           selectedGuildId={guildId}
           initialData={initialData}
@@ -116,11 +106,13 @@ export function AdminManagedMessagesPage({
 }
 
 function ManagedMessagesEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   initialData?: ManagedMessagesLoaderData | null;
@@ -145,6 +137,7 @@ function ManagedMessagesEditor({
   const pendingAfterSave = useRef<(() => void) | null>(null);
   const api = useAdminApi();
   const toast = useToast();
+  const { refreshAdminRouteData } = useAdminRouteRefresh();
   const textChannels = initialData?.resources.textChannels ?? [];
   const roles = initialData?.resources.roles ?? [];
   const limit = initialData?.entitlement ? initialData.entitlement.limits.managedMessagesMax : 3;
@@ -229,30 +222,14 @@ function ManagedMessagesEditor({
     const schedule =
       messageDraft.scheduledAtMs === null ? "" : localDateTimeValue(messageDraft.scheduledAtMs);
     protectNavigation(() =>
-      loadEditor(draftFromPersistedDraft(messageDraft), "managed-message", schedule),
+      loadEditor(draftFromMessage(messageDraft), "managed-message", schedule),
     );
   }
 
   async function performSave(republish = false) {
     if (!canWrite) return;
     setTab("editor");
-    if (!draft.internalName.trim()) {
-      api.setError("Internal name is required.");
-      return;
-    }
-    if (!draft.channelId) {
-      api.setError("Choose a destination channel.");
-      return;
-    }
-    if (draft.embeds.some((embed) => !embed.description.trim())) {
-      api.setError("Every embed needs a description.");
-      return;
-    }
-    const buttonError = validateLinkButtons(draft.buttons);
-    if (buttonError) {
-      api.setError(buttonError);
-      return;
-    }
+    if (!validateEditor()) return;
     await api.run(
       async () =>
         managedMessagesClient.save({
@@ -388,21 +365,16 @@ function ManagedMessagesEditor({
         const savedDraft = "draft" in result ? result.draft : undefined;
         const message = "message" in result ? result.message : undefined;
         if (savedDraft) {
+          const nextDraft = draftFromMessage(savedDraft);
+          const schedule =
+            savedDraft.scheduledAtMs === null ? "" : localDateTimeValue(savedDraft.scheduledAtMs);
           setManagedDrafts((current) => [
             ...current.filter((entry) => entry.id !== savedDraft.id),
             savedDraft,
           ]);
-          setDraft(draftFromPersistedDraft(savedDraft));
-          setSavedSnapshot(
-            createEditorSnapshot(
-              draftFromPersistedDraft(savedDraft),
-              "managed-message",
-              savedDraft.scheduledAtMs === null ? "" : localDateTimeValue(savedDraft.scheduledAtMs),
-            ),
-          );
-          setScheduledLocal(
-            savedDraft.scheduledAtMs === null ? "" : localDateTimeValue(savedDraft.scheduledAtMs),
-          );
+          setDraft(nextDraft);
+          setSavedSnapshot(createEditorSnapshot(nextDraft, "managed-message", schedule));
+          setScheduledLocal(schedule);
           toast.success(savedDraft.status === "scheduled" ? "Publish scheduled." : "Draft saved.");
         }
         if (message) {
@@ -506,7 +478,7 @@ function ManagedMessagesEditor({
           cancelled,
         ]);
         if (draft.id === cancelled.id) {
-          setDraft(draftFromPersistedDraft(cancelled));
+          setDraft(draftFromMessage(cancelled));
           setScheduledLocal("");
         }
         toast.success("Scheduled Publish cancelled.");
@@ -644,7 +616,7 @@ function ManagedMessagesEditor({
     );
   }
 
-  return (
+  const content = (
     <div className="space-y-5">
       <NavigationGuardBoundary>
         <NavigationGuard
@@ -934,68 +906,54 @@ function ManagedMessagesEditor({
           onDiscard={restoreSavedSnapshot}
         />
       )}
-      <ProductDialog
-        request={dialogRequest}
-        returnFocus={dialogRequest?.kind === "unsaved" ? tabReturnFocus.current : null}
-        loading={api.loading}
-        onClose={() => {
-          cancelPendingContinuation();
-          setDialogRequest(null);
-        }}
-        onConfirm={() => {
-          const request = dialogRequest;
-          if (!request) return;
-          if (request.kind === "unsaved") {
-            cancelPendingContinuation();
-            restoreSavedSnapshot();
-            setDialogRequest(null);
-            request.continueAction();
-          } else if (request.kind === "confirm") {
-            setDialogRequest(null);
-            request.action();
-          } else {
-            const name = request.name.trim();
-            if (!name) {
-              setDialogRequest({ ...request, error: "Enter a template name." });
-              return;
-            }
-            if (name.length > 100) {
-              setDialogRequest({
-                ...request,
-                error: "Template names must be 100 characters or fewer.",
+      {dialogRequest && (
+        <Suspense fallback={<p role="status">Loading dialog…</p>}>
+          <ManagedMessageDialog
+            request={dialogRequest}
+            templates={templates}
+            returnFocus={dialogRequest.kind === "unsaved" ? tabReturnFocus.current : null}
+            loading={api.loading}
+            onClose={() => {
+              cancelPendingContinuation();
+              setDialogRequest(null);
+            }}
+            onConfirm={(request) => {
+              if (request.kind === "unsaved") {
+                cancelPendingContinuation();
+                restoreSavedSnapshot();
+                setDialogRequest(null);
+                request.continueAction();
+              } else if (request.kind === "confirm") {
+                setDialogRequest(null);
+                request.action();
+              } else {
+                setDialogRequest(null);
+                void performDuplicateTemplate(request.template, request.name);
+              }
+            }}
+            onUnsavedSave={async () => {
+              if (dialogRequest.kind !== "unsaved") return;
+              pendingAfterSave.current = () => {
+                const next = dialogRequest.continueAction;
+                setDialogRequest(null);
+                next();
+              };
+              await saveAndContinueMutation(editorMode, {
+                managedMessage: performSave,
+                template: saveTemplate,
               });
-              return;
-            }
-            if (
-              templates.some(
-                (template) => template.internalName.toLowerCase() === name.toLowerCase(),
-              )
-            ) {
-              setDialogRequest({ ...request, error: "A template with this name already exists." });
-              return;
-            }
-            setDialogRequest(null);
-            void performDuplicateTemplate(request.template, name);
-          }
-        }}
-        onUnsavedSave={async () => {
-          if (!dialogRequest || dialogRequest.kind !== "unsaved") return;
-          pendingAfterSave.current = () => {
-            const next = dialogRequest.continueAction;
-            setDialogRequest(null);
-            next();
-          };
-          await saveAndContinueMutation(editorMode, {
-            managedMessage: performSave,
-            template: saveTemplate,
-          });
-        }}
-        onNameChange={(name) => {
-          if (dialogRequest?.kind === "duplicate")
-            setDialogRequest({ ...dialogRequest, name, error: undefined });
-        }}
-      />
+            }}
+          />
+        </Suspense>
+      )}
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 
   function restoreSavedSnapshot() {
@@ -1288,34 +1246,36 @@ function Editor({
                     />
                   </FormField>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField label="Image URL" htmlFor={`managed-embed-image-${index}`}>
-                    <ManagedMediaUpload
-                      id={`managed-embed-image-${index}`}
-                      label={`image for embed ${index + 1}`}
-                      guildId={selectedGuildId}
-                      workspaceId={selectedWorkspaceId || undefined}
-                      value={embed.imageUrl ?? ""}
-                      disabled={readOnly}
-                      onChange={(imageUrl) =>
-                        updateEmbed(index, { imageUrl: imageUrl || undefined })
-                      }
-                    />
-                  </FormField>
-                  <FormField label="Thumbnail URL" htmlFor={`managed-embed-thumbnail-${index}`}>
-                    <ManagedMediaUpload
-                      id={`managed-embed-thumbnail-${index}`}
-                      label={`thumbnail for embed ${index + 1}`}
-                      guildId={selectedGuildId}
-                      workspaceId={selectedWorkspaceId || undefined}
-                      value={embed.thumbnailUrl ?? ""}
-                      disabled={readOnly}
-                      onChange={(thumbnailUrl) =>
-                        updateEmbed(index, { thumbnailUrl: thumbnailUrl || undefined })
-                      }
-                    />
-                  </FormField>
-                </div>
+                <Suspense fallback={<p role="status">Loading image controls…</p>}>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField label="Image URL" htmlFor={`managed-embed-image-${index}`}>
+                      <ManagedMediaUpload
+                        id={`managed-embed-image-${index}`}
+                        label={`image for embed ${index + 1}`}
+                        guildId={selectedGuildId}
+                        workspaceId={selectedWorkspaceId || undefined}
+                        value={embed.imageUrl ?? ""}
+                        disabled={readOnly}
+                        onChange={(imageUrl) =>
+                          updateEmbed(index, { imageUrl: imageUrl || undefined })
+                        }
+                      />
+                    </FormField>
+                    <FormField label="Thumbnail URL" htmlFor={`managed-embed-thumbnail-${index}`}>
+                      <ManagedMediaUpload
+                        id={`managed-embed-thumbnail-${index}`}
+                        label={`thumbnail for embed ${index + 1}`}
+                        guildId={selectedGuildId}
+                        workspaceId={selectedWorkspaceId || undefined}
+                        value={embed.thumbnailUrl ?? ""}
+                        disabled={readOnly}
+                        onChange={(thumbnailUrl) =>
+                          updateEmbed(index, { thumbnailUrl: thumbnailUrl || undefined })
+                        }
+                      />
+                    </FormField>
+                  </div>
+                </Suspense>
                 <div className="space-y-3 border-t pt-4">
                   <SectionHeader title={`Fields (${embed.fields.length}/25)`} />
                   {embed.fields.map((field, fieldIndex) => (
@@ -1659,112 +1619,6 @@ class NavigationGuardBoundary extends Component<{ children: ReactNode }, { faile
   }
 }
 
-function ProductDialog({
-  request,
-  returnFocus,
-  loading,
-  onClose,
-  onConfirm,
-  onUnsavedSave,
-  onNameChange,
-}: {
-  request: ProductDialogRequest | null;
-  returnFocus: HTMLButtonElement | null;
-  loading: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  onUnsavedSave: () => Promise<void>;
-  onNameChange: (name: string) => void;
-}) {
-  if (!request) return null;
-  const unsaved = request.kind === "unsaved";
-  const duplicate = request.kind === "duplicate";
-  const title = unsaved
-    ? "Unsaved changes"
-    : duplicate
-      ? "Duplicate Message Template"
-      : request.title;
-  const actionLabel = unsaved
-    ? "Discard and continue"
-    : duplicate
-      ? "Duplicate"
-      : request.confirmLabel;
-  return (
-    <>
-      <Dialog open onOpenChange={(open) => !open && onClose()}>
-        <DialogContent
-          onCloseAutoFocus={(event) => {
-            if (returnFocus?.isConnected && !returnFocus.disabled) {
-              event.preventDefault();
-              returnFocus.focus();
-            }
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>
-              {unsaved
-                ? "Your editor contains unsaved changes. Choose how to continue."
-                : duplicate
-                  ? "Choose a unique name for the copied template."
-                  : request.description}
-            </DialogDescription>
-          </DialogHeader>
-          {duplicate ? (
-            <FormField label="Template name" htmlFor="duplicate-template-name" required>
-              <Input
-                id="duplicate-template-name"
-                value={request.name}
-                maxLength={100}
-                onChange={(event) => onNameChange(event.currentTarget.value)}
-                autoFocus
-              />
-              {request.error ? (
-                <p className="mt-1 text-xs text-destructive">{request.error}</p>
-              ) : null}
-            </FormField>
-          ) : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" disabled={loading} onClick={onClose}>
-              {unsaved ? "Keep editing" : "Cancel"}
-            </Button>
-            {unsaved ? (
-              <Button
-                type="button"
-                variant="outline"
-                loading={loading}
-                onClick={() => void onUnsavedSave()}
-              >
-                Save and continue
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant={
-                unsaved ||
-                (request.kind === "confirm" &&
-                  request.confirmLabel.toLowerCase().includes("delete"))
-                  ? "destructive"
-                  : "default"
-              }
-              loading={loading}
-              onClick={onConfirm}
-            >
-              {actionLabel}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <div className="sr-only" aria-hidden="true">
-        <span>{title}</span>
-        <button type="button" onClick={onConfirm}>
-          {actionLabel}
-        </button>
-      </div>
-    </>
-  );
-}
-
 function CheckLabel({
   checked,
   label,
@@ -1802,7 +1656,9 @@ function createDraft(message?: ManagedMessage): ManagedMessageEditorDraft {
       };
 }
 
-function draftFromMessage(message: ManagedMessage): ManagedMessageEditorDraft {
+function draftFromMessage(
+  message: ManagedMessage | PersistedManagedMessageDraft,
+): ManagedMessageEditorDraft {
   return {
     id: message.id,
     internalName: message.internalName,
@@ -1815,25 +1671,7 @@ function draftFromMessage(message: ManagedMessage): ManagedMessageEditorDraft {
     announcement: {
       ...message.announcement,
       roleIds: [...message.announcement.roleIds],
-      notifyOnCreate: false,
-    },
-    availableForTicketReplies: false,
-  };
-}
-
-function draftFromPersistedDraft(draft: PersistedManagedMessageDraft): ManagedMessageEditorDraft {
-  return {
-    id: draft.id,
-    internalName: draft.internalName,
-    channelId: draft.channelId,
-    embeds: draft.embeds.map((embed) => ({
-      ...embed,
-      fields: embed.fields.map((field) => ({ ...field })),
-    })),
-    buttons: (draft.buttons ?? []).map((button) => ({ ...button })),
-    announcement: {
-      ...draft.announcement,
-      roleIds: [...draft.announcement.roleIds],
+      notifyOnCreate: "scheduledAtMs" in message && message.announcement.notifyOnCreate,
     },
     availableForTicketReplies: false,
   };

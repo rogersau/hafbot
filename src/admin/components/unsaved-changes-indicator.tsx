@@ -1,8 +1,6 @@
 import { cn } from "../lib/utils";
-import { useRegisterSetupCheckDirtyState } from "./setup-check-dirty-state";
 
 export function UnsavedChangesIndicator({ hasChanges }: { hasChanges: boolean }) {
-  useRegisterSetupCheckDirtyState(hasChanges);
   if (!hasChanges) return null;
 
   return (

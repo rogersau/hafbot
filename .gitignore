@@ -5,7 +5,6 @@ node_modules/
 dist/
 dist-tests/
 dist-admin/
-dist-landing/
 dist-node/
 dist-e2e/
 
@@ -55,9 +54,9 @@ npm-debug.log*
 .worktrees/
 .tools/
 .scratch/
-src/runtime/admin-bundle.ts
-src/runtime/landing-bundle.ts
 
 docs-site/.vitepress/dist/
 docs-site/.vitepress/cache/
 db_backup/
+
+.tanstack/

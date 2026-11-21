@@ -1,5 +1,14 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 
 import type { CommerceOfferingDashboard } from "../../commerce/offering-service";
 import type { CommerceControlType } from "../../commerce/safeguards";
@@ -211,52 +220,86 @@ function CommerceDashboard({
   const client = useMemo(() => createAdminLoaderClient(), []);
   const retryKeys = useRef(new Map<string, string>());
 
-  // Stripe returns through a browser URL, so synchronizing that external state requires an effect.
+  const router = useRouter();
+  const returnState = useRouterState({
+    select: ({ location, resolvedLocation }) => {
+      if (location.href !== resolvedLocation?.href) return undefined;
+      const value = location.search.commerceConnect;
+      return value === "return" || value === "refresh" ? value : null;
+    },
+  });
+  const returnAttempt = useRef<{ running: boolean; synced: boolean } | null>(null);
+  const [sellerReturnError, setSellerReturnError] = useState<string | null>(null);
+  const readCommerce = useCallback(
+    () =>
+      client.getJson<CommerceLoaderData>("/admin/api/commerce", {
+        workspaceId: selectedWorkspaceId,
+        guildId: selectedGuildId,
+      }),
+    [client, selectedGuildId, selectedWorkspaceId],
+  );
+
+  const syncSellerReturn = useCallback(async () => {
+    const attempt = (returnAttempt.current ??= { running: false, synced: false });
+    if (attempt.running) return;
+    const returnedLocation = router.state.location;
+    attempt.running = true;
+    setBusyAction("seller:refresh");
+    setSellerReturnError(null);
+    try {
+      if (!attempt.synced) {
+        await client.postJson(
+          "/admin/api/commerce/seller/refresh",
+          {},
+          { workspaceId: selectedWorkspaceId, guildId: selectedGuildId },
+        );
+        attempt.synced = true;
+      }
+      const next = await readCommerce();
+      const location = router.state.location;
+      if (
+        returnAttempt.current !== attempt ||
+        location.pathname !== returnedLocation.pathname ||
+        location.search.workspaceId !== returnedLocation.search.workspaceId ||
+        location.search.commerceConnect !== "return"
+      ) {
+        return;
+      }
+
+      setData(next);
+      const search = { ...location.search };
+      delete search.commerceConnect;
+      await router.navigate({
+        to: location.pathname,
+        search,
+        hash: location.hash,
+        replace: true,
+        ignoreBlocker: true,
+      });
+      setMessage("Stripe onboarding status refreshed.");
+      toast.success("Stripe onboarding status refreshed.");
+    } catch (cause) {
+      if (returnAttempt.current === attempt) {
+        const detail = cause instanceof Error ? cause.message : "Could not refresh Stripe status.";
+        setSellerReturnError(detail);
+        toast.error(detail);
+      }
+    } finally {
+      attempt.running = false;
+      if (!returnAttempt.current || returnAttempt.current === attempt) {
+        setBusyAction((current) => (current === "seller:refresh" ? null : current));
+      }
+    }
+  }, [client, readCommerce, router, selectedGuildId, selectedWorkspaceId, toast]);
+
   // oxlint-disable-next-line custom/no-use-effect
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const connectState = url.searchParams.get("commerceConnect");
-    if (connectState !== "return" && connectState !== "refresh") return;
-    url.searchParams.delete("commerceConnect");
-    window.history.replaceState(window.history.state, "", url);
-    if (connectState === "refresh") {
-      setMessage("Your Stripe onboarding link expired. Confirm the seller details to continue.");
-      return;
-    }
-
-    setBusyAction("seller:refresh");
-    setError(null);
-    void client
-      .postJson(
-        "/admin/api/commerce/seller/refresh",
-        {},
-        { workspaceId: selectedWorkspaceId, guildId: selectedGuildId },
-      )
-      .then(() =>
-        client.getJson<CommerceLoaderData>("/admin/api/commerce", {
-          workspaceId: selectedWorkspaceId,
-          guildId: selectedGuildId,
-        }),
-      )
-      .then((next) => {
-        setData(next);
-        setMessage("Stripe onboarding status refreshed.");
-        toast.success("Stripe onboarding status refreshed.");
-      })
-      .catch((cause: unknown) => {
-        const detail = cause instanceof Error ? cause.message : "Could not refresh Stripe status.";
-        setError(detail);
-        toast.error(detail);
-      })
-      .finally(() => setBusyAction(null));
-  }, [client, selectedGuildId, selectedWorkspaceId, toast]);
+    if (returnState === null || returnState === "refresh") returnAttempt.current = null;
+    if (returnState === "return" && !returnAttempt.current) void syncSellerReturn();
+  }, [returnState, syncSellerReturn]);
 
   async function refresh() {
-    const next = await client.getJson<CommerceLoaderData>("/admin/api/commerce", {
-      workspaceId: selectedWorkspaceId,
-      guildId: selectedGuildId,
-    });
-    setData(next);
+    setData(await readCommerce());
   }
 
   async function mutate(
@@ -765,7 +808,25 @@ function CommerceDashboard({
 
   return (
     <>
-      <PageFeedback message={message} error={error} />
+      <PageFeedback
+        message={
+          message ??
+          (returnState === "refresh"
+            ? "Your Stripe onboarding link expired. Confirm the seller details to continue."
+            : null)
+        }
+        error={(returnState === "return" ? sellerReturnError : null) ?? error}
+      />
+      {sellerReturnError && returnState === "return" ? (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={Boolean(busyAction)}
+          onClick={() => void syncSellerReturn()}
+        >
+          Retry Stripe status refresh
+        </Button>
+      ) : null}
       <SettingsBlock className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

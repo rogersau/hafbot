@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useAdminRead } from "../hooks/use-admin-read";
 import type { TicketPanelConfig } from "../../types";
 import { ticketsClient } from "../generated/admin-client/tickets";
 import { cn } from "../lib/utils";
@@ -17,74 +18,83 @@ type RevisionSummary = RevisionPage["revisions"][number];
 type RevisionDetail = Awaited<ReturnType<typeof ticketsClient.revision>>;
 type RestorePreviewResponse = Awaited<ReturnType<typeof ticketsClient.restorePreview>>;
 
-export function TicketPanelHistory({
-  selectedWorkspaceId,
-  guildId,
-  panelId,
-  onRestored,
-}: {
+type TicketPanelHistoryProps = {
   selectedWorkspaceId: string;
   guildId: string;
   panelId: string;
   onRestored: (panel: TicketPanelConfig | null) => void | Promise<void>;
-}) {
-  const [revisions, setRevisions] = useState<RevisionSummary[]>([]);
-  const [nextCursor, setNextCursor] = useState<number | null>(null);
+};
+
+export function TicketPanelHistory(props: TicketPanelHistoryProps) {
+  const { selectedWorkspaceId, guildId, panelId } = props;
+  return (
+    <TicketPanelHistoryView
+      key={JSON.stringify([selectedWorkspaceId, guildId, panelId])}
+      {...props}
+    />
+  );
+}
+
+function TicketPanelHistoryView({
+  selectedWorkspaceId,
+  guildId,
+  panelId,
+  onRestored,
+}: TicketPanelHistoryProps) {
   const [detail, setDetail] = useState<RevisionDetail | null>(null);
   const [restorePreview, setRestorePreview] = useState<RestorePreviewResponse | null>(null);
-  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const historyVersion = useRef(0);
   const detailRequest = useRef(0);
   const loadMorePending = useRef(false);
   const toast = useToast();
   const { dialog: confirmDialog, confirm } = useConfirmDialog();
 
-  // eslint-disable-next-line custom/no-use-effect -- History follows the selected Guild and panel.
-  useEffect(() => {
-    setRevisions([]);
-    setNextCursor(null);
-    setDetail(null);
-    setRestorePreview(null);
-    void loadRevisions();
-    return () => {
+  const scope = { workspaceId: selectedWorkspaceId || undefined, guildId, panelId, limit: "50" };
+  const {
+    read,
+    data,
+    error: listError,
+    loading,
+  } = useAdminRead("ticket-panel-history", () => ticketsClient.revisions(scope));
+  const revisions = data?.revisions ?? [];
+  const nextCursor = data?.nextCursor ?? null;
+  const error =
+    actionError ??
+    (listError instanceof Error
+      ? listError.message
+      : listError
+        ? "Failed to load Ticket Panel history."
+        : null);
+
+  useEffect(
+    () => () => {
       historyVersion.current += 1;
-    };
-  }, [guildId, panelId, selectedWorkspaceId]);
+    },
+    [],
+  );
 
   async function loadRevisions() {
     const version = ++historyVersion.current;
     loadMorePending.current = false;
-    setLoading(true);
     setLoadingMore(false);
     setLoadingDetail(false);
     setRestoring(false);
     setError(null);
     try {
-      const page = await ticketsClient.revisions({
-        workspaceId: selectedWorkspaceId || undefined,
-        guildId,
-        panelId,
-        limit: "50",
-      });
-      if (version !== historyVersion.current) return;
-      setRevisions(page.revisions);
-      setNextCursor(page.nextCursor);
-      setDetail(null);
-      setRestorePreview(null);
-    } catch (reason) {
-      if (version !== historyVersion.current) return;
-      setError(reason instanceof Error ? reason.message : "Failed to load Ticket Panel history.");
-    } finally {
-      if (version === historyVersion.current) setLoading(false);
-    }
+      await read?.refresh();
+      if (version === historyVersion.current) {
+        setDetail(null);
+        setRestorePreview(null);
+      }
+    } catch {}
   }
 
   async function loadOlderRevisions() {
-    if (loading || restoring || loadMorePending.current || nextCursor === null) return;
+    if (!read || loading || restoring || loadMorePending.current || nextCursor === null) return;
     const version = historyVersion.current;
     loadMorePending.current = true;
     setLoadingMore(true);
@@ -98,16 +108,14 @@ export function TicketPanelHistory({
         beforeCreatedAtMs: String(nextCursor),
       });
       if (version !== historyVersion.current) return;
-      setRevisions((current) => {
-        const seen = new Set(current.map((revision) => revision.id));
-        const older = page.revisions.filter((revision) => {
-          if (seen.has(revision.id)) return false;
-          seen.add(revision.id);
-          return true;
-        });
-        return [...current, ...older];
+      const current = read.getSnapshot().data?.revisions ?? [];
+      const seen = new Set(current.map((revision) => revision.id));
+      const older = page.revisions.filter((revision) => {
+        if (seen.has(revision.id)) return false;
+        seen.add(revision.id);
+        return true;
       });
-      setNextCursor(page.nextCursor);
+      read.setData({ revisions: [...current, ...older], nextCursor: page.nextCursor });
     } catch (reason) {
       if (version !== historyVersion.current) return;
       setError(

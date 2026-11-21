@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { transformSync } from "esbuild";
+import { syncAdminStartRoutes } from "./start-routes.mjs";
 
 const require = createRequire(import.meta.url);
 require.extensions[".ts"] = (module, filename) => {
@@ -289,3 +290,48 @@ if (process.argv.includes("--check")) {
     writeFileSync(resolve(clientDirectory, fileName), source);
   }
 }
+
+const { createAdminRoutes } = require(resolve(root, "src/runtime/admin-routes/index.ts"));
+const { checkRouteCollisions, getAdminOperationId } = require(
+  resolve(root, "src/runtime/admin-route-registry.ts"),
+);
+const { ALL_FEATURES_ENABLED } = require(resolve(root, "src/runtime/features.ts"));
+const configuredDependency = {};
+const runtimeRoutes = createAdminRoutes({
+  discordBotToken: "admin-route-generation",
+  adminAccess: configuredDependency,
+  features: ALL_FEATURES_ENABLED,
+  stores: {
+    adminFeedback: configuredDependency,
+    clans: configuredDependency,
+    reactionRoles: configuredDependency,
+    serverLevels: configuredDependency,
+    suggestions: configuredDependency,
+  },
+  services: {
+    banCaseEnforcement: configuredDependency,
+    managedMessageService: configuredDependency,
+    managedMediaService: configuredDependency,
+    messageTemplateService: configuredDependency,
+    operationalIncidentService: configuredDependency,
+  },
+  adminRouteServices: configuredDependency,
+  attendanceObservations: configuredDependency,
+  banAppealServiceForGuild: configuredDependency,
+  communityTools: configuredDependency,
+  readCustomerAdminSession: configuredDependency,
+  reputationServiceForGuild: configuredDependency,
+  wardogs: configuredDependency,
+});
+checkRouteCollisions(runtimeRoutes);
+await syncAdminStartRoutes({
+  webDirectory: resolve(root, "src/web"),
+  operations: runtimeRoutes.map((route) => ({
+    operationId: getAdminOperationId(route),
+    method: route.method,
+    path: route.path,
+  })),
+  billingOperations: Object.values(contracts.billingContracts),
+  contracts: contracts.adminOperationContracts,
+  check: process.argv.includes("--check"),
+});

@@ -28,8 +28,9 @@ function applyThemeClass(resolved: "dark" | "light") {
  * Lives in a `.ts` hook (not `.tsx`) by repo convention: the FOUC script owns
  * first paint, and this owns runtime reactivity.
  */
-export function useTheme(theme: UserPreferencesTheme): void {
+export function useTheme(theme: UserPreferencesTheme, enabled = true): void {
   useEffect(() => {
+    if (!enabled) return;
     const media =
       typeof window !== "undefined" && window.matchMedia
         ? window.matchMedia("(prefers-color-scheme: dark)")
@@ -51,5 +52,5 @@ export function useTheme(theme: UserPreferencesTheme): void {
     return () => {
       media.removeEventListener("change", onChange);
     };
-  }, [theme]);
+  }, [theme, enabled]);
 }

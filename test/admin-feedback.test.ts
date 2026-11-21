@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ALL_FEATURES_ENABLED } from "../src/runtime/features";
 import { allowAllAdminAccess } from "./helpers/admin-api";
-import { dispatchAdminRoute, type Route } from "../src/runtime/admin-route-registry";
+import type { Route } from "../src/runtime/admin-route-registry";
+import { dispatchAdminRoute } from "./helpers/admin-route";
 import {
   createAdminFeedbackRoute,
   deliverAdminFeedbackNotification,

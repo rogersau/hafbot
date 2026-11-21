@@ -723,9 +723,7 @@ function formatResourceCreationError(cause: unknown, fallback: string): string {
     try {
       const parsed = JSON.parse(details.slice(details.indexOf("{"))) as { message?: unknown };
       if (typeof parsed.message === "string" && parsed.message.trim()) return parsed.message.trim();
-    } catch {
-      // Keep API payloads out of the dialog when Discord returns an unexpected body.
-    }
+    } catch {}
     return "Discord rejected that resource name. Check the name and try again.";
   }
   return message;

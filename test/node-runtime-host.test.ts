@@ -323,7 +323,7 @@ test("readiness fails closed when a selected component or runtime is unavailable
   assert.equal((await fetch(`${host.baseUrl}/health/live`)).status, 200);
 });
 
-test("dynamic routes take precedence and missing dynamic routes fall back to safe static assets", async (t) => {
+test("the host serves public assets and delegates application routes to the runtime", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "haf-node-assets-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await mkdir(join(directory, "admin", "assets"), { recursive: true });

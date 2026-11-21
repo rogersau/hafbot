@@ -1,6 +1,6 @@
 # Admin documentation screenshots
 
-The capture script renders the production admin SPA against fictional, deterministic API fixtures.
+The capture script renders the production TanStack Start admin routes against fictional, deterministic API fixtures.
 It never signs in to Discord or reads live customer data.
 
 Run `pnpm exec playwright install chromium` once on a new development machine, then use:

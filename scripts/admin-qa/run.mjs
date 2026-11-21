@@ -1,6 +1,5 @@
-import { spawn } from "node:child_process";
-import { execFileSync } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { execFileSync, spawn } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApi } from "./api.mjs";
@@ -16,7 +15,7 @@ const report = {
   schemaVersion: 1,
   startedAt: new Date().toISOString(),
   boundary:
-    "Compiled Admin SPA with fictional API state. Does not verify live Discord, backend authorization, billing, OAuth, or provider delivery.",
+    "Compiled Admin Start routes with fictional API state. Does not verify live Discord, backend authorization, billing, OAuth, or provider delivery.",
   source: {},
   runtime: { node: process.version, platform: process.platform },
   build: { status: "not-run" },
@@ -72,7 +71,8 @@ try {
     if (args.includes("--prebuilt")) {
       report.build = {
         status: "not-run",
-        reason: "Explicit --prebuilt; caller must ensure dist-admin matches source",
+        reason:
+          "Explicit --prebuilt; caller must ensure the Start server and client builds match source",
       };
     } else {
       const build = await runBuild();
@@ -82,10 +82,9 @@ try {
         exitCode: build.code,
         log: "build.log",
       };
-      if (build.code !== 0) throw new Error("Admin build failed; see build.log");
+      if (build.code !== 0) throw new Error("Web build failed; see build.log");
     }
-    await access(resolve(root, "dist-admin/admin/assets/admin.js"));
-    await access(resolve(root, "dist-admin/admin/assets/admin.css"));
+    server = await serveAdmin();
     const { chromium, expect } = await import("@playwright/test");
     report.runtime.playwright = JSON.parse(
       await readFile(resolve(root, "node_modules/@playwright/test/package.json"), "utf8"),
@@ -97,7 +96,6 @@ try {
     if (executablePath) report.runtime.executablePath = executablePath;
     browser = await chromium.launch(executablePath ? { executablePath } : {});
     report.runtime.chromium = browser.version();
-    server = await serveAdmin(resolve(root, "dist-admin"));
     for (const scenario of selected) {
       const result = report.cases.find((item) => item.id === scenario.id);
       delete result.reason;
@@ -207,11 +205,10 @@ try {
 
 function runBuild() {
   return new Promise((done) => {
-    const child = spawn(
-      process.platform === "win32" ? "pnpm.cmd" : "pnpm",
-      ["run", "build:admin"],
-      { cwd: root, env: process.env },
-    );
+    const child = spawn(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["run", "build:web"], {
+      cwd: root,
+      env: process.env,
+    });
     let output = "";
     child.stdout.on("data", (chunk) => {
       output += chunk;

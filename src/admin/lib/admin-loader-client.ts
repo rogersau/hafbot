@@ -108,9 +108,6 @@ export function createAdminLoaderClient(signal?: AbortSignal): AdminLoaderClient
 
       const query = row.query ? row.query(ctx) : { workspaceId: getWorkspaceId(ctx), guildId };
       const client = createAdminLoaderClient(ctx.abortController?.signal);
-      // A route configuration read only succeeds with real response data. Failures
-      // propagate to the shared route error/retry boundary; they must never be
-      // converted into local defaults that an editor could later save.
       const response = await client.getJson<TResponse>(row.path, query);
 
       const data = row.transform
@@ -142,10 +139,10 @@ export function wrapLoaded<T>(data: T): LoadedAdminRouteData<T> {
   return { data, loadedAt: Date.now() };
 }
 
-function getGuildId(ctx: AdminLoaderContext): string {
+export function getGuildId(ctx: AdminLoaderContext): string {
   return (ctx.params?.guildId ?? "").trim();
 }
 
-function getWorkspaceId(ctx: AdminLoaderContext): string {
+export function getWorkspaceId(ctx: AdminLoaderContext): string {
   return new URLSearchParams(ctx.location?.searchStr ?? "").get("workspaceId")?.trim() ?? "";
 }

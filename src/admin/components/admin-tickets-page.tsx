@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { cn } from "../lib/utils";
@@ -24,9 +24,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { EmptyState } from "./ui/empty-state";
-import { ResponsiveTable, type ResponsiveTableColumn } from "./ui/responsive-table";
-import { AlertTriangleIcon, CheckIcon, RefreshIcon, TicketIcon, ChevronDownIcon } from "./ui/icons";
+import { AlertTriangleIcon, CheckIcon, RefreshIcon, ChevronDownIcon } from "./ui/icons";
 import { PageFeedback } from "./page-feedback";
 import { useToast } from "./toast";
 import { useConfirmDialog } from "./ui/confirm-dialog";
@@ -46,10 +44,14 @@ import { ticketsClient } from "../generated/admin-client/tickets";
 import type { TicketsLoaderData } from "../lib/admin-route-loaders";
 import { useAdminRouteContext } from "../routes/page-context";
 import { buildTicketsTabHref } from "../lib/admin-route-state";
-import { AdminPageHeader } from "./admin-page-header";
+import { AdminPageHeader, type AdminPageHeaderRenderer } from "./admin-page-header";
 import { AdminRefreshNotice } from "./admin-refresh-notice";
 import { adminRefreshWarning, reconcileAdminMutation } from "../lib/mutation-reconciliation";
 import { firstTicketModalFieldValidationIssue } from "../../tickets/validation";
+
+const ClosedTicketsSection = lazy(async () => ({
+  default: (await import("./closed-tickets-section")).ClosedTicketsSection,
+}));
 
 type TicketAutoSaveKey = "enableTicketClaiming" | "aiTranscriptSummariesEnabled";
 
@@ -109,16 +111,21 @@ export function AdminTicketsPage({
   initialData?: TicketsLoaderData | null;
   onRouteDataRefresh?: () => Promise<void>;
 }) {
+  const renderHeader: AdminPageHeaderRenderer = (hasUnsavedChanges) => (
+    <AdminPageHeader
+      title="Tickets"
+      description="Configure how your guild handles support tickets."
+      readinessFeature="tickets"
+      selectedGuildId={selectedGuildId}
+      selectedWorkspaceId={selectedWorkspaceId}
+      hasUnsavedChanges={hasUnsavedChanges}
+    />
+  );
+
   return (
     <section className="admin-feature-page admin-page-workflow space-y-6">
-      <AdminPageHeader
-        title="Tickets"
-        description="Configure how your guild handles support tickets."
-        readinessFeature="tickets"
-        selectedGuildId={selectedGuildId}
-        selectedWorkspaceId={selectedWorkspaceId}
-      />
       <TicketPanelsEditor
+        renderHeader={renderHeader}
         selectedWorkspaceId={selectedWorkspaceId}
         selectedGuildId={selectedGuildId}
         entitlement={entitlement}
@@ -151,12 +158,14 @@ function emptyPanelConfig(guildId: string): TicketPanelConfig {
 }
 
 function TicketPanelsEditor({
+  renderHeader,
   selectedWorkspaceId,
   selectedGuildId,
   entitlement,
   initialData,
   onRouteDataRefresh,
 }: {
+  renderHeader: AdminPageHeaderRenderer;
   selectedWorkspaceId: string;
   selectedGuildId: string;
   entitlement?: EntitlementInfo | null;
@@ -203,7 +212,7 @@ function TicketPanelsEditor({
   const trimmedGuildId = selectedGuildId.trim();
   const api = useAdminApi();
   const toast = useToast();
-  const { setPageMetadata, ticketsTab, currentSearch } = useAdminRouteContext();
+  const { ticketsTab, currentSearch } = useAdminRouteContext();
   const navigate = useNavigate();
   const wizardFromUrl = new URLSearchParams(currentSearch).get("wizard") === "1";
   const [showWizard, setShowWizard] = useState(wizardFromUrl);
@@ -426,15 +435,6 @@ function TicketPanelsEditor({
       setPublishing(false);
     }
   }
-
-  // eslint-disable-next-line custom/no-use-effect -- Synchronizes route-owned page metadata with the shell.
-  useEffect(() => {
-    setPageMetadata({
-      title: "Tickets",
-      description: "Configure how your guild handles support tickets.",
-      icon: <TicketIcon className="h-6 w-6" />,
-    });
-  }, [setPageMetadata]);
 
   const tabs: { id: "setup" | "panel" | "types" | "rules" | "closed"; label: string }[] = [
     { id: "setup", label: "Setup Check" },
@@ -690,7 +690,7 @@ function TicketPanelsEditor({
     typeof entitlement.limits.ticketsMaxPanels === "number" &&
     panels.length >= entitlement.limits.ticketsMaxPanels;
 
-  return (
+  const content = (
     <div className="space-y-4">
       <NavigationGuard
         hasChanges={hasUnsavedChanges}
@@ -883,15 +883,17 @@ function TicketPanelsEditor({
             </Alert>
           )}
           {ticketsTab === "closed" && (
-            <ClosedTicketsSection
-              workspaceId={selectedWorkspaceId}
-              guildId={loadedGuildId}
-              tickets={closedTickets}
-              total={closedTicketsTotal}
-              nextCursor={closedTicketsNextCursor}
-              loading={api.loading}
-              onLoadMore={loadMoreClosedTickets}
-            />
+            <Suspense fallback={<p role="status">Loading closed tickets…</p>}>
+              <ClosedTicketsSection
+                workspaceId={selectedWorkspaceId}
+                guildId={loadedGuildId}
+                tickets={closedTickets}
+                total={closedTicketsTotal}
+                nextCursor={closedTicketsNextCursor}
+                loading={api.loading}
+                onLoadMore={loadMoreClosedTickets}
+              />
+            </Suspense>
           )}
           {ticketsTab !== "setup" ? (
             <TicketPanelActions
@@ -909,6 +911,13 @@ function TicketPanelsEditor({
         </>
       )}
     </div>
+  );
+
+  return (
+    <>
+      {renderHeader(hasUnsavedChanges)}
+      {content}
+    </>
   );
 }
 
@@ -1273,188 +1282,6 @@ export function validateTicketCreationLimit(value: number | null): string | null
 
 function emptyClosedTicketsPage() {
   return { tickets: [], total: 0, nextCursor: null };
-}
-
-export function ClosedTicketsSection({
-  workspaceId,
-  guildId,
-  tickets,
-  total,
-  nextCursor,
-  loading,
-  onLoadMore,
-}: {
-  workspaceId?: string;
-  guildId: string;
-  tickets: TicketInstance[];
-  total: number;
-  nextCursor: number | null;
-  loading: boolean;
-  onLoadMore: () => void;
-}) {
-  const toast = useToast();
-  const [transcriptUrls, setTranscriptUrls] = useState<Record<string, string>>({});
-  const [pendingTranscript, setPendingTranscript] = useState<string | null>(null);
-  const transcriptKey = (channelId: string) => `${guildId}:${channelId}`;
-
-  async function generateTranscriptLink(channelId: string) {
-    const key = transcriptKey(channelId);
-    setPendingTranscript(key);
-    try {
-      const result = await ticketsClient.rotateTranscript({
-        workspaceId: workspaceId || undefined,
-        guildId,
-        channelId,
-      });
-      setTranscriptUrls((current) => ({ ...current, [key]: result.url }));
-      toast.success("Generated a new 30-day transcript link.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not generate the transcript link.",
-      );
-    } finally {
-      setPendingTranscript(null);
-    }
-  }
-
-  async function revokeTranscriptLink(channelId: string) {
-    const key = transcriptKey(channelId);
-    setPendingTranscript(key);
-    try {
-      await ticketsClient.revokeTranscript({
-        workspaceId: workspaceId || undefined,
-        guildId,
-        channelId,
-      });
-      setTranscriptUrls((current) => {
-        const next = { ...current };
-        delete next[key];
-        return next;
-      });
-      toast.success("Revoked the transcript link.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not revoke the transcript link.");
-    } finally {
-      setPendingTranscript(null);
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Closed Tickets</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Read-only transcript access for tickets that have already been closed.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-xs text-muted-foreground">
-          {`${tickets.length} of ${total} closed tickets`}
-        </p>
-        {tickets.length === 0 ? (
-          <EmptyState>No closed tickets found for this server.</EmptyState>
-        ) : (
-          <ClosedTicketsTable
-            guildId={guildId}
-            tickets={tickets}
-            transcriptUrls={transcriptUrls}
-            pendingTranscript={pendingTranscript}
-            onGenerateLink={generateTranscriptLink}
-            onRevokeLink={revokeTranscriptLink}
-          />
-        )}
-        {nextCursor !== null ? (
-          <Button type="button" variant="outline" disabled={loading} onClick={onLoadMore}>
-            {loading ? "Loading…" : "Load more"}
-          </Button>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function formatClosedAt(value: number | null): string {
-  return value === null ? "Unknown" : new Date(value).toLocaleString();
-}
-
-function ClosedTicketsTable({
-  guildId,
-  tickets,
-  transcriptUrls,
-  pendingTranscript,
-  onGenerateLink,
-  onRevokeLink,
-}: {
-  guildId: string;
-  tickets: TicketInstance[];
-  transcriptUrls: Record<string, string>;
-  pendingTranscript: string | null;
-  onGenerateLink: (channelId: string) => void;
-  onRevokeLink: (channelId: string) => void;
-}) {
-  const columns: ResponsiveTableColumn<TicketInstance>[] = [
-    {
-      header: "Channel name/ID",
-      cell: (ticket) => <span className="font-mono text-xs">{ticket.channelId}</span>,
-      className: "font-mono text-xs",
-    },
-    { header: "Type", cell: (ticket) => ticket.ticketTypeLabel },
-    {
-      header: "Opened by",
-      cell: (ticket) => <span className="font-mono text-xs">{ticket.openerUserId}</span>,
-      className: "font-mono text-xs",
-    },
-    { header: "Closed at", cell: (ticket) => formatClosedAt(ticket.closedAtMs) },
-    {
-      header: "Transcript",
-      cell: (ticket) => {
-        const key = `${guildId}:${ticket.channelId}`;
-        const transcriptUrl = transcriptUrls[key];
-        const pending = pendingTranscript === key;
-        return (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={pending}
-              onClick={() => onGenerateLink(ticket.channelId)}
-            >
-              {pending ? "Working…" : transcriptUrl ? "Regenerate link" : "Generate link"}
-            </Button>
-            {transcriptUrl ? (
-              <a
-                className="text-primary underline-offset-4 hover:underline"
-                href={transcriptUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                View transcript
-              </a>
-            ) : null}
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={pending}
-              onClick={() => onRevokeLink(ticket.channelId)}
-            >
-              Revoke
-            </Button>
-          </div>
-        );
-      },
-    },
-  ];
-
-  return (
-    <ResponsiveTable
-      rows={tickets}
-      rowKey={(ticket) => ticket.channelId}
-      columns={columns}
-      emptyMessage="No closed tickets found for this server."
-    />
-  );
 }
 
 function emptyTicketSetupCheck(guildId: string): TicketSetupCheckResponse {

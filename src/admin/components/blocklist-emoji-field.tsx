@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { MAX_BLOCKLIST_BATCH_EMOJIS, normalizeBlocklistEmoji } from "../../blocklist";
 import { EmojiPicker, type EmojiPickerSelection, type GuildEmojiResource } from "./emoji-picker";
@@ -12,7 +12,6 @@ export interface BlocklistEmojiFieldProps {
   submitting?: boolean;
   onSubmit: (emojis: string[]) => Promise<boolean> | boolean;
 }
-
 export function BlocklistEmojiField({
   currentEmojis,
   emojis,
@@ -25,41 +24,6 @@ export function BlocklistEmojiField({
     () => new Set(currentEmojis.map((emoji) => normalizeBlocklistEmoji(emoji)).filter(Boolean)),
     [currentEmojis],
   );
-  const blockedUnicodeSet = useMemo(() => {
-    const values = currentEmojis.flatMap((emoji) => {
-      const normalized = normalizeBlocklistEmoji(emoji);
-      return normalized && !isCustomEmojiValue(normalized) ? [toUnicodeUnified(normalized)] : [];
-    });
-    return new Set(values);
-  }, [currentEmojis]);
-  const fieldRef = useRef<HTMLDivElement>(null);
-
-  // eslint-disable-next-line custom/no-use-effect -- Disables blocked Unicode buttons after the lazy picker mounts.
-  useEffect(() => {
-    const field = fieldRef.current;
-    if (!field) return;
-
-    const syncBlockedUnicode = () => {
-      for (const button of field.querySelectorAll<HTMLButtonElement>("button[data-unified]")) {
-        const isBlocked = blockedUnicodeSet.has(button.dataset.unified ?? "");
-        button.disabled = isBlocked;
-        button.style.opacity = isBlocked ? "0.5" : "";
-        if (isBlocked) {
-          button.setAttribute("aria-disabled", "true");
-          button.setAttribute("title", "Already blocked");
-        } else {
-          button.removeAttribute("aria-disabled");
-          if (button.title === "Already blocked") button.removeAttribute("title");
-        }
-      }
-    };
-
-    syncBlockedUnicode();
-    if (typeof MutationObserver === "undefined") return;
-    const observer = new MutationObserver(syncBlockedUnicode);
-    observer.observe(field, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, [blockedUnicodeSet]);
 
   function handleSelect(selection: EmojiPickerSelection) {
     const value = normalizeBlocklistEmoji(selection.value);
@@ -84,7 +48,7 @@ export function BlocklistEmojiField({
   }
 
   return (
-    <div ref={fieldRef} className="space-y-3">
+    <div className="space-y-3">
       <EmojiPicker
         emojis={emojis}
         loading={loading}
@@ -147,15 +111,4 @@ export function BlocklistEmojiField({
       ) : null}
     </div>
   );
-}
-
-function isCustomEmojiValue(value: string): boolean {
-  return /^[^:>\s]+:\d+$/.test(value);
-}
-
-function toUnicodeUnified(value: string): string {
-  return Array.from(value)
-    .map((character) => character.codePointAt(0)?.toString(16) ?? "")
-    .filter(Boolean)
-    .join("-");
 }

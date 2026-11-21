@@ -1,14 +1,11 @@
-/// <reference types="node/assert" />
-/// <reference types="node/assert/strict" />
-
 import assert from "node:assert/strict";
-// @ts-ignore -- Runtime tests compile via tsconfig.tests.json.
 import test from "node:test";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 
 import { AdminPageHeader } from "../src/admin/components/admin-page-header";
+import { withAdminDom } from "./support/admin-dom";
 
 test("AdminPageHeader exposes readiness through the rendered setup check", async () => {
   const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", {
@@ -76,4 +73,48 @@ test("AdminPageHeader exposes readiness through the rendered setup check", async
     reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
     dom.window.close();
   }
+});
+
+test("Setup Check follows the current guild and the editor's dirty flag", async () => {
+  await withAdminDom(async ({ render, container }) => {
+    let finishOld!: (response: Response) => void;
+    const old = new Promise<Response>((resolve) => {
+      finishOld = resolve;
+    });
+    const diagnostics = (label: string) =>
+      Response.json({
+        checksByFeature: {
+          lfg: [{ id: "notice-channel", label, status: "warning", detail: "Choose a channel." }],
+        },
+      });
+    const requests: string[] = [];
+    globalThis.fetch = async (input) => {
+      const guildId = new URL(String(input), "https://example.com").searchParams.get("guildId");
+      assert.ok(guildId);
+      requests.push(guildId);
+      return guildId === "guild-1" ? old : diagnostics("New guild check");
+    };
+    const header = (guildId: string, dirty = false) => (
+      <AdminPageHeader
+        title="LFG"
+        readinessFeature="lfg"
+        selectedGuildId={guildId}
+        hasUnsavedChanges={dirty}
+      />
+    );
+    await render(header("guild-1"));
+    await render(header("guild-2"));
+    assert.match(container.textContent ?? "", /New guild check/);
+    await act(async () => finishOld(diagnostics("Old guild check")));
+    assert.match(container.textContent ?? "", /New guild check/);
+    assert.doesNotMatch(container.textContent ?? "", /Old guild check/);
+    await render(header("guild-2", true));
+    assert.match(container.textContent ?? "", /Setup check: Unsaved changes/);
+    assert.ok(
+      [...container.querySelectorAll("button")].find((button) =>
+        /Recheck setup/.test(button.textContent ?? ""),
+      )?.disabled,
+    );
+    assert.deepEqual(requests, ["guild-1", "guild-2"]);
+  });
 });

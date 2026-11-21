@@ -3,7 +3,9 @@ dist-tests
 dist-node
 dist-e2e
 dist-admin
-dist-landing
+dist
+.tanstack
+.scratch
 .git
 .github
 .ai-bridge

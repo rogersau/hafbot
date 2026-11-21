@@ -57,9 +57,14 @@ function scopedPath(guildId: string, operation: string, workspaceId: string): st
   return `${path(guildId, operation)}${suffix ? `?${suffix}` : ""}`;
 }
 
-export function getChannelPermissionCopyResources(workspaceId: string, guildId: string) {
+export function getChannelPermissionCopyResources(
+  workspaceId: string,
+  guildId: string,
+  signal?: AbortSignal,
+) {
   return readJsonOrThrow<ChannelPermissionCopyResources>(
     scopedPath(guildId, "resources", workspaceId),
+    { signal },
   );
 }
 

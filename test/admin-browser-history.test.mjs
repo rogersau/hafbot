@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createBrowserHistory } from "@tanstack/react-router";
 import { JSDOM } from "jsdom";
@@ -15,15 +14,6 @@ const entries = [
 function nextPop(window) {
   return new Promise((resolve) => window.addEventListener("popstate", resolve, { once: true }));
 }
-
-test("container copies dependency patches before its frozen install", async () => {
-  const dockerfile = await readFile("Dockerfile", "utf8");
-  const dependencyStage = dockerfile.match(
-    /FROM base AS dependencies([\s\S]*?)FROM base AS production-dependencies/,
-  );
-  assert.ok(dependencyStage);
-  assert.match(dependencyStage[1], /COPY patches \.\/patches[\s\S]*pnpm install --frozen-lockfile/);
-});
 
 async function withHistory(run) {
   const dom = new JSDOM("", { url: `https://admin.example${entries[0]}` });

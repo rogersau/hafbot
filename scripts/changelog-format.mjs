@@ -88,14 +88,6 @@ export function buildDiscordPayload(release, changelogUrl) {
   };
 }
 
-export function assertGeneratedBundleFresh(bundleSource, latestVersion) {
-  if (!bundleSource.includes(latestVersion)) {
-    throw new Error(
-      `Generated landing bundle is stale: expected changelog version ${latestVersion}. Run pnpm build:landing.`,
-    );
-  }
-}
-
 function validateDiscordLimits(release, location) {
   if (release.title.length > 256) {
     throw new Error(`${location} title exceeds Discord's 256 character limit.`);

@@ -1,12 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
-import { resolve, extname } from "node:path";
 import { chromium, expect } from "@playwright/test";
 import { build } from "esbuild";
 import { commonResponses } from "../scripts/admin-docs/fixtures.mjs";
 import { scenarios } from "../scripts/admin-docs/scenarios.mjs";
+import { serveAdmin } from "../scripts/admin-qa/server.mjs";
 
 test("compiled Admin preserves drafts and completes canonical Guild setup flows", async (t) => {
   const defaults = await build({
@@ -23,27 +21,9 @@ test("compiled Admin preserves drafts and completes canonical Guild setup flows"
   const { defaultSuggestionsConfig, defaultClanManagementConfig } = await import(
     `data:text/javascript;base64,${Buffer.from(defaults.outputFiles[0].text).toString("base64")}`
   );
-  const server = createServer(async (request, response) => {
-    const url = new URL(request.url, "http://localhost");
-    if (url.pathname.startsWith("/admin/assets/")) {
-      try {
-        const file = resolve("dist-admin", `.${url.pathname}`);
-        response.writeHead(200, {
-          "content-type": extname(file) === ".css" ? "text/css" : "text/javascript",
-        });
-        response.end(await readFile(file));
-      } catch {
-        response.writeHead(404).end();
-      }
-    } else {
-      response.writeHead(200, { "content-type": "text/html" });
-      response.end(
-        `<!doctype html><html><head><link rel="stylesheet" href="/admin/assets/admin.css"></head><body><div id="admin-root" data-authenticated="true" data-initial-path="${url.pathname}" data-initial-search="${url.search.replaceAll('"', "&quot;")}" data-user-name="Fictional Admin"></div><script type="module" src="/admin/assets/admin.js"></script></body></html>`,
-      );
-    }
-  });
-  await new Promise((done) => server.listen(0, "127.0.0.1", done));
-  const origin = `http://127.0.0.1:${server.address().port}`;
+  const server = await serveAdmin();
+  t.after(() => server.close());
+  const { origin } = server;
   const browser = await chromium.launch();
 
   async function withPage(run, overrides = {}) {
@@ -315,14 +295,26 @@ test("compiled Admin preserves drafts and completes canonical Guild setup flows"
       },
     );
     await t.test(
-      "Commerce seller tab does not leak into Clan Management or break history",
+      "Commerce and Clan Management keep their page titles and tab state across history",
       async () => {
         await withPage(
           async (page) => {
-            await page.goto(`${origin}/admin/docs-guild/commerce`);
-            await expect(
-              page.getByRole("heading", { name: "Commerce", exact: true }),
-            ).toBeVisible();
+            const directory = Promise.withResolvers();
+            await page.route("**/admin/api/guilds*", async (route) => {
+              await directory.promise;
+              await route.fallback();
+            });
+            try {
+              await page.goto(`${origin}/admin/docs-guild/commerce`);
+              await expect(
+                page.getByRole("heading", { name: "Commerce", exact: true }),
+              ).toBeVisible();
+              await expect(page).toHaveTitle("Commerce | HAF Bot");
+            } finally {
+              directory.resolve();
+            }
+            await expect(page).toHaveTitle("Commerce · Northstar Gaming | HAF Bot");
+            await expect(page.locator("head title")).toHaveCount(1);
             await expect(
               page.getByRole("tab", { name: "Seller & finance", exact: true }),
             ).toHaveAttribute("aria-selected", "true");
@@ -333,15 +325,18 @@ test("compiled Admin preserves drafts and completes canonical Guild setup flows"
             await expect(
               page.getByRole("heading", { name: "Clan Management", exact: true }),
             ).toBeVisible();
+            await expect(page).toHaveTitle("Clan Management · Northstar Gaming | HAF Bot");
             assert.equal(new URL(page.url()).searchParams.get("tab"), null);
             await page.evaluate(() => history.back());
             await expect(
               page.getByRole("heading", { name: "Commerce", exact: true }),
             ).toBeVisible();
+            await expect(page).toHaveTitle("Commerce · Northstar Gaming | HAF Bot");
             await page.evaluate(() => history.forward());
             await expect(
               page.getByRole("heading", { name: "Clan Management", exact: true }),
             ).toBeVisible();
+            await expect(page).toHaveTitle("Clan Management · Northstar Gaming | HAF Bot");
           },
           {
             "/admin/api/commerce": {
@@ -615,6 +610,5 @@ test("compiled Admin preserves drafts and completes canonical Guild setup flows"
     );
   } finally {
     await browser.close();
-    await new Promise((done) => server.close(done));
   }
 });

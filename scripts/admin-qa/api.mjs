@@ -8,7 +8,22 @@ const paths = {
   profile: `${root}/profile/preferences`,
   lfg: `${root}/lfg`,
   analytics: `${root}/product-analytics/events`,
+  billing: `${root}/billing`,
+  commerce: `${root}/commerce`,
 };
+export const checkoutSessionId = "cs_qa_premium_plus_monthly";
+
+export function createCommerceOnboardingFixture() {
+  const commerce = structuredClone(commonResponses[paths.commerce]);
+  commerce.sellerProfile.lifecycleState = "onboarding_incomplete";
+  Object.assign(commerce.dashboard.seller, {
+    status: "pending",
+    chargesEnabled: false,
+    payoutsEnabled: false,
+    detailsSubmitted: false,
+  });
+  return commerce;
+}
 
 // These are intentionally explicit contracts, not a generic successful POST stub.
 const mutations = new Map([
@@ -82,6 +97,8 @@ const mutations = new Map([
   [`PATCH ${paths.profile}`, updatePreferences],
   [`POST ${paths.lfg}/config`, updateLfg],
   [`POST ${paths.analytics}`, acceptAnalytics],
+  [`POST ${paths.billing}/sync`, syncBillingCheckout],
+  [`POST ${paths.commerce}/seller/refresh`, refreshCommerceSeller],
 ]);
 
 /**
@@ -107,6 +124,7 @@ export function createApi({
     [`${root}/guild-overview`]: documentationScenarios[0].responses[`${root}/guild-overview`],
     [`${root}/operations/incidents/capabilities`]: { canWrite: true },
     [`${root}/product-analytics/preference`]: { guildId: "docs-guild", enabled: false },
+    [`${paths.billing}/assignments`]: { assignments: [], eligibleGuilds: [], capacity: 3 },
     ...responses,
   });
   // The docs capture has this acknowledgement in its path-only response map.
@@ -293,6 +311,48 @@ function requireValue(condition, message) {
 
 function requireGuild(body) {
   requireValue(body.guildId === "docs-guild", "Expected fictional guildId docs-guild");
+}
+
+function syncBillingCheckout(state, body) {
+  requireValue(body.checkoutSessionId === checkoutSessionId, "Unknown fictional checkout session");
+  const billing = state[paths.billing];
+  billing.subscription = {
+    ownerId: "qa-owner",
+    customerId: "cus_qa",
+    subscriptionId: "sub_qa",
+    priceId: "price-plus-monthly",
+    productId: "product-plus",
+    plan: "premium_plus",
+    frequency: "monthly",
+    status: "active",
+    currentPeriodStartMs: null,
+    currentPeriodEndMs: null,
+    cancelAtPeriodEnd: false,
+    cancelledAtMs: null,
+    latestInvoiceId: null,
+    scheduleId: null,
+    observedAtMs: 1,
+    quarantineReason: null,
+  };
+  return { subscription: billing.subscription };
+}
+
+function refreshCommerceSeller(state, body) {
+  requireGuild(body);
+  requireValue(
+    body.workspaceId === undefined || body.workspaceId === "docs-workspace",
+    "Unknown fictional workspace",
+  );
+  const commerce = state[paths.commerce];
+  requireValue(commerce.sellerProfile && commerce.dashboard?.seller, "Expected a connected seller");
+  commerce.sellerProfile.lifecycleState = "active";
+  Object.assign(commerce.dashboard.seller, {
+    status: "active",
+    chargesEnabled: true,
+    payoutsEnabled: true,
+    detailsSubmitted: true,
+  });
+  return { sellerProfile: commerce.sellerProfile };
 }
 
 function requireStrings(value, field) {

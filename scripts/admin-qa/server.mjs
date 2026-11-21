@@ -1,7 +1,12 @@
+import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
-import { extname, resolve, sep } from "node:path";
+import { access, readFile } from "node:fs/promises";
+import { extname, sep } from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
 
+const assetRoot = new URL("../../dist-admin/", import.meta.url);
 const types = {
   ".js": "text/javascript",
   ".css": "text/css",
@@ -11,19 +16,14 @@ const types = {
   ".woff2": "font/woff2",
 };
 
-function escapeAttribute(value) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-export async function serveAdmin(assetRoot) {
-  assetRoot = resolve(assetRoot);
+export async function serveAdmin({
+  userProfile = { name: "Fictional Admin", email: "qa@example.invalid" },
+} = {}) {
+  await access(new URL(".vite/manifest.json", assetRoot));
+  const { default: start } = await import("../../dist/server/server.js");
   const server = createServer(async (request, response) => {
     try {
-      const url = new URL(request.url ?? "/", "http://localhost");
+      const url = new URL(request.url ?? "/", `http://127.0.0.1:${server.address().port}`);
       if (request.method !== "GET" && request.method !== "HEAD") {
         response.writeHead(405).end();
         return;
@@ -36,30 +36,54 @@ export async function serveAdmin(assetRoot) {
       }
       if (
         url.pathname.startsWith("/admin/assets/") ||
-        ["/favicon.ico", "/logo.png"].includes(url.pathname)
+        ["/favicon.ico", "/logo.png", "/banner.png"].includes(url.pathname)
       ) {
-        const file = resolve(assetRoot, `.${decodeURIComponent(url.pathname)}`);
-        if (!file.startsWith(`${assetRoot}${sep}`)) {
+        const file = fileURLToPath(new URL(`.${url.pathname}`, assetRoot));
+        if (!file.startsWith(fileURLToPath(assetRoot)) || file.endsWith(sep)) {
           response.writeHead(403).end();
           return;
         }
-        const bytes = await readFile(file);
+        const bytes = await readFile(file).catch((error) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        });
+        if (!bytes) {
+          response.writeHead(404).end();
+          return;
+        }
         response
           .writeHead(200, { "content-type": types[extname(file)] ?? "application/octet-stream" })
-          .end(bytes);
+          .end(request.method === "HEAD" ? undefined : bytes);
         return;
       }
       if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
-        response
-          .writeHead(200, { "content-type": "text/html; charset=utf-8" })
-          .end(
-            `<!doctype html><html lang="en" class="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fictional Admin QA</title><link rel="stylesheet" href="/admin/assets/admin.css"></head><body><div id="admin-root" data-authenticated="true" data-initial-path="${escapeAttribute(url.pathname)}" data-initial-search="${escapeAttribute(url.search)}" data-user-name="Fictional Admin" data-user-email="qa@example.invalid"></div><script type="module" src="/admin/assets/admin.js"></script></body></html>`,
-          );
+        const rendered = await start.fetch(
+          new Request(url, { method: request.method, headers: request.headers }),
+          {
+            context: {
+              admin: {
+                authenticated: true,
+                userProfile,
+                playstationLinkEnabled: true,
+                workerVersion: "",
+              },
+              nonce: randomBytes(16).toString("base64"),
+            },
+          },
+        );
+        response.writeHead(rendered.status, Object.fromEntries(rendered.headers));
+        if (rendered.body && request.method !== "HEAD") {
+          await pipeline(Readable.fromWeb(rendered.body), response);
+        } else {
+          response.end();
+          await rendered.body?.cancel();
+        }
         return;
       }
       response.writeHead(404).end();
-    } catch {
-      response.writeHead(404).end();
+    } catch (error) {
+      if (response.headersSent) response.destroy(error);
+      else response.writeHead(500).end("Admin fixture server failed to handle the request");
     }
   });
   await new Promise((done, reject) => {

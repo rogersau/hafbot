@@ -5,15 +5,16 @@ import { AdminErrorNotice } from "./admin-error-notice";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 
-/** Inline reconciliation warning with a refresh-only retry. */
 export function AdminRefreshNotice({
   action,
   error,
   refresh,
+  onResolved,
 }: {
   action: string;
   error: unknown;
   refresh?: (() => Promise<void>) | null;
+  onResolved?: () => void;
 }) {
   const [state, setState] = useState<"pending" | "refreshing" | "resolved">("pending");
   const retrying = state === "refreshing";
@@ -24,6 +25,7 @@ export function AdminRefreshNotice({
     setState("refreshing");
     const result = await retryAdminRefresh(refresh);
     setState(result.ok ? "resolved" : "pending");
+    if (result.ok) onResolved?.();
   }
 
   return (

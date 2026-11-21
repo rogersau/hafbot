@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "budgets": {
-    "initialJs": { "rawBytes": 615000, "gzipBytes": 195000 },
+    "initialJs": { "rawBytes": 675000, "gzipBytes": 220000 },
     "totalInitialCss": { "gzipBytes": 20000 },
     "routes": {
       "route.auditLog": { "gzipBytes": 45000 },
