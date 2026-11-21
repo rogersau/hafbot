@@ -21,6 +21,7 @@ export interface FeatureFlags {
   clans?: boolean;
   suggestions?: boolean;
   serverLevels?: boolean;
+  wardogsCommunity?: boolean;
 }
 
 export const ALL_FEATURES_ENABLED: FeatureFlags = {
@@ -46,6 +47,7 @@ export const ALL_FEATURES_ENABLED: FeatureFlags = {
   clans: true,
   suggestions: true,
   serverLevels: true,
+  wardogsCommunity: true,
 };
 
 function isDisabled(value: unknown): boolean {
@@ -77,6 +79,7 @@ export function parseFeatureFlags(env: {
   DISABLE_CLANS?: string;
   DISABLE_SUGGESTIONS?: string;
   DISABLE_SERVER_LEVELS?: string;
+  DISABLE_WARDOGS_COMMUNITY?: string;
   ENABLE_WEBHOOK_PROXY_LOGS?: string;
 }): FeatureFlags {
   return {
@@ -102,6 +105,7 @@ export function parseFeatureFlags(env: {
     clans: !isDisabled(env.DISABLE_CLANS),
     suggestions: !isDisabled(env.DISABLE_SUGGESTIONS),
     serverLevels: !isDisabled(env.DISABLE_SERVER_LEVELS),
+    wardogsCommunity: !isDisabled(env.DISABLE_WARDOGS_COMMUNITY),
   };
 }
 

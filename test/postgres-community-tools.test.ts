@@ -12,6 +12,7 @@ import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/
 import { createGatewayEventOperationRunner } from "../src/runtime/gateway-event-idempotency";
 import { createPostgresGatewayEventOperationStore } from "../src/runtime/postgres/postgres-gateway-event-operation-store";
 import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
+import { GOLD_DAY_MS } from "../src/wardogs/community-data";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 test(
@@ -35,10 +36,12 @@ test(
       let suspended = false;
       let botUserId = "199";
       let failDelivery = false;
+      let goldDay = 0;
       let feedBody =
         "<rss><item><guid>old</guid><title>Old post</title><link>https://game.example/old</link></item></rss>";
       const sends: Array<{ channelId: string; content: string; roles: string[]; nonce: string }> =
         [];
+      const panelMessages: Array<{ messageId: string; channelId: string }> = [];
       const deletes: string[] = [];
       const timeouts: number[] = [];
       let accountCalls = 0;
@@ -64,6 +67,16 @@ test(
           timeouts.push(until);
         },
         validateChannel: async () => {},
+        async publishPanel({ channelId, previous, body }) {
+          const messageId =
+            previous?.channelId === channelId
+              ? previous.messageId
+              : String(900 + panelMessages.length);
+          assert.equal(body.embeds?.[0]?.title, "WARDOGS links");
+          assert.match(JSON.stringify(body.components), /wardogs:link-steam.*wardogs:sync-stats/);
+          panelMessages.push({ messageId, channelId });
+          return { messageId, botUserId };
+        },
         moderate: async () => {
           accountCalls++;
           if (failAccountAction) throw new Error("Discord response lost after mutation");
@@ -80,6 +93,18 @@ test(
         isSuspended: async () => suspended,
         authorizeAdmin: async () => false,
         feedReader: new ContentFeedReader({ transport: async () => feedBody }),
+        wardogsGold: {
+          goldAvailable: true,
+          async readGoldStatus() {
+            return {
+              latest: { ts: goldDay, price: 651_250 },
+              history: [
+                { ts: goldDay - GOLD_DAY_MS, price: 621_425 },
+                { ts: goldDay, price: 651_250 },
+              ],
+            };
+          },
+        },
         now: () => now,
       });
       const config = automationConfigSchema.parse({
@@ -245,6 +270,73 @@ test(
         "<rss><item><guid>another</guid><title>Suspended patch</title><link>https://game.example/suspended</link></item></rss>";
       await service.sweep();
       assert.ok(!sends.some((send) => send.content.includes("Suspended patch")));
+
+      suspended = false;
+      const currentDay = (Math.floor(now / GOLD_DAY_MS) + 1) * GOLD_DAY_MS;
+      now = currentDay + 60000;
+      goldDay = currentDay - GOLD_DAY_MS;
+      const goldPosts = () =>
+        sends.filter((send) => send.content.includes("WARDOGS Gold Exchange"));
+      await service.configureWardogsGold("100", "103");
+      await service.sweep();
+      assert.equal(goldPosts().length, 0, "the scheduler waits for today's rate");
+
+      goldDay = currentDay;
+      await Promise.all([service.sweep(), service.sweep()]);
+      await service.sweep();
+      assert.equal(goldPosts().length, 1, "concurrent sweeps enqueue and send once per day");
+      assert.equal(goldPosts()[0]?.channelId, "103");
+      assert.deepEqual(goldPosts()[0]?.roles, []);
+      assert.match(goldPosts()[0]!.content, /651,250 cash/);
+      assert.match(goldPosts()[0]!.content, /Price history \(UTC\)/);
+      assert.match(goldPosts()[0]!.content, /621,425/);
+
+      await service.configureWardogsGold("100", "104");
+      await service.sweep();
+      assert.equal(
+        goldPosts().length,
+        1,
+        "changing the channel keeps today's delivery deduplicated",
+      );
+
+      now += GOLD_DAY_MS;
+      goldDay += GOLD_DAY_MS;
+      await service.sweep();
+      assert.deepEqual(
+        goldPosts().map((post) => post.channelId),
+        ["103", "104"],
+      );
+      assert.notEqual(goldPosts()[0]?.nonce, goldPosts()[1]?.nonce);
+
+      await service.configureWardogsGold("100", null);
+      now += GOLD_DAY_MS;
+      goldDay += GOLD_DAY_MS;
+      await service.sweep();
+      assert.equal(goldPosts().length, 2, "turning updates off stops later posts");
+
+      const draft = { title: "WARDOGS links", channelId: "104", description: "Link here." };
+      const published = await service.publishWardogsLinkPanel("100", draft);
+      assert.deepEqual((await service.readWardogsSettings("100")).panel, published);
+      const updated = await service.publishWardogsLinkPanel("100", {
+        ...draft,
+        description: "Updated.",
+      });
+      assert.equal(updated.messageId, published.messageId);
+      const moved = await service.publishWardogsLinkPanel("100", { ...draft, channelId: "105" });
+      assert.notEqual(moved.messageId, published.messageId);
+      assert.deepEqual((await service.readWardogsSettings("200")).panel, null);
+      const automation = await service.read("100", "automation");
+      await service.save(
+        "100",
+        "automation",
+        { ...automation.config, wardogsLinkPanel: published },
+        automation.revision,
+      );
+      assert.deepEqual(
+        (await service.readWardogsSettings("100")).panel,
+        moved,
+        "regular settings cannot replace the published message reference",
+      );
     } finally {
       await database.close();
     }

@@ -277,7 +277,7 @@ function isMaintenanceReadOnlyRequest(request: Request, url: URL): boolean {
   if (url.pathname === "/api/auth" || url.pathname.startsWith("/api/auth/")) {
     return url.pathname === "/api/auth/get-session";
   }
-  if (/^\/auth\/(?:steam|xbox)(?:\/|$)/.test(url.pathname)) return false;
+  if (/^\/auth\/(?:steam|xbox|wardogs)(?:\/|$)/.test(url.pathname)) return false;
   if (url.pathname === "/commerce/return" || url.pathname === "/commerce/support/return") {
     return false;
   }

@@ -40,8 +40,7 @@ import {
 } from "./playstation-link-interaction-handler";
 import { handleTicketSlashCommandInteraction } from "./ticket-interaction-handler";
 import { createGuildBrandingResolver } from "./guild-branding";
-import type { RuntimeStores } from "./app-types";
-import type { DiscordInteraction } from "./app-types";
+import type { DiscordInteraction, RuntimeAppOptions, RuntimeStores } from "./app-types";
 import type { FeatureFlags } from "./features";
 import type { ApplicationCommandServices } from "./handler-services";
 import { assertGuildPremiumTier, QuantityLimitError } from "./entitlement-checks";
@@ -68,11 +67,17 @@ import {
 } from "../server-levels/policy";
 import { postMemberAuditEvent } from "../services/guild-audit-log-service";
 import type { SelfHostedSite } from "./self-hosted-site";
+import { handleWardogsCommunityCommand } from "./wardogs-community-command";
+import { CommunityToolsError } from "../community-tools/config";
 
 const DISCORD_MESSAGE_CONTENT_LIMIT = 2_000;
 
 export interface ApplicationCommandHandlerOptions {
-  communityTools?: import("../community-tools/service").CommunityToolsService;
+  communityTools?: Pick<
+    import("../community-tools/service").CommunityToolsService,
+    "handleInteraction" | "configureWardogsGold"
+  >;
+  wardogsCommunity?: RuntimeAppOptions["wardogsCommunity"];
   reputationServiceForGuild?: (
     guildId: string,
   ) => Promise<import("../reputation/service").ReputationService>;
@@ -165,6 +170,42 @@ export async function handleApplicationCommand(
 
   if (!invocation) {
     return Response.json(buildEphemeralMessage("Unsupported command."));
+  }
+
+  if (invocation.commandName === "wardogs") {
+    if (features.wardogsCommunity === false || !options.wardogsCommunity) {
+      return Response.json(buildEphemeralMessage("WARDOGS community commands are unavailable."));
+    }
+    if (invocation.subcommandName === "gold-daily") {
+      if (!options.communityTools) {
+        return Response.json(buildEphemeralMessage("Daily WARDOGS gold updates are unavailable."));
+      }
+      if (!(await hasInteractionAdminAccess(interaction, stores))) {
+        return Response.json(buildEphemeralMessage(INTERACTION_ADMIN_DENIAL_MESSAGE));
+      }
+      if (invocation.channelId && invocation.off) {
+        return Response.json(buildEphemeralMessage("Choose a channel or turn daily updates off."));
+      }
+      try {
+        const channel = invocation.off ? null : (invocation.channelId ?? undefined);
+        const message = await options.communityTools.configureWardogsGold(
+          interaction.guild_id,
+          channel,
+        );
+        return Response.json(buildEphemeralMessage(message));
+      } catch (error) {
+        if (error instanceof CommunityToolsError)
+          return Response.json(buildEphemeralMessage(error.message));
+        throw error;
+      }
+    }
+    return handleWardogsCommunityCommand(invocation, {
+      ...options.wardogsCommunity,
+      guildId: interaction.guild_id,
+      actorUserId: interaction.member?.user?.id ?? interaction.user?.id,
+      platformLink: stores.platformLink,
+      steamLinkEnabled: features.steamLink,
+    });
   }
 
   const brandingResolver = createGuildBrandingResolver(stores.whiteLabelBots);

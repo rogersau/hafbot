@@ -24,6 +24,7 @@
       "route.mentionProtection": { "gzipBytes": 46000 },
       "route.overview": { "gzipBytes": 12000 },
       "route.wardogs": { "gzipBytes": 5000 },
+      "route.wardogsCommunity": { "gzipBytes": 32000 },
       "route.playercount": { "gzipBytes": 42000 },
       "route.profile": { "gzipBytes": 12000 },
       "route.reactionRoles": { "gzipBytes": 38000 },

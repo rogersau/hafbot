@@ -11,6 +11,10 @@ import {
 } from "../runtime/postgres/postgres-wardogs-store";
 import { wardogsNetworkPolicy } from "../wardogs/config";
 import { WardogsService } from "../wardogs/service";
+import { createWardogsCommunityData } from "../wardogs/community-data";
+import { createWardogsTrackerConnect } from "../wardogs/tracker-connect";
+import { createPlatformLinkIdentityReader } from "../services/platform-link-identity-reader";
+import { GuildServicePolicy } from "../runtime/guild-service-policy";
 import type { Env } from "../env";
 import { readSelfHostedSite } from "../runtime/self-hosted-site";
 import { assertValidDiscordPublicKey } from "../discord";
@@ -264,6 +268,33 @@ export function createNodeApplicationContext(
   const lfgStore = stores.lfg;
   const clanStore = stores.clans;
   const platformLinkStore = stores.platformLink;
+  const publicUrl = normalizeOptionalString(env.BETTER_AUTH_URL);
+  const wardogsConnectClientId = normalizeOptionalString(env.WARDOGS_TRACKER_CONNECT_CLIENT_ID);
+  const wardogsConnectKey = normalizeOptionalString(env.WARDOGS_TRACKER_CONNECT_KEY);
+  const guildServicePolicy = new GuildServicePolicy(guildServiceSuspensionStore);
+  const wardogsCommunity = features.wardogsCommunity
+    ? {
+        data: createWardogsCommunityData({ goldApiKey: env.WARDOGS_SERVER_LIST_API_KEY }),
+        connect:
+          features.steamLink &&
+          publicUrl &&
+          URL.canParse(publicUrl) &&
+          new URL(publicUrl).protocol === "https:" &&
+          wardogsConnectClientId &&
+          wardogsConnectKey &&
+          componentIdSigningSecret
+            ? createWardogsTrackerConnect({
+                publicUrl,
+                clientId: wardogsConnectClientId,
+                apiKey: wardogsConnectKey,
+                signingSecret: componentIdSigningSecret,
+                links: createPlatformLinkIdentityReader(platformLinkStore),
+                oneTimeTokens: oneTimeTokenStore,
+                isGuildSuspended: (guildId) => guildServicePolicy.isGuildSuspended(guildId),
+              })
+            : undefined,
+      }
+    : undefined;
   const steamWebApiKey = normalizeOptionalString(env.STEAM_WEB_API_KEY);
   const xboxOAuthClientId = normalizeOptionalString(env.XBOX_OAUTH_CLIENT_ID);
   const xboxOAuthClientSecret = normalizeOptionalString(env.XBOX_OAUTH_CLIENT_SECRET);
@@ -405,6 +436,7 @@ export function createNodeApplicationContext(
     serverLevelIngressHandler,
     wardogsPlayerCountEnabled: env.WARDOGS_PLAYER_COUNT_ENABLED === "true",
     wardogs,
+    wardogsCommunity,
     commerceGameAccess,
     banIncidentStore: createPostgresOperationalIncidentStore(database, "ban-cases"),
     banEnforcementStore: createPostgresBanEnforcementStore(database),
@@ -420,7 +452,7 @@ export function createNodeApplicationContext(
     playerCountStreakReportedStore: createPostgresPlayerCountStreakReportedStore(database),
     imageRulesClassifierEnv,
     aiTranscriptSummarizerEnv,
-    publicUrl: normalizeOptionalString(env.BETTER_AUTH_URL),
+    publicUrl,
     selfHostedSite,
     turnstileSiteKey: normalizeOptionalString(env.TURNSTILE_SITE_KEY),
     turnstileSecretKey: normalizeOptionalString(env.TURNSTILE_SECRET_KEY),

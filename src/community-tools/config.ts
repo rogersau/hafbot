@@ -24,10 +24,24 @@ export const recurringMessageSchema = z.object({
   startsAtMs: z.number().int().positive().max(8_640_000_000_000_000),
   notifyRoleIds: ids,
 });
+export const wardogsLinkPanelDraftSchema = z.object({
+  channelId: snowflake,
+  title: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(800),
+});
+const wardogsLinkPanelSchema = wardogsLinkPanelDraftSchema.extend({
+  messageId: snowflake,
+  botUserId: snowflake,
+});
+export type WardogsLinkPanelDraft = z.infer<typeof wardogsLinkPanelDraftSchema>;
+export type WardogsLinkPanel = z.infer<typeof wardogsLinkPanelSchema>;
+
 export const automationConfigSchema = z.object({
   enabled: z.boolean().default(false),
   commands: z.array(customReplySchema).max(50).default([]),
   schedules: z.array(recurringMessageSchema).max(10).default([]),
+  wardogsGoldChannelId: snowflake.nullable().optional(),
+  wardogsLinkPanel: wardogsLinkPanelSchema.optional(),
 });
 export const moderationRuleSchema = z.object({
   id,

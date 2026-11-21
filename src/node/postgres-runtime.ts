@@ -527,6 +527,7 @@ function createNodeContext(input: {
     resolveGuildBotIdentity: resolveCommunityBot,
     twitchClientId: input.environment.TWITCH_CLIENT_ID,
     twitchClientSecret: input.environment.TWITCH_CLIENT_SECRET,
+    wardogsGold: app.wardogsCommunity?.data,
   });
   const reputationStore = createPostgresReputationStore(input.database);
   app.banAppealServiceForGuild = createBanAppealRuntime({

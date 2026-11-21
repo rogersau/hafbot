@@ -2,6 +2,7 @@ import type { Cache } from "../discord-json-cache";
 import { createBanEnforcementRoutes } from "./ban-case-enforcement";
 import { createAttendanceObservationRoutes } from "./attendance-observations";
 import { createWardogsAdminRoutes } from "./wardogs";
+import { createWardogsCommunityAdminRoutes } from "./wardogs-community";
 import type { WardogsService } from "../../wardogs/service";
 import type { Route } from "../admin-route-registry";
 import type { AdminAccess } from "../admin-access";
@@ -77,6 +78,7 @@ export interface WorkspaceAdminApi {
 export interface AdminRoutesOptions {
   banAppealServiceForGuild?: import("../../moderation-appeals/routes").BanAppealServiceFactory;
   communityTools?: import("../../community-tools/service").CommunityToolsService;
+  wardogsCommunity?: import("../app-types").RuntimeAppOptions["wardogsCommunity"];
   reputationServiceForGuild?: (
     guildId: string,
   ) => Promise<import("../../reputation/service").ReputationService>;
@@ -159,6 +161,7 @@ export function createAdminRoutes(options: AdminRoutesOptions): Route[] {
         })
       : []),
     ...(options.communityTools ? createCommunityToolsAdminRoutes(options.communityTools) : []),
+    ...createWardogsCommunityAdminRoutes(options),
     ...(options.reputationServiceForGuild
       ? createReputationAdminRoutes({ serviceForGuild: options.reputationServiceForGuild })
       : []),

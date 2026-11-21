@@ -75,6 +75,19 @@ choose the panel and role, save, and publish the panel.
 when one is configured, and staff can use the documented lookup flow. Do not treat a link as an
 anti-cheat result, proof of WARDOGS ownership, or proof that the member is trustworthy. Staff manual links are administrative records, not proof of Steam sign-in.
 
+The [WARDOGS commands](/commands#wardogs) show public career snapshots from WARDOGS Tracker.
+Members can use their verified Steam links or search by SteamID64. An operator-configured gold
+feed shows the latest game-wide cash price per gold bar and recent daily history.
+
+In the dashboard, open **Integrations → WARDOGS community**. Use **Daily gold updates** to pick or
+create a channel and save. Clear the channel to turn posts off. **Gold Exchange** shows the latest
+rate and up to seven UTC days of history, and **Player stats** looks up public snapshots by SteamID64.
+
+With Steam Player Link enabled, choose or create a Discord channel under **WARDOGS link panel** and
+publish the preview. Members use **Link Steam**, then close WARDOGS and select **Sync WARDOGS stats**.
+Use **Update link panel** to edit the message in its current channel. Publishing to a new channel
+makes the latest panel active.
+
 ### 3. Give reports and appeals a private path
 
 **Outcome:** A member can open a private support Ticket instead of posting a player report in

@@ -736,6 +736,60 @@ test("ALL_SLASH_COMMAND_DEFINITIONS matches expected command tree (steamlink exc
       ],
     },
     {
+      name: "wardogs",
+      description: "Look up WARDOGS progression and the Gold Exchange price",
+      options: [
+        {
+          type: 1,
+          name: "stats",
+          description: "Look up a public WARDOGS progression snapshot",
+          options: [
+            { type: 6, name: "user", description: "Server member to look up (defaults to you)" },
+            {
+              type: 3,
+              name: "steamid",
+              description: "Look up a public profile by its SteamID64",
+              min_length: 17,
+              max_length: 17,
+            },
+          ],
+        },
+        {
+          type: 1,
+          name: "gold",
+          description: "Show the latest cash price of one WARDOGS gold bar",
+        },
+        {
+          type: 1,
+          name: "gold-daily",
+          description: "Manage daily WARDOGS gold updates for this server",
+          options: [
+            {
+              type: 7,
+              name: "channel",
+              description: "Channel for the daily update",
+              channel_types: [0, 5],
+            },
+            { type: 5, name: "off", description: "Turn daily updates off" },
+          ],
+        },
+        {
+          type: 1,
+          name: "sync",
+          description: "Sync your WARDOGS progression with WARDOGS Tracker",
+          options: [
+            {
+              type: 3,
+              name: "steamid",
+              description: "Your linked SteamID64 if you have multiple accounts",
+              min_length: 17,
+              max_length: 17,
+            },
+          ],
+        },
+      ],
+    },
+    {
       name: "serverlevel",
       description: "View Server Levels earned from trusted game-server attendance",
       options: [

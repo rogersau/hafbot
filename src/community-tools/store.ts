@@ -11,7 +11,10 @@ import {
   type ConfigSnapshot,
   type ContentFeed,
   type ModerationCase,
+  type WardogsLinkPanel,
 } from "./config";
+
+export const WARDOGS_GOLD_DELIVERY_PREFIX = "wardogs-gold:";
 
 export interface CommunityDelivery {
   id: string;
@@ -89,6 +92,31 @@ export class CommunityToolsStore {
   }
   async claim(key: string, expiresAtMs: number, nowMs: number): Promise<boolean> {
     return claim(this.database, key, expiresAtMs, nowMs);
+  }
+  async releaseClaim(key: string, expiresAtMs: number): Promise<void> {
+    await this.database.execute(
+      "DELETE FROM community_tool_claims WHERE claim_key=$1 AND expires_at_ms=$2",
+      [key, expiresAtMs],
+    );
+  }
+  async saveWardogsLinkPanel(
+    guildId: string,
+    panel: WardogsLinkPanel,
+    claimKey: string,
+    expiresAtMs: number,
+  ): Promise<boolean> {
+    const now = this.now();
+    return (
+      (await this.database.execute(
+        `INSERT INTO community_tool_configs AS c (guild_id,feature,config_json,revision,updated_at_ms)
+       SELECT $1,'automation',jsonb_build_object('wardogsLinkPanel',$2::jsonb)::text,1,$3
+        WHERE EXISTS (SELECT 1 FROM community_tool_claims WHERE claim_key=$4 AND expires_at_ms=$5 AND expires_at_ms>$3)
+       ON CONFLICT (guild_id,feature) DO UPDATE
+         SET config_json=jsonb_set(c.config_json::jsonb,'{wardogsLinkPanel}',$2::jsonb)::text,
+             revision=c.revision+1`,
+        [guildId, JSON.stringify(panel), now, claimKey, expiresAtMs],
+      )) === 1
+    );
   }
   async dueFeeds(
     nowMs: number,
@@ -188,6 +216,28 @@ export class CommunityToolsStore {
       ],
     );
   }
+  async dueWardogsGold(
+    dayMs: number,
+  ): Promise<Array<{ guildId: string; channelId: string; revision: number }>> {
+    const rows = await this.database.query<{
+      guild_id: string;
+      channel_id: string;
+      revision: number;
+    }>(
+      `SELECT c.guild_id, c.config_json::jsonb->>'wardogsGoldChannelId' AS channel_id, c.revision
+         FROM community_tool_configs c
+        WHERE c.feature='automation' AND c.config_json::jsonb->>'wardogsGoldChannelId' IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM community_tool_deliveries d
+                           WHERE d.id=$1 || c.guild_id || ':' || $2::text)
+        ORDER BY c.guild_id`,
+      [WARDOGS_GOLD_DELIVERY_PREFIX, dayMs],
+    );
+    return rows.map((row) => ({
+      guildId: row.guild_id,
+      channelId: row.channel_id,
+      revision: row.revision,
+    }));
+  }
   async deliveries(nowMs: number): Promise<Array<CommunityDelivery & { token: string }>> {
     return this.database.transaction(async (tx) => {
       await tx.execute(
@@ -242,15 +292,20 @@ export class CommunityToolsStore {
       [id, token, status, error],
     );
   }
-  async bindDeliveryBot(id: string, token: string, botUserId: string): Promise<boolean> {
+  async bindDeliveryBot(
+    id: string,
+    token: string,
+    botUserId: string,
+    configRevision?: number,
+  ): Promise<boolean> {
     return (
       (await this.database.execute(
         `UPDATE community_tool_deliveries SET bot_user_id=COALESCE(bot_user_id,$3)
        WHERE id=$1 AND lease_token=$2 AND status='sending' AND lease_until_ms>$4
          AND (bot_user_id IS NULL OR bot_user_id=$3)
          AND EXISTS (SELECT 1 FROM community_tool_configs c WHERE c.guild_id=community_tool_deliveries.guild_id
-           AND c.feature=community_tool_deliveries.feature AND c.revision=community_tool_deliveries.config_revision)`,
-        [id, token, botUserId, this.now()],
+           AND c.feature=community_tool_deliveries.feature AND c.revision=COALESCE($5,community_tool_deliveries.config_revision))`,
+        [id, token, botUserId, this.now(), configRevision ?? null],
       )) === 1
     );
   }

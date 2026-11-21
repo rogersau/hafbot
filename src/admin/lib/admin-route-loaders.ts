@@ -827,3 +827,8 @@ export const loadWardogsRoute = (ctx: AdminLoaderContext) =>
     ctx,
     loadOptionalEntitlement,
   );
+
+export const loadWardogsCommunityRoute = (ctx: AdminLoaderContext) =>
+  client(ctx).loadRoute<
+    import("../../runtime/admin-routes/wardogs-community").WardogsCommunityDashboard
+  >({ path: "/admin/api/wardogs/community" }, ctx, loadOptionalEntitlement);

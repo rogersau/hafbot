@@ -4,6 +4,10 @@ import { deriveGatewayOperationNonce } from "../runtime/gateway-event-idempotenc
 import type { DiscordInteraction } from "../runtime/app-types";
 import { isRecord } from "../unknown-parse";
 import { ContentFeedReader, contentFeedUrl } from "./feeds";
+import { GOLD_DAY_MS, type WardogsCommunityData } from "../wardogs/community-data";
+import { formatWardogsGoldStatus } from "../wardogs/gold-status";
+import { buildWardogsLinkPanel } from "../wardogs/link-panel";
+import type { CreateChannelMessageInput } from "../discord/messages";
 import {
   CommunityToolsError,
   matchesReply,
@@ -15,8 +19,14 @@ import {
   type CommunityFeature,
   type CommunityMessage,
   type ModerationConfig,
+  type WardogsLinkPanel,
+  type WardogsLinkPanelDraft,
 } from "./config";
-import type { CommunityToolsStore, CommunityDelivery } from "./store";
+import {
+  WARDOGS_GOLD_DELIVERY_PREFIX,
+  type CommunityToolsStore,
+  type CommunityDelivery,
+} from "./store";
 
 export interface CommunityMember {
   roles: string[];
@@ -29,6 +39,12 @@ export interface CommunityDiscord {
   delete(channelId: string, messageId: string): Promise<void>;
   timeout(userId: string, untilMs: number): Promise<void>;
   validateChannel(channelId: string, privateOnly?: boolean): Promise<void>;
+  publishPanel?(input: {
+    channelId: string;
+    previous?: Pick<WardogsLinkPanel, "channelId" | "messageId" | "botUserId">;
+    body: CreateChannelMessageInput;
+    nonce: string;
+  }): Promise<{ messageId: string; botUserId: string }>;
   moderate(action: "kick" | "ban" | "unban", userId: string, reason: string): Promise<void>;
   messages(
     channelId: string,
@@ -48,10 +64,12 @@ export interface CommunityToolsOptions {
   isSuspended(guildId: string): Promise<boolean>;
   authorizeAdmin(interaction: DiscordInteraction): Promise<boolean>;
   feedReader: ContentFeedReader;
+  wardogsGold?: Pick<WardogsCommunityData, "goldAvailable" | "readGoldStatus">;
   now?: () => number;
 }
 export class CommunityToolsService {
   readonly store: CommunityToolsStore;
+  private wardogsGoldRetryAtMs = 0;
   constructor(private readonly options: CommunityToolsOptions) {
     this.store = options.store;
   }
@@ -78,6 +96,16 @@ export class CommunityToolsService {
         throw new CommunityToolsError("One of the selected roles no longer exists in this server.");
     };
     if ("commands" in config) {
+      const saved = (await this.read(guildId, "automation")).config as AutomationConfig;
+      config.wardogsLinkPanel = saved.wardogsLinkPanel;
+      if (config.wardogsGoldChannelId === undefined) {
+        config.wardogsGoldChannelId = saved.wardogsGoldChannelId;
+      } else if (
+        config.wardogsGoldChannelId &&
+        config.wardogsGoldChannelId !== saved.wardogsGoldChannelId
+      ) {
+        await this.validateWardogsGoldChannel(discord, config.wardogsGoldChannelId);
+      }
       for (const command of config.commands) {
         requireRoles(command.requiredRoleIds);
         for (const channel of command.channelIds) await discord.validateChannel(channel);
@@ -111,6 +139,101 @@ export class CommunityToolsService {
       }
     }
     return this.store.save(guildId, feature, config, revision);
+  }
+
+  async readWardogsSettings(guildId: string) {
+    const { config } = await this.read(guildId, "automation");
+    const settings = config as AutomationConfig;
+    return {
+      goldChannelId: settings.wardogsGoldChannelId ?? null,
+      panel: settings.wardogsLinkPanel ?? null,
+    };
+  }
+
+  async publishWardogsLinkPanel(
+    guildId: string,
+    draft: WardogsLinkPanelDraft,
+  ): Promise<WardogsLinkPanel> {
+    const key = `wardogs-panel:publish:${guildId}`;
+    const now = this.now();
+    const expiresAtMs = now + 120_000;
+    if (!(await this.store.claim(key, expiresAtMs, now))) {
+      throw new CommunityToolsError(
+        "The WARDOGS panel is already being published. Try again shortly.",
+        409,
+      );
+    }
+    try {
+      const discord = await this.options.discordForGuild(guildId);
+      if (!discord.publishPanel)
+        throw new CommunityToolsError("Panel publishing is unavailable.", 503);
+      const { panel: previous } = await this.readWardogsSettings(guildId);
+      const published = await discord.publishPanel({
+        channelId: draft.channelId,
+        previous: previous ?? undefined,
+        body: buildWardogsLinkPanel(draft.title, draft.description),
+        nonce: deriveGatewayOperationNonce(
+          `${guildId}:${draft.channelId}:${previous?.messageId ?? "new"}`,
+          "wardogs-panel",
+        ),
+      });
+      const panel = { ...draft, ...published };
+      if (!(await this.store.saveWardogsLinkPanel(guildId, panel, key, expiresAtMs))) {
+        throw new CommunityToolsError(
+          "The panel reference could not be saved. Try publishing again.",
+          409,
+        );
+      }
+      return panel;
+    } finally {
+      await this.store.releaseClaim(key, expiresAtMs).catch(() => undefined);
+    }
+  }
+
+  async configureWardogsGold(
+    guildId: string,
+    requestedChannel: string | null | undefined,
+  ): Promise<string> {
+    const snapshot = await this.read(guildId, "automation");
+    const config = snapshot.config as AutomationConfig;
+    const channelId = config.wardogsGoldChannelId ?? null;
+    if (requestedChannel === undefined) {
+      return channelId
+        ? `Daily WARDOGS gold updates are configured for <#${channelId}>.`
+        : "Daily WARDOGS gold updates are off. Choose a channel with /wardogs gold-daily.";
+    }
+    if (requestedChannel !== null)
+      await this.validateWardogsGoldChannel(
+        await this.options.discordForGuild(guildId),
+        requestedChannel,
+      );
+    if (channelId !== requestedChannel) {
+      await this.store.save(
+        guildId,
+        "automation",
+        { ...config, wardogsGoldChannelId: requestedChannel },
+        snapshot.revision,
+      );
+    }
+    return requestedChannel === null
+      ? "Daily WARDOGS gold updates are off."
+      : `Daily WARDOGS gold updates are on for <#${requestedChannel}>. Hafbot posts once per UTC day when that day's price is available.`;
+  }
+
+  private async validateWardogsGoldChannel(
+    discord: CommunityDiscord,
+    channelId: string,
+  ): Promise<void> {
+    if (!this.options.wardogsGold?.goldAvailable) {
+      throw new CommunityToolsError(
+        "The bot operator needs to configure the WARDOGS gold price feed.",
+        503,
+      );
+    }
+    if (!snowflake.safeParse(channelId).success) {
+      throw new CommunityToolsError("Choose a text channel in this server.");
+    }
+    await discord.validateChannel(channelId);
   }
   async onMessage(
     message: CommunityMessage,
@@ -316,12 +439,49 @@ export class CommunityToolsService {
         await this.store.recordFeedFailure(guildId, feed.id, fingerprint, now);
       }
     }
+    await this.enqueueWardogsGold(now, signal);
     for (const delivery of await this.store.deliveries(now)) {
       signal?.throwIfAborted();
       await this.deliver(delivery, signal);
     }
     await this.store.prune(now);
   }
+
+  private async enqueueWardogsGold(now: number, signal?: AbortSignal): Promise<void> {
+    const gold = this.options.wardogsGold;
+    if (!gold?.goldAvailable || now < this.wardogsGoldRetryAtMs) return;
+    const day = Math.floor(now / GOLD_DAY_MS) * GOLD_DAY_MS;
+    const candidates = [];
+    for (const candidate of await this.store.dueWardogsGold(day)) {
+      signal?.throwIfAborted();
+      if (await this.options.isSuspended(candidate.guildId)) continue;
+      candidates.push(candidate);
+      if (candidates.length === 10) break;
+    }
+    if (candidates.length === 0) return;
+    const status = await gold.readGoldStatus().catch(() => {
+      this.wardogsGoldRetryAtMs = this.now() + 5 * 60_000;
+      console.warn("wardogs_gold_feed_unavailable");
+      return null;
+    });
+    if (status?.latest.ts !== day || this.now() >= day + GOLD_DAY_MS) return;
+    const content = formatWardogsGoldStatus(status);
+    for (const { guildId, channelId, revision } of candidates) {
+      signal?.throwIfAborted();
+      await this.store.enqueue({
+        id: `${WARDOGS_GOLD_DELIVERY_PREFIX}${guildId}:${day}`,
+        guildId,
+        feature: "automation",
+        itemId: "wardogs-gold",
+        channelId,
+        content,
+        roleIds: [],
+        createdAtMs: now,
+        configRevision: revision,
+      });
+    }
+  }
+
   private async deliver(
     delivery: CommunityDelivery & { token: string },
     signal?: AbortSignal,
@@ -331,17 +491,28 @@ export class CommunityToolsService {
       return;
     }
     const { config, revision } = await this.read(delivery.guildId, delivery.feature);
-    const current =
-      "schedules" in config
+    const gold = delivery.id.startsWith(WARDOGS_GOLD_DELIVERY_PREFIX);
+    const current:
+      | { enabled?: boolean; channelId?: string | null; notifyRoleIds: string[] }
+      | null
+      | undefined = gold
+      ? {
+          enabled:
+            this.options.wardogsGold?.goldAvailable &&
+            delivery.id ===
+              `${WARDOGS_GOLD_DELIVERY_PREFIX}${delivery.guildId}:${Math.floor(this.now() / GOLD_DAY_MS) * GOLD_DAY_MS}`,
+          channelId: "schedules" in config ? config.wardogsGoldChannelId : null,
+          notifyRoleIds: [],
+        }
+      : "schedules" in config
         ? config.schedules.find((item) => item.id === delivery.itemId)
         : "feeds" in config
           ? config.feeds.find((item) => item.id === delivery.itemId)
           : null;
     if (
-      !config.enabled ||
+      (!gold && (!config.enabled || revision !== delivery.configRevision)) ||
       !current?.enabled ||
-      current.channelId !== delivery.channelId ||
-      revision !== delivery.configRevision
+      current.channelId !== delivery.channelId
     ) {
       await this.store.finishDelivery(delivery.id, delivery.token, "cancelled");
       return;
@@ -350,7 +521,7 @@ export class CommunityToolsService {
       const discord = await this.options.discordForGuild(delivery.guildId);
       const { botUserId } = await discord.resources();
       signal?.throwIfAborted();
-      if (!(await this.store.bindDeliveryBot(delivery.id, delivery.token, botUserId))) {
+      if (!(await this.store.bindDeliveryBot(delivery.id, delivery.token, botUserId, revision))) {
         await this.store.finishDelivery(
           delivery.id,
           delivery.token,

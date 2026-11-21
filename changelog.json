@@ -1,6 +1,26 @@
 {
   "releases": [
     {
+      "version": "2026.11.21",
+      "date": "2026-11-21",
+      "title": "WARDOGS player stats and daily gold updates",
+      "summary": "Open Integrations → WARDOGS community in the dashboard to look up player stats, set up daily gold posts, and publish a Discord panel for members to link Steam and sync their WARDOGS stats.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Look up a public WARDOGS Tracker snapshot by SteamID64 in the dashboard or use /wardogs stats in Discord with a verified Steam link."
+        },
+        {
+          "type": "new",
+          "text": "Publish a customizable Discord panel with Link Steam and Sync WARDOGS stats buttons."
+        },
+        {
+          "type": "new",
+          "text": "View the Gold Exchange rate and up to seven UTC days of price history. When the gold feed is configured, choose a channel to receive the new rate each day or check it with /wardogs gold."
+        }
+      ]
+    },
+    {
       "version": "2026.11.10.1",
       "date": "2026-11-10",
       "title": "HAF Bot is now open source",

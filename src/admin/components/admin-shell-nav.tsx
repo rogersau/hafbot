@@ -156,6 +156,7 @@ const CUSTOMER_NAV_GROUPS = [
       "Player Link",
       { path: "/admin/webhooks", label: "Webhooks" },
       { path: "/admin/playercount", label: "Player Count" },
+      dashboardRoute("/admin/wardogs-community"),
       { path: "/admin/wardogs", label: "WARDOGS targets" },
     ],
   },

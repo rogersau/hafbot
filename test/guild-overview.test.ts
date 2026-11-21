@@ -57,9 +57,11 @@ test("Guild Overview distinguishes enabled community tools from saved disabled s
         "chat-moderation": { configured: true, enabled: false },
         "content-feeds": { configured: false, enabled: false },
         reputation: { configured: true, enabled: true },
+        "wardogs-community": { configured: true, enabled: true },
       },
     }),
   );
+  assert.equal(cards.find(({ id }) => id === "wardogs-community")?.status, "configured");
   assert.deepEqual(
     cards.slice(0, 4).map(({ id, status, detail, locked }) => ({ id, status, detail, locked })),
     [
@@ -429,6 +431,7 @@ test("buildGuildOverviewCards surfaces all feature cards in the expected order",
       "bot-defense",
       "member-verification",
       "player-count",
+      "wardogs-community",
       "wardogs",
       "webhooks",
       "ban-cases",
@@ -590,6 +593,7 @@ test("buildGuildOverviewCards exposes correct dashboard paths for click-through"
     "bot-defense": "/admin/bot-defense",
     "member-verification": "/admin/member-verification",
     "player-count": "/admin/playercount",
+    "wardogs-community": "/admin/wardogs-community",
     wardogs: "/admin/wardogs",
     webhooks: "/admin/webhooks",
     "ban-cases": "/admin/ban-cases",

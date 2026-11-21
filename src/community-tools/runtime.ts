@@ -15,6 +15,7 @@ export function createCommunityToolsRuntime(options: {
   resolveGuildBotIdentity: (guildId: string) => Promise<{ token: string; userId: string }>;
   twitchClientId?: string;
   twitchClientSecret?: string;
+  wardogsGold?: import("../wardogs/community-data").WardogsCommunityData;
 }) {
   const operations = createPostgresGatewayEventOperationStore(options.database);
   const policy = new GuildServicePolicy(options.stores.guildServiceSuspensions);
@@ -30,6 +31,7 @@ export function createCommunityToolsRuntime(options: {
     },
     operationsFor: (eventKey) => createGatewayEventOperationRunner({ eventKey, store: operations }),
     isSuspended: (guildId) => policy.isGuildSuspended(guildId),
+    wardogsGold: options.wardogsGold,
     authorizeAdmin: (interaction) => hasInteractionAdminAccess(interaction, options.stores),
   });
 }
