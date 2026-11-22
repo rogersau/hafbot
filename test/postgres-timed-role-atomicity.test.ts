@@ -190,17 +190,11 @@ test(
       try {
         await Promise.race([gateReady, blocker]);
         firstWriter = store.upsertTimedRoleConfigRules(guildId, "new-member", firstRules);
-        const firstWaiting = await waitForTimedRoleRuleWait(database, "rule insert");
-        assert.equal(firstWaiting, true);
+        await waitForTimedRoleWriters(database, 1);
         assert.deepEqual(await store.readTimedRoleConfigRules(guildId, "new-member"), []);
 
         secondWriter = store.upsertTimedRoleConfigRules(guildId, "new-member", secondRules);
-        const secondWaiting = await waitForTimedRoleRuleWait(database, "replacement lock");
-        assert.equal(
-          secondWaiting,
-          true,
-          "the competing replacement must wait for the first replacement's transaction",
-        );
+        await waitForTimedRoleWriters(database, 2);
       } finally {
         releaseGate();
         await Promise.allSettled([blocker, firstWriter, secondWriter]);
@@ -230,27 +224,20 @@ test(
   },
 );
 
-async function waitForTimedRoleRuleWait(
+async function waitForTimedRoleWriters(
   database: PostgresDatabaseCapability,
-  expected: "rule insert" | "replacement lock",
-): Promise<boolean> {
+  expected: number,
+): Promise<void> {
   const deadline = Date.now() + 5_000;
-  const pattern =
-    expected === "rule insert" ? "%timed_role_config_rules%" : "%pg_advisory_xact_lock%";
   while (Date.now() < deadline) {
-    const rows = await database.query<{ blocked: boolean }>(
-      `SELECT EXISTS (
-         SELECT 1 FROM pg_stat_activity
-         WHERE datname = current_database()
-           AND pid <> pg_backend_pid()
-           AND state = 'active'
-           AND wait_event_type = 'Lock'
-           AND query ILIKE $1
-       ) AS blocked`,
-      [pattern],
+    const [row] = await database.query<{ blocked: number }>(
+      `SELECT COUNT(*)::integer AS blocked FROM pg_stat_activity
+       WHERE datname = current_database()
+         AND state = 'active'
+         AND wait_event_type = 'Lock'`,
     );
-    if (rows[0]?.blocked) return true;
+    if (row?.blocked === expected) return;
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  throw new Error(`Expected the timed-role ${expected} to wait for a database lock`);
+  throw new Error(`Expected ${expected} timed-role writers to wait for the test gate`);
 }

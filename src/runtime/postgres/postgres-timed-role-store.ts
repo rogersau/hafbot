@@ -142,9 +142,6 @@ export function createPostgresTimedRoleStore(database: PostgresDatabaseCapabilit
       rules: TimedRoleAutomationRule[],
     ): Promise<void> {
       await db.transaction(async (transaction) => {
-        // Whole-set replacement must serialize per Guild and config type. A
-        // delete followed by an insert in separate transactions could leave
-        // rows from two competing replacements in the same configuration.
         await transaction.execute(
           sql`SELECT pg_advisory_xact_lock(hashtextextended(${`timed-role-config:${guildId}:${configType}`}, 0))`,
         );
