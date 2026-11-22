@@ -98,6 +98,10 @@ test("dashboard href preserves workspace and guild ids", () => {
     buildAdminDashboardHref("/admin/image-rules", "workspace-1", "guild-1"),
     "/admin/guild-1/image-rules?workspaceId=workspace-1",
   );
+  assert.equal(
+    buildAdminDashboardHref("/admin/wardogs-community", "workspace-1", "guild-1"),
+    "/admin/guild-1/wardogs-community?workspaceId=workspace-1",
+  );
   assert.equal(buildAdminDashboardHref("/admin/guild-1", "", "guild-2"), "/admin/guild-2");
   assert.equal(
     buildAdminDashboardHref("/admin/tickets", "workspace-1", ""),
