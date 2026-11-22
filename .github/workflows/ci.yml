@@ -41,6 +41,7 @@ jobs:
       - run: bash scripts/check-model.sh OfferingPublication PublicationCapacity
       - run: bash scripts/check-model.sh MentionBurstWindow FreshWindowCounts
       - run: bash scripts/check-model.sh PostgresJobSettlement DurableSettlementReason
+      - run: bash scripts/check-model.sh TimedRoleReplacement CommittedRulesAreWhole
       - run: pnpm test:prebuilt
       - run: node --test test/release-version.test.mjs
       - run: pnpm docs:build
