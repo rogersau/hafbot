@@ -191,6 +191,19 @@ test("compiled Admin preserves drafts and completes canonical Guild setup flows"
     await expect(page.locator("#rl-max-message")).toBeVisible();
   }
   try {
+    await t.test("WARDOGS community opens from Guild navigation and survives reload", async () => {
+      await withPage(
+        async (page) => {
+          await page.goto(`${origin}/admin/docs-guild`);
+          await section(page, "Integrations");
+          await page.getByRole("link", { name: "WARDOGS community", exact: true }).click();
+          await expect(page).toHaveURL(`${origin}/admin/docs-guild/wardogs-community`);
+          assert.equal((await page.reload()).status(), 200);
+          await expect(page.getByRole("heading", { name: "WARDOGS community" })).toBeVisible();
+        },
+        { "/admin/api/wardogs/community": { enabled: false } },
+      );
+    });
     await t.test(
       "Free Overview without workspace renders discovery and Guided setup actions",
       async () => {
