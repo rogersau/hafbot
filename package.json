@@ -75,6 +75,7 @@
     "@radix-ui/react-slot": "^1.5.0",
     "@radix-ui/react-switch": "^1.4.1",
     "@radix-ui/react-tooltip": "^1.4.1",
+    "@resvg/resvg-js": "2.6.2",
     "@sentry/node": "^11.11.0",
     "@skyra/discord-components-core": "^4.0.2",
     "@skyra/discord-components-react": "^4.0.2",

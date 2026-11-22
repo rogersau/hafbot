@@ -31,6 +31,7 @@ ENV HAF_STATIC_ROOT=/app/dist-admin
 WORKDIR /app
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade --yes \
+    && apt-get install --yes --no-install-recommends fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v1.22.22 \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pnpx /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=production-dependencies --chown=node:node /runtime/node_modules ./node_modules

@@ -2,6 +2,7 @@ import type {
   PostgresDatabaseCapability,
   PostgresExecutor,
 } from "../runtime/postgres/postgres-capability";
+import type { GoldPostFormat } from "../wardogs/gold-status";
 import {
   CommunityToolsError,
   contentFeedSchema,
@@ -224,6 +225,8 @@ export class CommunityToolsStore {
       guildId: string;
       channelId: string;
       revision: number;
+      voiceFormat?: string;
+      postFormat?: GoldPostFormat;
     }>
   > {
     const rows = await this.database.query<{
@@ -232,8 +235,12 @@ export class CommunityToolsStore {
       guild_id: string;
       channel_id: string;
       revision: number;
+      voice_format: string | null;
+      post_format: GoldPostFormat | null;
     }>(
-      `SELECT target.id, target.kind, c.guild_id, target.channel_id, c.revision
+      `SELECT target.id, target.kind, c.guild_id, target.channel_id, c.revision,
+              c.config_json::jsonb->>'wardogsGoldVoiceFormat' AS voice_format,
+              c.config_json::jsonb->>'wardogsGoldPostFormat' AS post_format
          FROM community_tool_configs c
         CROSS JOIN LATERAL (VALUES
           ('message', c.config_json::jsonb->>'wardogsGoldChannelId',
@@ -252,6 +259,8 @@ export class CommunityToolsStore {
       guildId: row.guild_id,
       channelId: row.channel_id,
       revision: row.revision,
+      voiceFormat: row.voice_format ?? undefined,
+      postFormat: row.post_format ?? undefined,
     }));
   }
   async deliveries(nowMs: number): Promise<Array<CommunityDelivery & { token: string }>> {

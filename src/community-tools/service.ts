@@ -4,8 +4,15 @@ import { deriveGatewayOperationNonce } from "../runtime/gateway-event-idempotenc
 import type { DiscordInteraction } from "../runtime/app-types";
 import { isRecord } from "../unknown-parse";
 import { ContentFeedReader, contentFeedUrl } from "./feeds";
-import { GOLD_DAY_MS, type WardogsCommunityData } from "../wardogs/community-data";
-import { formatWardogsGoldChannelName, formatWardogsGoldStatus } from "../wardogs/gold-status";
+import type { WardogsCommunityData, WardogsGoldStatus } from "../wardogs/community-data";
+import { renderWardogsGoldChart } from "../wardogs/gold-chart";
+import {
+  DEFAULT_GOLD_VOICE_FORMAT,
+  GOLD_DAY_MS,
+  formatWardogsGoldChannelName,
+  formatWardogsGoldStatus,
+  type GoldPostFormat,
+} from "../wardogs/gold-status";
 import { buildWardogsLinkPanel } from "../wardogs/link-panel";
 import type { CreateChannelMessageInput } from "../discord/messages";
 import {
@@ -29,6 +36,8 @@ import {
   type CommunityDelivery,
 } from "./store";
 
+const WARDOGS_GOLD_IMAGE_ITEM = "wardogs-gold-image";
+
 export interface CommunityMember {
   roles: string[];
   bot: boolean;
@@ -36,7 +45,13 @@ export interface CommunityMember {
 export interface CommunityDiscord {
   resources(): Promise<GuildPermissionContext>;
   member(userId: string): Promise<CommunityMember | null>;
-  send(channelId: string, content: string, roleIds: string[], nonce: string): Promise<void>;
+  send(
+    channelId: string,
+    content: string,
+    roleIds: string[],
+    nonce: string,
+    attachment?: { filename: string; description: string; data: Blob },
+  ): Promise<void>;
   delete(channelId: string, messageId: string): Promise<void>;
   timeout(userId: string, untilMs: number): Promise<void>;
   validateChannel(channelId: string, privateOnly?: boolean): Promise<void>;
@@ -102,6 +117,8 @@ export class CommunityToolsService {
       const saved = (await this.read(guildId, "automation")).config as AutomationConfig;
       config.wardogsLinkPanel = saved.wardogsLinkPanel;
       config.wardogsGoldVoiceChannelId = saved.wardogsGoldVoiceChannelId;
+      config.wardogsGoldVoiceFormat = saved.wardogsGoldVoiceFormat;
+      config.wardogsGoldPostFormat = saved.wardogsGoldPostFormat;
       if (config.wardogsGoldChannelId === undefined) {
         config.wardogsGoldChannelId = saved.wardogsGoldChannelId;
       } else if (
@@ -152,6 +169,8 @@ export class CommunityToolsService {
     return {
       goldChannelId: settings.wardogsGoldChannelId ?? null,
       goldVoiceChannelId: settings.wardogsGoldVoiceChannelId ?? null,
+      goldVoiceFormat: settings.wardogsGoldVoiceFormat ?? DEFAULT_GOLD_VOICE_FORMAT,
+      goldPostFormat: settings.wardogsGoldPostFormat ?? "full",
       panel: settings.wardogsLinkPanel ?? null,
     };
   }
@@ -200,11 +219,17 @@ export class CommunityToolsService {
     guildId: string,
     requestedChannel: string | null | undefined,
     requestedVoiceChannel?: string | null,
+    { voiceFormat, postFormat }: { voiceFormat?: string; postFormat?: GoldPostFormat } = {},
   ): Promise<string> {
     const snapshot = await this.read(guildId, "automation");
     const config = snapshot.config as AutomationConfig;
     const channelId = config.wardogsGoldChannelId ?? null;
-    if (requestedChannel === undefined && requestedVoiceChannel === undefined) {
+    if (
+      requestedChannel === undefined &&
+      requestedVoiceChannel === undefined &&
+      voiceFormat === undefined &&
+      postFormat === undefined
+    ) {
       return channelId
         ? `Daily WARDOGS gold updates are configured for <#${channelId}>.`
         : "Daily WARDOGS gold updates are off. Choose a channel with /wardogs gold-daily.";
@@ -214,7 +239,9 @@ export class CommunityToolsService {
     const nextVoiceChannel =
       requestedVoiceChannel === undefined ? voiceChannelId : requestedVoiceChannel;
     const validateText =
-      nextChannel && (requestedVoiceChannel === undefined || nextChannel !== channelId);
+      nextChannel &&
+      requestedChannel !== undefined &&
+      (requestedVoiceChannel === undefined || nextChannel !== channelId);
     const validateVoice = nextVoiceChannel && nextVoiceChannel !== voiceChannelId;
     if (validateText || validateVoice) {
       this.requireWardogsGoldFeed();
@@ -222,7 +249,13 @@ export class CommunityToolsService {
       if (validateText) await this.validateWardogsGoldChannel(discord, nextChannel);
       if (validateVoice) await discord.validateVoiceChannel(nextVoiceChannel);
     }
-    if (channelId !== nextChannel || voiceChannelId !== nextVoiceChannel) {
+    if (
+      channelId !== nextChannel ||
+      voiceChannelId !== nextVoiceChannel ||
+      (voiceFormat !== undefined &&
+        voiceFormat !== (config.wardogsGoldVoiceFormat ?? DEFAULT_GOLD_VOICE_FORMAT)) ||
+      (postFormat !== undefined && postFormat !== (config.wardogsGoldPostFormat ?? "full"))
+    ) {
       await this.store.save(
         guildId,
         "automation",
@@ -230,6 +263,8 @@ export class CommunityToolsService {
           ...config,
           wardogsGoldChannelId: nextChannel,
           wardogsGoldVoiceChannelId: nextVoiceChannel,
+          wardogsGoldVoiceFormat: voiceFormat ?? config.wardogsGoldVoiceFormat,
+          wardogsGoldPostFormat: postFormat ?? config.wardogsGoldPostFormat,
         },
         snapshot.revision,
       );
@@ -487,17 +522,25 @@ export class CommunityToolsService {
       return null;
     });
     if (status?.latest.ts !== day || this.now() >= day + GOLD_DAY_MS) return;
-    const content = formatWardogsGoldStatus(status);
-    const voiceName = formatWardogsGoldChannelName(status.latest.price);
-    for (const { id, kind, guildId, channelId, revision } of candidates) {
+    for (const { id, kind, guildId, channelId, revision, voiceFormat, postFormat } of candidates) {
       signal?.throwIfAborted();
+      const imagePost = kind === "message" && postFormat === "image";
       await this.store.enqueue({
         id,
         guildId,
         feature: "automation",
-        itemId: kind === "voice" ? "wardogs-gold-voice" : "wardogs-gold",
+        itemId: imagePost
+          ? WARDOGS_GOLD_IMAGE_ITEM
+          : kind === "voice"
+            ? "wardogs-gold-voice"
+            : "wardogs-gold",
         channelId,
-        content: kind === "voice" ? voiceName : content,
+        content:
+          kind === "voice"
+            ? formatWardogsGoldChannelName(status, voiceFormat)
+            : imagePost
+              ? JSON.stringify(status)
+              : formatWardogsGoldStatus(status, postFormat),
         roleIds: [],
         createdAtMs: now,
         configRevision: revision,
@@ -561,13 +604,33 @@ export class CommunityToolsService {
         return;
       }
       if (goldVoice) await discord.renameVoiceChannel(delivery.channelId, delivery.content);
-      else
+      else {
+        let content = delivery.content;
+        let attachment: { filename: string; description: string; data: Blob } | undefined;
+        if (gold && delivery.itemId === WARDOGS_GOLD_IMAGE_ITEM) {
+          const status = JSON.parse(delivery.content) as WardogsGoldStatus;
+          content = formatWardogsGoldStatus(status, "image");
+          try {
+            attachment = {
+              filename: "wardogs-gold-price.png",
+              description:
+                "Bar chart of the daily cash price per gold bar. Exact prices are listed in the message.",
+              data: await renderWardogsGoldChart(status, signal),
+            };
+          } catch {
+            signal?.throwIfAborted();
+            console.warn("wardogs_gold_chart_render_failed");
+          }
+        }
+        signal?.throwIfAborted();
         await discord.send(
           delivery.channelId,
-          delivery.content,
+          content,
           delivery.roleIds.filter((id) => current.notifyRoleIds.includes(id)),
           deriveGatewayOperationNonce(delivery.id, "community:delivery"),
+          attachment,
         );
+      }
       await this.store.finishDelivery(delivery.id, delivery.token, "delivered");
     } catch {
       signal?.throwIfAborted();

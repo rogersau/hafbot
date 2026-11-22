@@ -12,7 +12,7 @@ import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/
 import { createGatewayEventOperationRunner } from "../src/runtime/gateway-event-idempotency";
 import { createPostgresGatewayEventOperationStore } from "../src/runtime/postgres/postgres-gateway-event-operation-store";
 import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
-import { GOLD_DAY_MS } from "../src/wardogs/community-data";
+import { GOLD_DAY_MS } from "../src/wardogs/gold-status";
 
 const postgresUrl = process.env.TEST_POSTGRES_URL;
 test(
@@ -42,8 +42,13 @@ test(
       const renames: Array<{ channelId: string; name: string }> = [];
       let feedBody =
         "<rss><item><guid>old</guid><title>Old post</title><link>https://game.example/old</link></item></rss>";
-      const sends: Array<{ channelId: string; content: string; roles: string[]; nonce: string }> =
-        [];
+      const sends: Array<{
+        channelId: string;
+        content: string;
+        roles: string[];
+        nonce: string;
+        attachment?: { filename: string; data: Blob };
+      }> = [];
       const panelMessages: Array<{ messageId: string; channelId: string }> = [];
       const deletes: string[] = [];
       const timeouts: number[] = [];
@@ -58,8 +63,8 @@ test(
           member: { roles: [] },
         }),
         member: async () => ({ roles: [], bot: false }),
-        send: async (channelId, content, roles, nonce) => {
-          sends.push({ channelId, content, roles, nonce });
+        send: async (channelId, content, roles, nonce, attachment) => {
+          sends.push({ channelId, content, roles, nonce, attachment });
           if (failDelivery && content === "Identity-bound notice")
             throw new Error("Ambiguous send");
         },
@@ -303,12 +308,19 @@ test(
       assert.deepEqual(renames, [{ channelId: "106", name: "Gold: 651,250 cash" }]);
 
       await service.configureWardogsGold("100", "104");
+      await service.configureWardogsGold("100", undefined, undefined, {
+        voiceFormat: "Gold {price} ({change})",
+        postFormat: "image",
+      });
+      const goldConfig = await service.read("100", "automation");
+      await service.save("100", "automation", { enabled: false }, goldConfig.revision);
       await service.sweep();
       assert.equal(
         goldPosts().length,
         1,
         "changing the channel keeps today's delivery deduplicated",
       );
+      assert.deepEqual(renames.at(-1), { channelId: "106", name: "Gold 651,250 (+4.8%)" });
 
       now += GOLD_DAY_MS;
       goldDay += GOLD_DAY_MS;
@@ -318,6 +330,13 @@ test(
         ["103", "104"],
       );
       assert.notEqual(goldPosts()[0]?.nonce, goldPosts()[1]?.nonce);
+      const chartPost = goldPosts()[1]!;
+      assert.match(chartPost.content, /Price history \(UTC\)/);
+      assert.match(chartPost.content, /621,425/);
+      assert.equal(chartPost.attachment?.filename, "wardogs-gold-price.png");
+      assert.equal(chartPost.attachment.data.type, "image/png");
+      const png = Buffer.from(await chartPost.attachment.data.arrayBuffer());
+      assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
 
       await service.configureWardogsGold("100", null);
       now += GOLD_DAY_MS;
@@ -327,17 +346,18 @@ test(
       assert.equal(goldPosts().length, 2, "turning updates off stops later posts");
       assert.deepEqual(renames, [
         { channelId: "106", name: "Gold: 651,250 cash" },
-        { channelId: "106", name: "Gold: 670,000 cash" },
+        { channelId: "106", name: "Gold 651,250 (+4.8%)" },
+        { channelId: "106", name: "Gold 670,000 (+7.8%)" },
       ]);
       await service.configureWardogsGold("100", null, "107");
       await service.sweep();
-      assert.deepEqual(renames.at(-1), { channelId: "107", name: "Gold: 670,000 cash" });
+      assert.deepEqual(renames.at(-1), { channelId: "107", name: "Gold 670,000 (+7.8%)" });
       await service.configureWardogsGold("100", null, null);
       now += GOLD_DAY_MS;
       goldDay += GOLD_DAY_MS;
       goldPrice = 680_000;
       await service.sweep();
-      assert.equal(renames.length, 3);
+      assert.equal(renames.length, 4);
 
       const draft = { title: "WARDOGS links", channelId: "104", description: "Link here." };
       const published = await service.publishWardogsLinkPanel("100", draft);

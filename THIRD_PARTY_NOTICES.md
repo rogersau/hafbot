@@ -12,6 +12,9 @@ JavaScript packages carry their notices in their installed package directories. 
 dependency trees separately: the root manifest includes frontend and development tooling, while
 `packages/node-runtime` defines the smaller production container dependency tree.
 
+The production Gold Exchange chart renderer includes `@resvg/resvg-js` 2.6.2 under MPL-2.0.
+Its [source and license](https://github.com/thx/resvg-js/tree/v2.6.2) are available upstream.
+
 ```sh
 pnpm licenses list --prod --json
 pnpm --dir packages/node-runtime install --prod --frozen-lockfile --ignore-scripts

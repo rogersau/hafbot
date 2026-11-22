@@ -4,6 +4,13 @@ import type {
   PublishedWardogsPanel,
 } from "../../runtime/admin-routes/wardogs-community";
 import type { WardogsGoldStatus, WardogsPublicStats } from "../../wardogs/community-data";
+import {
+  GOLD_POST_FORMATS,
+  GOLD_VOICE_FORMAT_LIMIT,
+  formatWardogsGoldChannelName,
+  isGoldVoiceFormat,
+  type GoldPostFormat,
+} from "../../wardogs/gold-status";
 import { DEFAULT_WARDOGS_PANEL_TITLE, WARDOGS_PANEL_INSTRUCTIONS } from "../../wardogs/link-panel";
 import { useAdminApi } from "../hooks/use-admin-api";
 import { useGuildResources } from "../hooks/use-guild-resources";
@@ -27,6 +34,12 @@ const percent = new Intl.NumberFormat("en-US", {
   signDisplay: "exceptZero",
 });
 const roles = ["assault", "medic", "recon", "support", "driver", "pilot"];
+const goldPostLabels: Record<GoldPostFormat, string> = {
+  full: "Price and history",
+  chart: "Price and bar chart",
+  image: "Price and chart image",
+  summary: "Price summary",
+};
 
 interface Props {
   selectedGuildId: string;
@@ -88,6 +101,10 @@ function WardogsCommunitySettings({
     initialData.goldVoiceChannelId ?? "",
   );
   const [goldVoiceChannel, setGoldVoiceChannel] = useState(savedGoldVoiceChannel);
+  const [savedVoiceFormat, setSavedVoiceFormat] = useState(initialData.goldVoiceFormat);
+  const [voiceFormat, setVoiceFormat] = useState(savedVoiceFormat);
+  const [savedPostFormat, setSavedPostFormat] = useState(initialData.goldPostFormat);
+  const [postFormat, setPostFormat] = useState(savedPostFormat);
   const [goldSaved, setGoldSaved] = useState(false);
   const [panel, setPanel] = useState(initialData.panel);
   const [panelDraft, setPanelDraft] = useState(() => panelDraftFor(initialData.panel));
@@ -95,7 +112,12 @@ function WardogsCommunitySettings({
   const goldRequest = useAdminApi();
   const goldSave = useAdminApi();
   const panelPublish = useAdminApi();
-  const goldDirty = goldChannel !== savedGoldChannel || goldVoiceChannel !== savedGoldVoiceChannel;
+  const voiceFormatValid = isGoldVoiceFormat(voiceFormat);
+  const goldDirty =
+    goldChannel !== savedGoldChannel ||
+    goldVoiceChannel !== savedGoldVoiceChannel ||
+    voiceFormat.trim() !== savedVoiceFormat ||
+    postFormat !== savedPostFormat;
   const goldNeedsFeed =
     (goldChannel && goldChannel !== savedGoldChannel) ||
     (goldVoiceChannel && goldVoiceChannel !== savedGoldVoiceChannel);
@@ -186,7 +208,13 @@ function WardogsCommunitySettings({
                 void goldSave.run(
                   () =>
                     createAdminLoaderClient().postJson<
-                      Pick<WardogsCommunityDashboard, "goldChannelId" | "goldVoiceChannelId">
+                      Pick<
+                        WardogsCommunityDashboard,
+                        | "goldChannelId"
+                        | "goldVoiceChannelId"
+                        | "goldVoiceFormat"
+                        | "goldPostFormat"
+                      >
                     >(
                       endpoint,
                       {
@@ -197,14 +225,20 @@ function WardogsCommunitySettings({
                         ...(goldVoiceChannel !== savedGoldVoiceChannel
                           ? { voiceChannelId: goldVoiceChannel || null }
                           : {}),
+                        ...(voiceFormat.trim() !== savedVoiceFormat ? { voiceFormat } : {}),
+                        ...(postFormat !== savedPostFormat ? { postFormat } : {}),
                       },
                       scope,
                     ),
-                  ({ goldChannelId, goldVoiceChannelId }) => {
+                  ({ goldChannelId, goldVoiceChannelId, goldVoiceFormat, goldPostFormat }) => {
                     setSavedGoldChannel(goldChannelId ?? "");
                     setGoldChannel(goldChannelId ?? "");
                     setSavedGoldVoiceChannel(goldVoiceChannelId ?? "");
                     setGoldVoiceChannel(goldVoiceChannelId ?? "");
+                    setSavedVoiceFormat(goldVoiceFormat);
+                    setVoiceFormat(goldVoiceFormat);
+                    setSavedPostFormat(goldPostFormat);
+                    setPostFormat(goldPostFormat);
                     setGoldSaved(true);
                   },
                 );
@@ -236,6 +270,24 @@ function WardogsCommunitySettings({
                       : undefined
                   }
                 />
+              </FormField>
+              <FormField label="Daily post format" htmlFor="wardogs-gold-post-format">
+                <select
+                  id="wardogs-gold-post-format"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={postFormat}
+                  disabled={goldSave.loading}
+                  onChange={(event) => {
+                    setPostFormat(event.target.value as GoldPostFormat);
+                    setGoldSaved(false);
+                  }}
+                >
+                  {GOLD_POST_FORMATS.map((format) => (
+                    <option key={format} value={format}>
+                      {goldPostLabels[format]}
+                    </option>
+                  ))}
+                </select>
               </FormField>
               <FormField
                 label="Gold price voice channel"
@@ -270,10 +322,40 @@ function WardogsCommunitySettings({
                   }
                 />
               </FormField>
+              <FormField
+                label="Voice channel name format"
+                htmlFor="wardogs-gold-voice-format"
+                hint="Use {price} for cash per bar, {change} for the percent change since yesterday, and {date} for the UTC price date."
+              >
+                <Input
+                  id="wardogs-gold-voice-format"
+                  value={voiceFormat}
+                  maxLength={GOLD_VOICE_FORMAT_LIMIT}
+                  required
+                  aria-invalid={!voiceFormatValid}
+                  disabled={goldSave.loading}
+                  onChange={(event) => {
+                    setVoiceFormat(event.target.value);
+                    setGoldSaved(false);
+                  }}
+                />
+              </FormField>
+              {!voiceFormatValid ? (
+                <p className="text-sm text-destructive">
+                  Enter a name using the supported placeholders.
+                </p>
+              ) : gold ? (
+                <p className="break-all text-sm text-muted-foreground">
+                  Preview · {formatWardogsGoldChannelName(gold, voiceFormat)}
+                </p>
+              ) : null}
               <Button
                 type="submit"
                 disabled={
-                  goldSave.loading || !goldDirty || Boolean(goldNeedsFeed && !goldAvailable)
+                  goldSave.loading ||
+                  !goldDirty ||
+                  !voiceFormatValid ||
+                  Boolean(goldNeedsFeed && !goldAvailable)
                 }
               >
                 {goldSave.loading ? "Saving…" : "Save daily updates"}

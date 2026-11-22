@@ -451,6 +451,7 @@ test("container files pin Node, minimize runtime tooling, run non-root, and pres
     "@aws-sdk/client-s3",
     "@azure/identity",
     "@azure/storage-blob",
+    "@resvg/resvg-js",
     "@sentry/node",
     "better-auth",
     "drizzle-orm",

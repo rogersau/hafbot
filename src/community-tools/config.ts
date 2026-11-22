@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GOLD_POST_FORMATS, isGoldVoiceFormat } from "../wardogs/gold-status";
 
 export const snowflake = z.string().regex(/^\d{1,20}$/);
 const ids = z.array(snowflake).max(25).default([]);
@@ -36,12 +37,23 @@ const wardogsLinkPanelSchema = wardogsLinkPanelDraftSchema.extend({
 export type WardogsLinkPanelDraft = z.infer<typeof wardogsLinkPanelDraftSchema>;
 export type WardogsLinkPanel = z.infer<typeof wardogsLinkPanelSchema>;
 
+export const goldVoiceFormatSchema = z
+  .string()
+  .trim()
+  .refine(
+    isGoldVoiceFormat,
+    "Enter a name of up to 100 characters using {price}, {change}, or {date}.",
+  );
+export const goldPostFormatSchema = z.enum(GOLD_POST_FORMATS);
+
 export const automationConfigSchema = z.object({
   enabled: z.boolean().default(false),
   commands: z.array(customReplySchema).max(50).default([]),
   schedules: z.array(recurringMessageSchema).max(10).default([]),
   wardogsGoldChannelId: snowflake.nullable().optional(),
   wardogsGoldVoiceChannelId: snowflake.nullable().optional(),
+  wardogsGoldVoiceFormat: goldVoiceFormatSchema.optional(),
+  wardogsGoldPostFormat: goldPostFormatSchema.optional(),
   wardogsLinkPanel: wardogsLinkPanelSchema.optional(),
 });
 export const moderationRuleSchema = z.object({

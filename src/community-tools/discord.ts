@@ -3,13 +3,16 @@ import { modifyChannel } from "../discord/channels";
 import { fetchDiscordChannel, fetchGuildSummary } from "../discord/guilds";
 import type { DiscordChannelResource } from "../discord/guilds";
 import { applyGuildMemberTimeout, fetchGuildMember } from "../discord/members";
+import type { CreateChannelMessageInput } from "../discord/messages";
 import {
   createChannelMessage,
+  createChannelMessageWithAttachments,
   deleteChannelMessage,
   editChannelMessage,
   listChannelMessages,
 } from "../discord/messages";
 import {
+  DISCORD_PERMISSION_FLAGS,
   getChannelPermissions,
   getMemberBaseGuildPermissions,
   hasPermission,
@@ -67,6 +70,7 @@ export function createCommunityDiscord(
       throw new CommunityToolsError(
         "Choose a private staff channel that denies View Channel to @everyone.",
       );
+    return permissions;
   };
   const manageableVoiceChannel = async (channelId: string) => {
     const [channel, context] = await Promise.all([
@@ -100,7 +104,9 @@ export function createCommunityDiscord(
   return {
     resources,
     member,
-    validateChannel,
+    async validateChannel(channelId, privateOnly) {
+      await validateChannel(channelId, privateOnly);
+    },
     async validateVoiceChannel(channelId) {
       await manageableVoiceChannel(channelId);
     },
@@ -125,20 +131,26 @@ export function createCommunityDiscord(
       );
       return { messageId: message.id, botUserId };
     },
-    async send(channelId, content, roleIds, nonce) {
-      await validateChannel(channelId);
+    async send(channelId, content, roleIds, nonce, attachment) {
+      const permissions = await validateChannel(channelId);
       const roles = Array.from(new Set(roleIds));
       const mentions = roles.map((id) => `<@&${id}>`).join(" ");
-      await createChannelMessage(
-        channelId,
-        {
-          content: `${mentions}${mentions ? "\n" : ""}${content}`.slice(0, 2000),
-          allowed_mentions: { parse: [], roles },
-          nonce,
-          enforce_nonce: true,
-        },
-        token,
-      );
+      const body: CreateChannelMessageInput = {
+        content: `${mentions}${mentions ? "\n" : ""}${content}`.slice(0, 2000),
+        allowed_mentions: { parse: [], roles },
+        nonce,
+        enforce_nonce: true,
+      };
+      if (attachment && hasPermission(permissions, DISCORD_PERMISSION_FLAGS.attachFiles)) {
+        await createChannelMessageWithAttachments(
+          channelId,
+          body,
+          [{ ...attachment, contentType: attachment.data.type }],
+          token,
+        );
+      } else {
+        await createChannelMessage(channelId, body, token);
+      }
     },
     async delete(channelId, messageId) {
       await validateChannel(channelId);

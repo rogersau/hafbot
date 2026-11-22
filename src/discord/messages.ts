@@ -198,16 +198,24 @@ export async function editOriginalInteractionResponse(
 export async function createChannelMessageWithAttachments(
   channelId: string,
   body: CreateChannelMessageInput,
-  files: Array<{ filename: string; contentType: string | null; data: Blob | ArrayBuffer }>,
+  files: Array<{
+    filename: string;
+    description?: string;
+    contentType: string | null;
+    data: Blob | ArrayBuffer;
+  }>,
   botToken: string,
 ): Promise<DiscordMessageResource> {
   const form = new FormData();
   form.set(
     "payload_json",
     JSON.stringify({
-      content: body.content,
-      allowed_mentions: body.allowed_mentions,
-      attachments: files.map((file, index) => ({ id: index, filename: file.filename })),
+      ...body,
+      attachments: files.map((file, index) => ({
+        id: index,
+        filename: file.filename,
+        description: file.description,
+      })),
     }),
   );
   files.forEach((file, index) => {
