@@ -41,6 +41,7 @@ export const automationConfigSchema = z.object({
   commands: z.array(customReplySchema).max(50).default([]),
   schedules: z.array(recurringMessageSchema).max(10).default([]),
   wardogsGoldChannelId: snowflake.nullable().optional(),
+  wardogsGoldVoiceChannelId: snowflake.nullable().optional(),
   wardogsLinkPanel: wardogsLinkPanelSchema.optional(),
 });
 export const moderationRuleSchema = z.object({

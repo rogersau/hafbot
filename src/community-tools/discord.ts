@@ -1,4 +1,5 @@
 import { DISCORD_API, DiscordApiError, discordRequest } from "../discord/client";
+import { modifyChannel } from "../discord/channels";
 import { fetchDiscordChannel, fetchGuildSummary } from "../discord/guilds";
 import type { DiscordChannelResource } from "../discord/guilds";
 import { applyGuildMemberTimeout, fetchGuildMember } from "../discord/members";
@@ -67,6 +68,20 @@ export function createCommunityDiscord(
         "Choose a private staff channel that denies View Channel to @everyone.",
       );
   };
+  const manageableVoiceChannel = async (channelId: string) => {
+    const [channel, context] = await Promise.all([
+      fetchDiscordChannel(channelId, token),
+      resources(),
+    ]);
+    if (channel.guild_id !== guildId || channel.type !== 2)
+      throw new CommunityToolsError("Choose a voice channel in this server.");
+    const permissions = getChannelPermissions(context, channel);
+    if (!hasPermission(permissions, 1n << 10n) || !hasPermission(permissions, 1n << 4n))
+      throw new CommunityToolsError(
+        "HAF Bot needs View Channel and Manage Channels in the selected voice channel.",
+      );
+    return channel;
+  };
   async function mutate(method: "DELETE" | "PUT", path: string, reason: string, body?: unknown) {
     try {
       const response = await discordRequest(DISCORD_API + path, method, token, {
@@ -86,6 +101,13 @@ export function createCommunityDiscord(
     resources,
     member,
     validateChannel,
+    async validateVoiceChannel(channelId) {
+      await manageableVoiceChannel(channelId);
+    },
+    async renameVoiceChannel(channelId, name) {
+      const channel = await manageableVoiceChannel(channelId);
+      if (channel.name !== name) await modifyChannel(channelId, { name }, token);
+    },
     async publishPanel({ channelId, previous, body, nonce }) {
       await validateChannel(channelId);
       if (previous?.channelId === channelId && previous.botUserId === botUserId) {

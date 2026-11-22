@@ -65,6 +65,55 @@ test("staff purge and bot delivery respect a thread parent's channel overwrites"
   await discord.validateChannel("201");
 });
 
+test("voice price renames require a manageable Guild voice channel and skip an unchanged name", async (t) => {
+  let guild = "100";
+  let type = 2;
+  let deny = "0";
+  let name = "Gold price";
+  const writes: unknown[] = [];
+  t.mock.method(globalThis, "fetch", async (input: string, init?: RequestInit) => {
+    const path = new URL(input).pathname.replace("/api/v10", "");
+    switch (path) {
+      case "/channels/200":
+        if (init?.method === "PATCH") {
+          const body = JSON.parse(String(init.body));
+          writes.push(body);
+          name = body.name;
+        }
+        return Response.json({
+          id: "200",
+          guild_id: guild,
+          type,
+          name,
+          permission_overwrites: [{ id: "100", type: 0, allow: "0", deny }],
+        });
+      case "/guilds/100/channels":
+        return Response.json([]);
+      case "/guilds/100/roles":
+        return Response.json([{ id: "100", position: 0, permissions: "1040" }]);
+      case "/guilds/100/members/102":
+        return Response.json({ roles: [] });
+      case "/guilds/100":
+        return Response.json({ id: "100", owner_id: "999" });
+      default:
+        throw new Error(`Unexpected Discord request: ${path}`);
+    }
+  });
+  const discord = createCommunityDiscord("100", "test-token", "102");
+  await discord.validateVoiceChannel("200");
+  await discord.renameVoiceChannel("200", "Gold: 651,250 cash");
+  await discord.renameVoiceChannel("200", "Gold: 651,250 cash");
+  deny = "16";
+  await assert.rejects(() => discord.renameVoiceChannel("200", "Gold: 1 cash"), /Manage Channels/);
+  deny = "0";
+  type = 0;
+  await assert.rejects(() => discord.validateVoiceChannel("200"), /voice channel/);
+  type = 2;
+  guild = "101";
+  await assert.rejects(() => discord.validateVoiceChannel("200"), /this server/);
+  assert.deepEqual(writes, [{ name: "Gold: 651,250 cash" }]);
+});
+
 test("custom replies match normalized messages and config prevents duplicate command identities", () => {
   assert.equal(matchesReply(" ！ＣＯＮＮＥＣＴ ", "!connect", "exact"), true);
   assert.equal(matchesReply("!connect now", "!connect", "prefix"), true);

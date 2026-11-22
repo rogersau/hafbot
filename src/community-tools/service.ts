@@ -5,7 +5,7 @@ import type { DiscordInteraction } from "../runtime/app-types";
 import { isRecord } from "../unknown-parse";
 import { ContentFeedReader, contentFeedUrl } from "./feeds";
 import { GOLD_DAY_MS, type WardogsCommunityData } from "../wardogs/community-data";
-import { formatWardogsGoldStatus } from "../wardogs/gold-status";
+import { formatWardogsGoldChannelName, formatWardogsGoldStatus } from "../wardogs/gold-status";
 import { buildWardogsLinkPanel } from "../wardogs/link-panel";
 import type { CreateChannelMessageInput } from "../discord/messages";
 import {
@@ -24,6 +24,7 @@ import {
 } from "./config";
 import {
   WARDOGS_GOLD_DELIVERY_PREFIX,
+  WARDOGS_GOLD_VOICE_DELIVERY_PREFIX,
   type CommunityToolsStore,
   type CommunityDelivery,
 } from "./store";
@@ -39,6 +40,8 @@ export interface CommunityDiscord {
   delete(channelId: string, messageId: string): Promise<void>;
   timeout(userId: string, untilMs: number): Promise<void>;
   validateChannel(channelId: string, privateOnly?: boolean): Promise<void>;
+  validateVoiceChannel(channelId: string): Promise<void>;
+  renameVoiceChannel(channelId: string, name: string): Promise<void>;
   publishPanel?(input: {
     channelId: string;
     previous?: Pick<WardogsLinkPanel, "channelId" | "messageId" | "botUserId">;
@@ -98,12 +101,14 @@ export class CommunityToolsService {
     if ("commands" in config) {
       const saved = (await this.read(guildId, "automation")).config as AutomationConfig;
       config.wardogsLinkPanel = saved.wardogsLinkPanel;
+      config.wardogsGoldVoiceChannelId = saved.wardogsGoldVoiceChannelId;
       if (config.wardogsGoldChannelId === undefined) {
         config.wardogsGoldChannelId = saved.wardogsGoldChannelId;
       } else if (
         config.wardogsGoldChannelId &&
         config.wardogsGoldChannelId !== saved.wardogsGoldChannelId
       ) {
+        this.requireWardogsGoldFeed();
         await this.validateWardogsGoldChannel(discord, config.wardogsGoldChannelId);
       }
       for (const command of config.commands) {
@@ -146,6 +151,7 @@ export class CommunityToolsService {
     const settings = config as AutomationConfig;
     return {
       goldChannelId: settings.wardogsGoldChannelId ?? null,
+      goldVoiceChannelId: settings.wardogsGoldVoiceChannelId ?? null,
       panel: settings.wardogsLinkPanel ?? null,
     };
   }
@@ -193,43 +199,59 @@ export class CommunityToolsService {
   async configureWardogsGold(
     guildId: string,
     requestedChannel: string | null | undefined,
+    requestedVoiceChannel?: string | null,
   ): Promise<string> {
     const snapshot = await this.read(guildId, "automation");
     const config = snapshot.config as AutomationConfig;
     const channelId = config.wardogsGoldChannelId ?? null;
-    if (requestedChannel === undefined) {
+    if (requestedChannel === undefined && requestedVoiceChannel === undefined) {
       return channelId
         ? `Daily WARDOGS gold updates are configured for <#${channelId}>.`
         : "Daily WARDOGS gold updates are off. Choose a channel with /wardogs gold-daily.";
     }
-    if (requestedChannel !== null)
-      await this.validateWardogsGoldChannel(
-        await this.options.discordForGuild(guildId),
-        requestedChannel,
-      );
-    if (channelId !== requestedChannel) {
+    const voiceChannelId = config.wardogsGoldVoiceChannelId ?? null;
+    const nextChannel = requestedChannel === undefined ? channelId : requestedChannel;
+    const nextVoiceChannel =
+      requestedVoiceChannel === undefined ? voiceChannelId : requestedVoiceChannel;
+    const validateText =
+      nextChannel && (requestedVoiceChannel === undefined || nextChannel !== channelId);
+    const validateVoice = nextVoiceChannel && nextVoiceChannel !== voiceChannelId;
+    if (validateText || validateVoice) {
+      this.requireWardogsGoldFeed();
+      const discord = await this.options.discordForGuild(guildId);
+      if (validateText) await this.validateWardogsGoldChannel(discord, nextChannel);
+      if (validateVoice) await discord.validateVoiceChannel(nextVoiceChannel);
+    }
+    if (channelId !== nextChannel || voiceChannelId !== nextVoiceChannel) {
       await this.store.save(
         guildId,
         "automation",
-        { ...config, wardogsGoldChannelId: requestedChannel },
+        {
+          ...config,
+          wardogsGoldChannelId: nextChannel,
+          wardogsGoldVoiceChannelId: nextVoiceChannel,
+        },
         snapshot.revision,
       );
     }
-    return requestedChannel === null
+    return nextChannel === null
       ? "Daily WARDOGS gold updates are off."
-      : `Daily WARDOGS gold updates are on for <#${requestedChannel}>. Hafbot posts once per UTC day when that day's price is available.`;
+      : `Daily WARDOGS gold updates are on for <#${nextChannel}>. Hafbot posts once per UTC day when that day's price is available.`;
   }
 
-  private async validateWardogsGoldChannel(
-    discord: CommunityDiscord,
-    channelId: string,
-  ): Promise<void> {
+  private requireWardogsGoldFeed(): void {
     if (!this.options.wardogsGold?.goldAvailable) {
       throw new CommunityToolsError(
         "The bot operator needs to configure the WARDOGS gold price feed.",
         503,
       );
     }
+  }
+
+  private async validateWardogsGoldChannel(
+    discord: CommunityDiscord,
+    channelId: string,
+  ): Promise<void> {
     if (!snowflake.safeParse(channelId).success) {
       throw new CommunityToolsError("Choose a text channel in this server.");
     }
@@ -466,15 +488,16 @@ export class CommunityToolsService {
     });
     if (status?.latest.ts !== day || this.now() >= day + GOLD_DAY_MS) return;
     const content = formatWardogsGoldStatus(status);
-    for (const { guildId, channelId, revision } of candidates) {
+    const voiceName = formatWardogsGoldChannelName(status.latest.price);
+    for (const { id, kind, guildId, channelId, revision } of candidates) {
       signal?.throwIfAborted();
       await this.store.enqueue({
-        id: `${WARDOGS_GOLD_DELIVERY_PREFIX}${guildId}:${day}`,
+        id,
         guildId,
         feature: "automation",
-        itemId: "wardogs-gold",
+        itemId: kind === "voice" ? "wardogs-gold-voice" : "wardogs-gold",
         channelId,
-        content,
+        content: kind === "voice" ? voiceName : content,
         roleIds: [],
         createdAtMs: now,
         configRevision: revision,
@@ -491,7 +514,8 @@ export class CommunityToolsService {
       return;
     }
     const { config, revision } = await this.read(delivery.guildId, delivery.feature);
-    const gold = delivery.id.startsWith(WARDOGS_GOLD_DELIVERY_PREFIX);
+    const goldVoice = delivery.id.startsWith(WARDOGS_GOLD_VOICE_DELIVERY_PREFIX);
+    const gold = goldVoice || delivery.id.startsWith(WARDOGS_GOLD_DELIVERY_PREFIX);
     const current:
       | { enabled?: boolean; channelId?: string | null; notifyRoleIds: string[] }
       | null
@@ -499,9 +523,15 @@ export class CommunityToolsService {
       ? {
           enabled:
             this.options.wardogsGold?.goldAvailable &&
-            delivery.id ===
-              `${WARDOGS_GOLD_DELIVERY_PREFIX}${delivery.guildId}:${Math.floor(this.now() / GOLD_DAY_MS) * GOLD_DAY_MS}`,
-          channelId: "schedules" in config ? config.wardogsGoldChannelId : null,
+            Math.floor(delivery.createdAtMs / GOLD_DAY_MS) ===
+              Math.floor(this.now() / GOLD_DAY_MS) &&
+            (!goldVoice || revision === delivery.configRevision),
+          channelId:
+            "schedules" in config
+              ? goldVoice
+                ? config.wardogsGoldVoiceChannelId
+                : config.wardogsGoldChannelId
+              : null,
           notifyRoleIds: [],
         }
       : "schedules" in config
@@ -530,12 +560,14 @@ export class CommunityToolsService {
         );
         return;
       }
-      await discord.send(
-        delivery.channelId,
-        delivery.content,
-        delivery.roleIds.filter((id) => current.notifyRoleIds.includes(id)),
-        deriveGatewayOperationNonce(delivery.id, "community:delivery"),
-      );
+      if (goldVoice) await discord.renameVoiceChannel(delivery.channelId, delivery.content);
+      else
+        await discord.send(
+          delivery.channelId,
+          delivery.content,
+          delivery.roleIds.filter((id) => current.notifyRoleIds.includes(id)),
+          deriveGatewayOperationNonce(delivery.id, "community:delivery"),
+        );
       await this.store.finishDelivery(delivery.id, delivery.token, "delivered");
     } catch {
       signal?.throwIfAborted();
@@ -543,7 +575,9 @@ export class CommunityToolsService {
         delivery.id,
         delivery.token,
         "pending",
-        "Discord could not accept the message. Check channel permissions.",
+        goldVoice
+          ? "Discord could not rename the voice channel. Check channel permissions."
+          : "Discord could not accept the message. Check channel permissions.",
       );
     }
   }

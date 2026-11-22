@@ -1,6 +1,18 @@
 {
   "releases": [
     {
+      "version": "2026.11.22",
+      "date": "2026-11-22",
+      "title": "WARDOGS gold price voice channels",
+      "summary": "Display the current WARDOGS Gold Exchange rate in a Discord voice channel name.",
+      "changes": [
+        {
+          "type": "new",
+          "text": "Under Integrations → WARDOGS community → Daily gold updates, select or create a voice channel. HAF Bot updates the name when the new UTC day's gold price is available."
+        }
+      ]
+    },
+    {
       "version": "2026.11.21",
       "date": "2026-11-21",
       "title": "WARDOGS player stats and daily gold updates",

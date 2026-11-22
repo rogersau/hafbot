@@ -9,6 +9,10 @@ const percent = new Intl.NumberFormat("en-US", {
 });
 const chartLevels = "▁▂▃▄▅▆▇█";
 
+export function formatWardogsGoldChannelName(price: number): string {
+  return `Gold: ${number.format(price)} cash`;
+}
+
 export function formatWardogsGoldStatus({ latest, history }: WardogsGoldStatus): string {
   const previous = history.find((point) => point.ts === latest.ts - GOLD_DAY_MS);
   const lines = [

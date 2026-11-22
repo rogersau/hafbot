@@ -80,8 +80,10 @@ Members can use their verified Steam links or search by SteamID64. An operator-c
 feed shows the latest game-wide cash price per gold bar and recent daily history.
 
 In the dashboard, open **Integrations → WARDOGS community**. Use **Daily gold updates** to pick or
-create a channel and save. Clear the channel to turn posts off. **Gold Exchange** shows the latest
-rate and up to seven UTC days of history, and **Player stats** looks up public snapshots by SteamID64.
+create a text channel for daily posts or a voice channel that shows the current price in its name.
+HAF needs **View Channel** and **Manage Channels** for the voice channel. **Gold Exchange** shows
+the latest rate and up to seven UTC days of history, and **Player stats** looks up public snapshots
+by SteamID64.
 
 With Steam Player Link enabled, choose or create a Discord channel under **WARDOGS link panel** and
 publish the preview. Members use **Link Steam**, then close WARDOGS and select **Sync WARDOGS stats**.

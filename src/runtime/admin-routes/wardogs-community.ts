@@ -21,6 +21,7 @@ export interface WardogsCommunityDashboard {
   goldAvailable: boolean;
   gold: WardogsGoldStatus | null;
   goldChannelId: string | null;
+  goldVoiceChannelId: string | null;
   panel: PublishedWardogsPanel | null;
 }
 
@@ -67,6 +68,7 @@ export function createWardogsCommunityAdminRoutes(
           goldAvailable: runtime?.data.goldAvailable ?? false,
           gold,
           goldChannelId: settings.goldChannelId,
+          goldVoiceChannelId: settings.goldVoiceChannelId,
           panel: settings.panel ? publicPanel(settings.panel) : null,
         } satisfies WardogsCommunityDashboard);
       },
@@ -77,7 +79,17 @@ export function createWardogsCommunityAdminRoutes(
       access: bodyGuildScopedAccess("write"),
       maxBodyBytes: 4096,
       body: z.discriminatedUnion("action", [
-        scope.extend({ action: z.literal("gold"), channelId: snowflake.nullable() }).strict(),
+        scope
+          .extend({
+            action: z.literal("gold"),
+            channelId: snowflake.nullable().optional(),
+            voiceChannelId: snowflake.nullable().optional(),
+          })
+          .strict()
+          .refine(
+            ({ channelId, voiceChannelId }) =>
+              channelId !== undefined || voiceChannelId !== undefined,
+          ),
         scope
           .extend(wardogsLinkPanelDraftSchema.shape)
           .extend({ action: z.literal("publish-panel") })
@@ -91,9 +103,15 @@ export function createWardogsCommunityAdminRoutes(
           );
         try {
           if (body.action === "gold") {
-            await communityTools.configureWardogsGold(body.guildId, body.channelId);
-            const { goldChannelId } = await communityTools.readWardogsSettings(body.guildId);
-            return Response.json({ goldChannelId });
+            await communityTools.configureWardogsGold(
+              body.guildId,
+              body.channelId,
+              body.voiceChannelId,
+            );
+            const { goldChannelId, goldVoiceChannelId } = await communityTools.readWardogsSettings(
+              body.guildId,
+            );
+            return Response.json({ goldChannelId, goldVoiceChannelId });
           }
           if (!(await steamLinkReady(body.guildId))) {
             return Response.json(
@@ -112,7 +130,12 @@ export function createWardogsCommunityAdminRoutes(
             return Response.json({ error: error.message }, { status: error.status });
           if (error instanceof DiscordApiError && [403, 404].includes(error.status)) {
             return Response.json(
-              { error: "HAF Bot needs access to view and post in the selected channel." },
+              {
+                error:
+                  body.action === "gold" && body.voiceChannelId
+                    ? "Check that HAF Bot can access the selected Discord channels."
+                    : "HAF Bot needs access to view and post in the selected channel.",
+              },
               { status: 409 },
             );
           }
