@@ -39,6 +39,7 @@ jobs:
       - run: pnpm lint && pnpm format:check
       - run: pnpm build && pnpm typecheck && pnpm typecheck:shared
       - run: bash scripts/check-model.sh OfferingPublication PublicationCapacity
+      - run: bash scripts/check-model.sh MentionBurstWindow FreshWindowCounts
       - run: pnpm test:prebuilt
       - run: node --test test/release-version.test.mjs
       - run: pnpm docs:build
