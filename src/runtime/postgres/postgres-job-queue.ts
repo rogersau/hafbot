@@ -62,7 +62,6 @@ export interface PostgresJobMetadata {
   createdAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
-  /** Last retry or terminal reason; completion and operator retry clear it. */
   reasonCode: string | null;
 }
 
@@ -106,6 +105,12 @@ const DEFAULT_MAX_ATTEMPTS = 4;
 const DEFAULT_LEASE_MS = 30_000;
 const MAX_BATCH_SIZE = 100;
 const MAX_LEASE_MS = 15 * 60_000;
+
+const SETTLEMENT_STATE = {
+  complete: "completed",
+  terminal: "terminal",
+  retry: "queued",
+} satisfies Record<QueueDeliveryOutcome["status"], Exclude<PostgresJobState, "running">>;
 
 export function createPostgresJobQueue(
   database: PostgresDatabaseCapability,
@@ -232,44 +237,38 @@ export function createPostgresJobQueue(
     async settle(job, outcome, now = new Date()) {
       assertIdentifier(job.id, "jobId");
       assertIdentifier(job.leaseToken, "leaseToken");
-      if (outcome.status === "complete") {
-        return updateFinishedState(database, job, "completed", null, now);
+      const reasonCode =
+        outcome.status === "complete" ? null : normalizeReasonCode(outcome.reasonCode);
+      let retryAt: Date | null = null;
+      if (outcome.status === "retry") {
+        const delayMs =
+          outcome.delaySeconds === undefined
+            ? exponentialBackoffMs(await readAttempts(database, job), random)
+            : Math.min(86_400_000, Math.max(0, Math.floor(outcome.delaySeconds * 1_000)));
+        retryAt = new Date(now.getTime() + delayMs);
       }
-      if (outcome.status === "terminal") {
-        return updateFinishedState(
-          database,
-          job,
-          "terminal",
-          normalizeReasonCode(outcome.reasonCode),
-          now,
-        );
-      }
-
-      const reasonCode = normalizeReasonCode(outcome.reasonCode);
-      const delayMs =
-        outcome.delaySeconds === undefined
-          ? exponentialBackoffMs(await readAttempts(database, job), random)
-          : Math.min(86_400_000, Math.max(0, Math.floor(outcome.delaySeconds * 1_000)));
-      const availableAt = new Date(now.getTime() + delayMs);
       const rows = await database.query<{ state: PostgresJobState }>(
         `UPDATE jobs
-            SET state = CASE WHEN attempts >= max_attempts THEN 'terminal' ELSE 'queued' END,
+            SET state = CASE
+                  WHEN $1 = 'queued' AND attempts >= max_attempts THEN 'terminal'
+                  ELSE $1
+                END,
                 available_at = CASE
-                  WHEN attempts >= max_attempts THEN available_at
-                  ELSE $1::timestamptz
+                  WHEN $1 = 'queued' AND attempts < max_attempts THEN $2::timestamptz
+                  ELSE available_at
                 END,
                 lease_owner = NULL,
                 lease_token = NULL,
                 lease_expires_at = NULL,
                 completed_at = CASE
-                  WHEN attempts >= max_attempts THEN $2::timestamptz
-                  ELSE NULL
+                  WHEN $1 = 'queued' AND attempts < max_attempts THEN NULL
+                  ELSE $3::timestamptz
                 END,
-                reason_code = $3,
-                updated_at = $2
-          WHERE id = $4 AND state = 'running' AND lease_token = $5
+                reason_code = $4,
+                updated_at = $3
+          WHERE id = $5 AND state = 'running' AND lease_token = $6
           RETURNING state`,
-        [availableAt, now, reasonCode, job.id, job.leaseToken],
+        [SETTLEMENT_STATE[outcome.status], retryAt, now, reasonCode, job.id, job.leaseToken],
       );
       return rows[0]?.state ?? null;
     },
@@ -409,24 +408,6 @@ async function readAttempts(
     [job.id, job.leaseToken],
   );
   return rows[0]?.attempts ?? 1;
-}
-
-async function updateFinishedState(
-  database: PostgresDatabaseCapability,
-  job: Pick<ClaimedPostgresJob, "id" | "leaseToken">,
-  state: "completed" | "terminal",
-  reasonCode: string | null,
-  now: Date,
-): Promise<PostgresJobState | null> {
-  const rows = await database.query<{ state: PostgresJobState }>(
-    `UPDATE jobs
-        SET state = $1, lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL,
-            completed_at = $2, reason_code = $3, updated_at = $2
-      WHERE id = $4 AND state = 'running' AND lease_token = $5
-      RETURNING state`,
-    [state, now, reasonCode, job.id, job.leaseToken],
-  );
-  return rows[0]?.state ?? null;
 }
 
 function serializePayload(value: unknown): string {

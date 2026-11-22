@@ -55,7 +55,10 @@ test(
             recordContext(context, attemptsByJob, maxAttemptsByJob);
             return { status: "complete" };
           },
-          "billing-sync": async (_payload, context) => {
+          "billing-sync": async (payload, context) => {
+            assert.deepEqual(payload, { kind: "retry" });
+            assert.equal(context.queueName, "billing-sync");
+            assert.equal(context.signal.aborted, false);
             recordContext(context, attemptsByJob, maxAttemptsByJob);
             return {
               status: "retry",
@@ -376,7 +379,6 @@ function recordContext(
   maxAttemptsByJob: Map<string, number>,
 ): void {
   attemptsByJob.set(context.jobId, [...(attemptsByJob.get(context.jobId) ?? []), context.attempts]);
-  // Record the native attempt limit from the job row rather than a copied consumer limit.
   maxAttemptsByJob.set(context.jobId, context.maxAttempts);
 }
 
