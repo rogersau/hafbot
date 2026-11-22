@@ -36,14 +36,17 @@ function createAdminRoutes(options: TestAdminRouteOptions) {
 }
 
 test("worker redirects unauthenticated nested dashboard routes to Discord login", async () => {
-  const response = await worker.fetch(
-    new Request("https://worker.example/admin/guild-1/tickets"),
-    createEnv(),
-    {} as ExecutionContext,
-  );
+  for (const section of ["tickets", "wardogs-community"]) {
+    const path = `/admin/guild-1/${section}`;
+    const response = await worker.fetch(
+      new Request(`https://worker.example${path}`),
+      createEnv(),
+      {} as ExecutionContext,
+    );
 
-  assert.equal(response.status, 302);
-  assert.equal(response.headers.get("location"), "/admin/login?next=%2Fadmin%2Fguild-1%2Ftickets");
+    assert.equal(response.status, 302, path);
+    assert.equal(response.headers.get("location"), `/admin/login?next=${encodeURIComponent(path)}`);
+  }
 });
 
 test("worker redirects the unauthenticated admin home route to Discord login", async () => {
