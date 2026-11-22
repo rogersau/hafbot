@@ -7,6 +7,8 @@ import type {
 
 export type { CommerceOfferingLifecycle } from "./types";
 
+export const MAX_GUILD_PUBLISHED_SUBSCRIPTIONS = 5;
+
 export type CommerceOfferingRetirementStatus =
   | "requested"
   | "stopping_sales"
@@ -42,8 +44,7 @@ export interface CommerceOfferingStore {
     guildId: string,
     offeringId: string,
   ): Promise<CommerceOfferingPublishContext>;
-  /** Published subscriptions retain their publication slot while a role repair is pending. */
-  countPublishedSubscriptions(guildId: string): Promise<number>;
+  publishOffering(offeringId: string, guildId: string, nowMs: number): Promise<CommerceOffering>;
   hasPublishedRoleMapping(
     guildId: string,
     discordRoleId: string,
@@ -283,26 +284,7 @@ export class CommerceOfferingService {
     if (!(context.roleManageable && offering.roleManageable)) {
       throw new Error("commerce_offering_role_unmanageable");
     }
-    if (
-      await this.store.hasPublishedRoleMapping(
-        offering.guildId,
-        offering.discordRoleId,
-        offering.id,
-      )
-    ) {
-      throw new Error("commerce_offering_role_already_published");
-    }
-    if ((await this.store.countPublishedSubscriptions(offering.guildId)) >= 5) {
-      throw new Error("commerce_offering_subscription_limit");
-    }
-    const now = this.now();
-    const next: CommerceOffering = {
-      ...offering,
-      state: "published",
-      publishedAtMs: offering.publishedAtMs ?? now,
-      updatedAtMs: now,
-    };
-    await this.store.createOffering(next);
+    const next = await this.store.publishOffering(offering.id, offering.guildId, this.now());
     await this.onOfferingChanged?.(offering.guildId);
     return next;
   }

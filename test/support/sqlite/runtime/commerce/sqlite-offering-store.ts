@@ -1,9 +1,10 @@
-import type {
-  CommerceOfferingStore,
-  CommerceOfferingDashboard,
-  CommerceOfferingPublishContext,
-  CommerceOfferingRetirementProgress,
-  CommerceOfferingRetirementStatus,
+import {
+  MAX_GUILD_PUBLISHED_SUBSCRIPTIONS,
+  type CommerceOfferingStore,
+  type CommerceOfferingDashboard,
+  type CommerceOfferingPublishContext,
+  type CommerceOfferingRetirementProgress,
+  type CommerceOfferingRetirementStatus,
 } from "../../../../../src/commerce/offering-service";
 import type {
   CommerceOffering,
@@ -13,7 +14,6 @@ import type {
 
 type Row = Record<string, unknown>;
 
-/** D1 implementation for seller offering configuration and dashboard reads. */
 export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
   constructor(
     private readonly database: D1Database,
@@ -176,17 +176,37 @@ export class SqliteCommerceOfferingStore implements CommerceOfferingStore {
     };
   }
 
-  async countPublishedSubscriptions(guildId: string): Promise<number> {
+  async publishOffering(
+    offeringId: string,
+    guildId: string,
+    nowMs: number,
+  ): Promise<CommerceOffering> {
+    const offering = await this.readOffering(offeringId);
+    if (
+      offering?.guildId !== guildId ||
+      (offering.state !== "draft" && offering.state !== "unpublished")
+    ) {
+      throw new Error("commerce_offering_publish_invalid_state");
+    }
+    if (!offering.roleManageable) throw new Error("commerce_offering_role_unmanageable");
+    if (await this.hasPublishedRoleMapping(guildId, offering.discordRoleId, offeringId)) {
+      throw new Error("commerce_offering_role_already_published");
+    }
     const row = await this.database
       .prepare(
-        `SELECT COUNT(*) AS count FROM commerce_offerings o
-         WHERE o.guild_id = ? AND o.purchase_type = 'subscription'
-           AND (o.state = 'published'
-             OR (o.state = 'repair_required' AND o.repair_previous_state = 'published'))`,
+        `UPDATE commerce_offerings
+         SET state = 'published', published_at_ms = COALESCE(published_at_ms, ?1), updated_at_ms = ?1
+         WHERE id = ?2 AND guild_id = ?3 AND state IN ('draft', 'unpublished')
+           AND (SELECT COUNT(*) FROM commerce_offerings
+                WHERE guild_id = ?3 AND purchase_type = 'subscription'
+                  AND (state = 'published'
+                    OR (state = 'repair_required' AND repair_previous_state = 'published'))) < ?4
+         RETURNING *`,
       )
-      .bind(guildId)
-      .first<{ count: number }>();
-    return Number(row?.count ?? 0);
+      .bind(nowMs, offeringId, guildId, MAX_GUILD_PUBLISHED_SUBSCRIPTIONS)
+      .first<Row>();
+    if (!row) throw new Error("commerce_offering_subscription_limit");
+    return offeringFromRow(row);
   }
 
   async hasPublishedRoleMapping(

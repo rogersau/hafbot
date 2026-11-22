@@ -1,11 +1,12 @@
-import type { PostgresDatabaseCapability } from "./postgres-capability";
+import type { PostgresDatabaseCapability, PostgresExecutor } from "./postgres-capability";
 import { executePostgresCommands } from "./postgres-statements";
-import type {
-  CommerceOfferingStore,
-  CommerceOfferingDashboard,
-  CommerceOfferingPublishContext,
-  CommerceOfferingRetirementProgress,
-  CommerceOfferingRetirementStatus,
+import {
+  MAX_GUILD_PUBLISHED_SUBSCRIPTIONS,
+  type CommerceOfferingStore,
+  type CommerceOfferingDashboard,
+  type CommerceOfferingPublishContext,
+  type CommerceOfferingRetirementProgress,
+  type CommerceOfferingRetirementStatus,
 } from "../../commerce/offering-service";
 import type {
   CommerceOffering,
@@ -15,7 +16,9 @@ import type {
 
 type Row = Record<string, unknown>;
 
-/** D1 implementation for seller offering configuration and dashboard reads. */
+const OCCUPIES_PUBLICATION_SLOT =
+  "(state = 'published' OR (state = 'repair_required' AND repair_previous_state = 'published'))";
+
 export class PostgresCommerceOfferingStore implements CommerceOfferingStore {
   constructor(
     private readonly database: PostgresDatabaseCapability,
@@ -169,17 +172,45 @@ export class PostgresCommerceOfferingStore implements CommerceOfferingStore {
     };
   }
 
-  async countPublishedSubscriptions(guildId: string): Promise<number> {
-    const row = await this.database
-      .query<{ count: number }>(
-        `SELECT COUNT(*) AS count FROM commerce_offerings o
-         WHERE o.guild_id = $1 AND o.purchase_type = 'subscription'
-           AND (o.state = 'published'
-             OR (o.state = 'repair_required' AND o.repair_previous_state = 'published'))`,
+  async publishOffering(
+    offeringId: string,
+    guildId: string,
+    nowMs: number,
+  ): Promise<CommerceOffering> {
+    return this.database.transaction(async (transaction) => {
+      await transaction.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+        `commerce-offering-publication:${guildId}`,
+      ]);
+      const [row] = await transaction.query<Row>(
+        "SELECT * FROM commerce_offerings WHERE id = $1 AND guild_id = $2 FOR UPDATE",
+        [offeringId, guildId],
+      );
+      if (!row || (row.state !== "draft" && row.state !== "unpublished")) {
+        throw new Error("commerce_offering_publish_invalid_state");
+      }
+      const offering = offeringFromRow(row);
+      if (!offering.roleManageable) throw new Error("commerce_offering_role_unmanageable");
+      if (await hasPublishedRoleMapping(transaction, guildId, offering.discordRoleId, offeringId)) {
+        throw new Error("commerce_offering_role_already_published");
+      }
+      const [capacity] = await transaction.query<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM commerce_offerings
+         WHERE guild_id = $1 AND purchase_type = 'subscription' AND ${OCCUPIES_PUBLICATION_SLOT}`,
         [guildId],
-      )
-      .then((rows) => rows[0] ?? null);
-    return Number(row?.count ?? 0);
+      );
+      if (!capacity || Number(capacity.count) >= MAX_GUILD_PUBLISHED_SUBSCRIPTIONS) {
+        throw new Error("commerce_offering_subscription_limit");
+      }
+      const [published] = await transaction.query<Row>(
+        `UPDATE commerce_offerings
+         SET state = 'published', published_at_ms = COALESCE(published_at_ms, $2), updated_at_ms = $2
+         WHERE id = $1
+         RETURNING *`,
+        [offeringId, nowMs],
+      );
+      if (!published) throw new Error("commerce_offering_publish_invalid_state");
+      return offeringFromRow(published);
+    });
   }
 
   async hasPublishedRoleMapping(
@@ -187,19 +218,7 @@ export class PostgresCommerceOfferingStore implements CommerceOfferingStore {
     discordRoleId: string,
     excludingOfferingId: string,
   ): Promise<boolean> {
-    const row = await this.database
-      .query<{ found: number }>(
-        `SELECT 1 AS found FROM commerce_offerings o
-         WHERE o.guild_id = $1 AND o.discord_role_id = $2 AND o.id <> $3
-           AND (
-             o.state = 'published'
-             OR (o.state = 'repair_required' AND o.repair_previous_state = 'published')
-           )
-         LIMIT 1`,
-        [guildId, discordRoleId, excludingOfferingId],
-      )
-      .then((rows) => rows[0] ?? null);
-    return Boolean(row?.found);
+    return hasPublishedRoleMapping(this.database, guildId, discordRoleId, excludingOfferingId);
   }
 
   async beginRoleReplacement(input: {
@@ -496,6 +515,22 @@ export class PostgresCommerceOfferingStore implements CommerceOfferingStore {
       estimatedProceedsAreNonAuthoritative: true,
     };
   }
+}
+
+async function hasPublishedRoleMapping(
+  database: PostgresExecutor,
+  guildId: string,
+  discordRoleId: string,
+  excludingOfferingId: string,
+): Promise<boolean> {
+  const [row] = await database.query(
+    `SELECT 1 FROM commerce_offerings
+     WHERE guild_id = $1 AND discord_role_id = $2 AND id <> $3
+       AND ${OCCUPIES_PUBLICATION_SLOT}
+     LIMIT 1`,
+    [guildId, discordRoleId, excludingOfferingId],
+  );
+  return Boolean(row);
 }
 
 function offeringFromRow(row: Row): CommerceOffering {
