@@ -27,6 +27,26 @@ export function createPostgresMentionProtectionStore(
 ): MentionProtectionStore {
   const db = database.drizzle;
 
+  function withBurstWindow<T>(
+    { guildId, userId }: { guildId: string; userId?: string },
+    operation: (transaction: MentionProtectionTransaction) => Promise<T>,
+  ): Promise<T> {
+    return db.transaction(async (transaction) => {
+      const key = `mention-protection-config:${guildId}`;
+      await transaction.execute(
+        userId === undefined
+          ? sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, ${CONFIG_LOCK_NAMESPACE}))`
+          : sql`SELECT pg_advisory_xact_lock_shared(hashtextextended(${key}, ${CONFIG_LOCK_NAMESPACE}))`,
+      );
+      if (userId !== undefined) {
+        await transaction.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`mention-protection-burst:${guildId}:${userId}`}, ${BURST_LOCK_NAMESPACE}))`,
+        );
+      }
+      return operation(transaction);
+    });
+  }
+
   const store: MentionProtectionStore = {
     async readConfig(guildId) {
       const row = await db
@@ -40,8 +60,7 @@ export function createPostgresMentionProtectionStore(
 
     async upsertConfig(config) {
       const values = configToRow(config);
-      await db.transaction(async (transaction) => {
-        await lockConfig(transaction, config.guildId);
+      await withBurstWindow({ guildId: config.guildId }, async (transaction) => {
         const row = await transaction
           .select()
           .from(mentionProtectionConfigs)
@@ -83,8 +102,7 @@ export function createPostgresMentionProtectionStore(
     },
 
     async deleteConfig(guildId) {
-      await db.transaction(async (transaction) => {
-        await lockConfig(transaction, guildId);
+      await withBurstWindow({ guildId }, async (transaction) => {
         await transaction
           .delete(mentionProtectionConfigs)
           .where(eq(mentionProtectionConfigs.guildId, guildId))
@@ -94,19 +112,12 @@ export function createPostgresMentionProtectionStore(
     },
 
     async clearBurstWindow(guildId) {
-      await db.transaction(async (transaction) => {
-        await lockConfig(transaction, guildId);
-        await clearBurstWindow(transaction, guildId);
-      });
+      await withBurstWindow({ guildId }, (transaction) => clearBurstWindow(transaction, guildId));
     },
 
     async recordBurstMessage(input) {
       const cutoff = input.messageTimestampMs - input.windowMs;
-      return db.transaction(async (transaction) => {
-        // Configuration replacement clears every member's burst window.
-        // Burst recordings share the guild lock; replacements take it exclusively.
-        await lockConfig(transaction, input.guildId, "shared");
-        await lockBurstWindow(transaction, input.guildId, input.userId);
+      return withBurstWindow(input, async (transaction) => {
         await transaction
           .insert(mentionProtectionBurstEvents)
           .values({
@@ -458,29 +469,6 @@ function parseRecord(value: string): Record<string, unknown> {
 type MentionProtectionTransaction = Parameters<
   Parameters<PostgresDatabaseCapability["drizzle"]["transaction"]>[0]
 >[0];
-
-async function lockConfig(
-  transaction: MentionProtectionTransaction,
-  guildId: string,
-  mode: "shared" | "exclusive" = "exclusive",
-): Promise<void> {
-  const key = `mention-protection-config:${guildId}`;
-  await transaction.execute(
-    mode === "shared"
-      ? sql`SELECT pg_advisory_xact_lock_shared(hashtextextended(${key}, ${CONFIG_LOCK_NAMESPACE}))`
-      : sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, ${CONFIG_LOCK_NAMESPACE}))`,
-  );
-}
-
-async function lockBurstWindow(
-  transaction: MentionProtectionTransaction,
-  guildId: string,
-  userId: string,
-): Promise<void> {
-  await transaction.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`mention-protection-burst:${guildId}:${userId}`}, ${BURST_LOCK_NAMESPACE}))`,
-  );
-}
 
 async function clearBurstWindow(
   transaction: MentionProtectionTransaction,
