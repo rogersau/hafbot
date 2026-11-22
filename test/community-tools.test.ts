@@ -19,6 +19,7 @@ import {
 
 test("staff purge and bot delivery respect a thread parent's channel overwrites", async (t) => {
   let deny = 1n << 13n;
+  const sent: Array<BodyInit | null | undefined> = [];
   const parent = () => ({
     id: "200",
     guild_id: "100",
@@ -26,12 +27,15 @@ test("staff purge and bot delivery respect a thread parent's channel overwrites"
     parent_id: null,
     permission_overwrites: [{ id: "100", type: 0, allow: "0", deny: deny.toString() }],
   });
-  t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+  t.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const path = new URL(
       typeof input === "string" ? input : input instanceof URL ? input : input.url,
     ).pathname.replace("/api/v10", "");
     let value: unknown;
-    if (path === "/channels/201")
+    if (path === "/channels/201/messages") {
+      sent.push(init?.body);
+      value = { id: "301", channel_id: "201" };
+    } else if (path === "/channels/201")
       value = { id: "201", guild_id: "100", type: 11, parent_id: "200" };
     else if (path === "/channels/200") value = parent();
     else if (path === "/guilds/100/channels") value = [parent()];
@@ -40,7 +44,7 @@ test("staff purge and bot delivery respect a thread parent's channel overwrites"
         {
           id: "100",
           position: 0,
-          permissions: ((1n << 10n) | (1n << 13n) | (1n << 38n)).toString(),
+          permissions: ((1n << 10n) | (1n << 13n) | (1n << 15n) | (1n << 38n)).toString(),
         },
       ];
     else if (path === "/guilds/100/members/101" || path === "/guilds/100/members/102")
@@ -63,6 +67,27 @@ test("staff purge and bot delivery respect a thread parent's channel overwrites"
   deny = 0n;
   await discord.assertStaffTarget("101", "101", 1n << 13n, "201");
   await discord.validateChannel("201");
+  const chart = {
+    filename: "price-chart.png",
+    description: "Price history",
+    data: new Blob(["chart"], { type: "image/png" }),
+  };
+  await discord.send("201", "Daily price", [], "price-nonce", chart);
+  const upload = sent[0];
+  assert.ok(upload instanceof FormData);
+  assert.deepEqual(JSON.parse(String(upload.get("payload_json"))), {
+    content: "Daily price",
+    allowed_mentions: { parse: [], roles: [] },
+    nonce: "price-nonce",
+    enforce_nonce: true,
+    attachments: [{ id: 0, filename: chart.filename, description: chart.description }],
+  });
+  const file = upload.get("files[0]");
+  assert.ok(file instanceof File);
+  assert.equal(file.type, "image/png");
+  deny = 1n << 15n;
+  await discord.send("201", "Daily price", [], "next-price-nonce", chart);
+  assert.equal(JSON.parse(String(sent[1])).content, "Daily price");
 });
 
 test("voice price renames require a manageable Guild voice channel and skip an unchanged name", async (t) => {

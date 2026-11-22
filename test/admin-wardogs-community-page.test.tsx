@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { act } from "react";
+import { DEFAULT_GOLD_VOICE_FORMAT } from "../src/wardogs/gold-status";
 import { withAdminDom } from "./support/admin-dom";
 
 test("WARDOGS dashboard shows price history and saves its Discord channels and panel", async (t) => {
@@ -24,7 +25,12 @@ test("WARDOGS dashboard shows price history and saves its Discord channels and p
         const body = JSON.parse(String(init.body));
         writes.push(body);
         if (body.action === "gold")
-          return Response.json({ goldChannelId: null, goldVoiceChannelId: "111" });
+          return Response.json({
+            goldChannelId: null,
+            goldVoiceChannelId: "111",
+            goldVoiceFormat: body.voiceFormat,
+            goldPostFormat: body.postFormat,
+          });
         return Response.json({ panel });
       }
       return Response.json({
@@ -55,6 +61,8 @@ test("WARDOGS dashboard shows price history and saves its Discord channels and p
           },
           goldChannelId: null,
           goldVoiceChannelId: null,
+          goldVoiceFormat: DEFAULT_GOLD_VOICE_FORMAT,
+          goldPostFormat: "full",
           panel,
         }}
       />,
@@ -91,12 +99,31 @@ test("WARDOGS dashboard shows price history and saves its Discord channels and p
     await act(async () =>
       voice.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
     );
+    const format = container.querySelector("#wardogs-gold-post-format");
+    assert.ok(format instanceof window.HTMLSelectElement);
+    await act(async () => {
+      format.value = "image";
+      format.dispatchEvent(new window.Event("change", { bubbles: true }));
+    });
+    const voiceFormat = "Gold {price} · {change} · {date}";
+    const input = container.querySelector<HTMLInputElement>("#wardogs-gold-voice-format");
+    assert.ok(input);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!.call(
+        input,
+        voiceFormat,
+      );
+      input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    });
+    assert.match(container.textContent ?? "", /Gold 651,250 · \+4\.8% · 21 Nov 2026/);
     await click("Save daily updates");
     assert.deepEqual(writes.at(-1), {
       guildId: "100",
       workspaceId: "workspace-1",
       action: "gold",
       voiceChannelId: "111",
+      voiceFormat,
+      postFormat: "image",
     });
     assert.match(container.textContent ?? "", /Price display in Gold Exchange/);
   });

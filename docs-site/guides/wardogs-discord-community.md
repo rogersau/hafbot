@@ -81,6 +81,12 @@ feed shows the latest game-wide cash price per gold bar and recent daily history
 
 In the dashboard, open **Integrations → WARDOGS community**. Use **Daily gold updates** to pick or
 create a text channel for daily posts or a voice channel that shows the current price in its name.
+For daily posts, choose a price summary, the price with recent history, a text bar chart, or
+**Price and chart image**. The image uses up to seven days of prices. Give HAF **Attach Files**
+in the daily update channel to display the image. The post includes the exact prices in text.
+Changes apply to upcoming posts. Set the voice channel name with placeholders such as
+`Gold: {price} cash ({change})`. Use `{date}` for the UTC price date. The `{change}` placeholder
+shows the percentage change since yesterday, or a dash when yesterday's price is unavailable.
 HAF needs **View Channel** and **Manage Channels** for the voice channel. **Gold Exchange** shows
 the latest rate and up to seven UTC days of history, and **Player stats** looks up public snapshots
 by SteamID64.

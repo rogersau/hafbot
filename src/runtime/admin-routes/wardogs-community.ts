@@ -1,12 +1,15 @@
 import { z } from "zod";
 import {
   CommunityToolsError,
+  goldPostFormatSchema,
+  goldVoiceFormatSchema,
   snowflake,
   wardogsLinkPanelDraftSchema,
   type WardogsLinkPanel,
 } from "../../community-tools/config";
 import type { WardogsGoldStatus } from "../../wardogs/community-data";
 import { STEAM_ID64 } from "../../wardogs/community-data";
+import type { GoldPostFormat } from "../../wardogs/gold-status";
 import { DiscordApiError } from "../../discord/client";
 import { defineRoute, type Route } from "../admin-route-registry";
 import { bodyGuildScopedAccess, guildScopedAccess } from "../admin-route-guards";
@@ -22,6 +25,8 @@ export interface WardogsCommunityDashboard {
   gold: WardogsGoldStatus | null;
   goldChannelId: string | null;
   goldVoiceChannelId: string | null;
+  goldVoiceFormat: string;
+  goldPostFormat: GoldPostFormat;
   panel: PublishedWardogsPanel | null;
 }
 
@@ -69,6 +74,8 @@ export function createWardogsCommunityAdminRoutes(
           gold,
           goldChannelId: settings.goldChannelId,
           goldVoiceChannelId: settings.goldVoiceChannelId,
+          goldVoiceFormat: settings.goldVoiceFormat,
+          goldPostFormat: settings.goldPostFormat,
           panel: settings.panel ? publicPanel(settings.panel) : null,
         } satisfies WardogsCommunityDashboard);
       },
@@ -84,11 +91,14 @@ export function createWardogsCommunityAdminRoutes(
             action: z.literal("gold"),
             channelId: snowflake.nullable().optional(),
             voiceChannelId: snowflake.nullable().optional(),
+            voiceFormat: goldVoiceFormatSchema.optional(),
+            postFormat: goldPostFormatSchema.optional(),
           })
           .strict()
-          .refine(
-            ({ channelId, voiceChannelId }) =>
-              channelId !== undefined || voiceChannelId !== undefined,
+          .refine(({ channelId, voiceChannelId, voiceFormat, postFormat }) =>
+            [channelId, voiceChannelId, voiceFormat, postFormat].some(
+              (value) => value !== undefined,
+            ),
           ),
         scope
           .extend(wardogsLinkPanelDraftSchema.shape)
@@ -107,11 +117,12 @@ export function createWardogsCommunityAdminRoutes(
               body.guildId,
               body.channelId,
               body.voiceChannelId,
+              { voiceFormat: body.voiceFormat, postFormat: body.postFormat },
             );
-            const { goldChannelId, goldVoiceChannelId } = await communityTools.readWardogsSettings(
+            const { panel: _panel, ...goldSettings } = await communityTools.readWardogsSettings(
               body.guildId,
             );
-            return Response.json({ goldChannelId, goldVoiceChannelId });
+            return Response.json(goldSettings);
           }
           if (!(await steamLinkReady(body.guildId))) {
             return Response.json(

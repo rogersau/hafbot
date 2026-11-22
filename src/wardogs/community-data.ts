@@ -1,11 +1,10 @@
 import { z } from "zod";
+import { GOLD_DAY_MS, WARDOGS_SERVER_LIST_URL } from "./gold-status";
 
 export const WARDOGS_TRACKER_URL = "https://wardogstracker.gg";
-export const WARDOGS_SERVER_LIST_URL = "https://wardogserverlist.com";
 export const STEAM_ID64 = /^\d{17}$/;
 
 const GOLD_CACHE_MS = 5 * 60 * 1000;
-export const GOLD_DAY_MS = 24 * 60 * 60 * 1000;
 const count = z.int().nonnegative();
 const publicStatsSchema = z.object({
   wardogLevel: count,

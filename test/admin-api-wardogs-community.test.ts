@@ -2,25 +2,31 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { CommunityToolsService } from "../src/community-tools/service";
 import { createWardogsCommunityData } from "../src/wardogs/community-data";
+import { DEFAULT_GOLD_VOICE_FORMAT, type GoldPostFormat } from "../src/wardogs/gold-status";
 import { createAdminApiHandler } from "./helpers/admin-api";
 
 test("WARDOGS dashboard protects guild settings and only accepts a panel draft", async () => {
   const calls: unknown[] = [];
   let goldChannelId: string | null = null;
   let goldVoiceChannelId: string | null = null;
+  let goldVoiceFormat = DEFAULT_GOLD_VOICE_FORMAT;
+  let goldPostFormat: GoldPostFormat = "full";
   const communityTools = {
     async readWardogsSettings(guildId: string) {
       calls.push(["read", guildId]);
-      return { goldChannelId, goldVoiceChannelId, panel: null };
+      return { goldChannelId, goldVoiceChannelId, goldVoiceFormat, goldPostFormat, panel: null };
     },
     async configureWardogsGold(
       guildId: string,
       channelId: string | null | undefined,
-      voiceChannelId?: string | null,
+      voiceChannelId: string | null | undefined,
+      formats: { voiceFormat?: string; postFormat?: GoldPostFormat },
     ) {
-      calls.push(["gold", guildId, channelId, voiceChannelId]);
+      calls.push(["gold", guildId, channelId, voiceChannelId, formats]);
       if (channelId !== undefined) goldChannelId = channelId;
       if (voiceChannelId !== undefined) goldVoiceChannelId = voiceChannelId;
+      goldVoiceFormat = formats.voiceFormat ?? goldVoiceFormat;
+      goldPostFormat = formats.postFormat ?? goldPostFormat;
     },
     async publishWardogsLinkPanel(
       guildId: string,
@@ -92,13 +98,32 @@ test("WARDOGS dashboard protects guild settings and only accepts a panel draft",
   assert.equal((await post({ ...voice, voiceChannelId: "not-a-channel" }, true)).status, 400);
   const saved = await post(voice, true);
   assert.equal(saved.status, 200);
-  assert.deepEqual(await saved.json(), { goldChannelId: "110", goldVoiceChannelId: "111" });
+  assert.deepEqual(await saved.json(), {
+    goldChannelId: "110",
+    goldVoiceChannelId: "111",
+    goldVoiceFormat: DEFAULT_GOLD_VOICE_FORMAT,
+    goldPostFormat: "full",
+  });
+  const formats = { voiceFormat: "Gold {price} ({change})", postFormat: "chart" };
+  assert.equal((await post({ action: "gold", ...formats })).status, 403);
+  assert.equal((await post({ action: "gold", voiceFormat: "{count}" }, true)).status, 400);
+  assert.equal((await post({ action: "gold", postFormat: "unknown" }, true)).status, 400);
+  const savedFormats = await post({ action: "gold", ...formats }, true);
+  assert.equal(savedFormats.status, 200);
+  assert.deepEqual(await savedFormats.json(), {
+    goldChannelId: "110",
+    goldVoiceChannelId: "111",
+    goldVoiceFormat: formats.voiceFormat,
+    goldPostFormat: formats.postFormat,
+  });
   assert.deepEqual(calls, [
     ["read", "100"],
     ["publish", "100", { title: draft.title, description: "", channelId: "102" }],
-    ["gold", "100", "110", undefined],
+    ["gold", "100", "110", undefined, { voiceFormat: undefined, postFormat: undefined }],
     ["read", "100"],
-    ["gold", "100", undefined, "111"],
+    ["gold", "100", undefined, "111", { voiceFormat: undefined, postFormat: undefined }],
+    ["read", "100"],
+    ["gold", "100", undefined, undefined, formats],
     ["read", "100"],
   ]);
 });
