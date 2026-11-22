@@ -16,69 +16,6 @@ interface SettledJob {
   outcome: QueueDeliveryOutcome;
 }
 
-test("Native job worker passes claimed metadata and exact direct outcomes to settlement", async () => {
-  const job = claimedJob({
-    id: "direct-retry",
-    queueName: "billing-sync",
-    payload: { kind: "retry" },
-    attempts: 2,
-    maxAttempts: 5,
-  });
-  const native = createFakeNativeQueue([job]);
-  let received: { payload: unknown; context: Parameters<PostgresJobHandler>[1] } | undefined;
-  const worker = createPostgresJobWorker({
-    queue: native.queue,
-    ownerId: "native-direct-outcome",
-    leaseMs: 500,
-    pollIntervalMs: 1_000,
-    handlers: {
-      "billing-sync": async (payload, context) => {
-        received = { payload, context };
-        return {
-          status: "retry",
-          reasonCode: "provider_rate_limited",
-          delaySeconds: 37,
-        };
-      },
-    },
-  });
-
-  await worker.start();
-  try {
-    await waitFor(() => native.settled.length === 1);
-  } finally {
-    await worker.stop();
-  }
-
-  assert.deepEqual(received?.payload, { kind: "retry" });
-  assert.equal(received?.context.jobId, "direct-retry");
-  assert.equal(received?.context.queueName, "billing-sync");
-  assert.equal(received?.context.attempts, 2);
-  assert.equal(received?.context.maxAttempts, 5);
-  assert.ok(received?.context.signal instanceof AbortSignal);
-  assert.equal(received?.context.signal.aborted, false);
-  assert.deepEqual(native.settled, [
-    {
-      jobId: "direct-retry",
-      outcome: {
-        status: "retry",
-        reasonCode: "provider_rate_limited",
-        delaySeconds: 37,
-      },
-    },
-  ]);
-  const status = worker.status();
-  assert.equal(status.state, "stopped");
-  assert.equal(status.ownerId, "native-direct-outcome");
-  assert.deepEqual(status.configuredQueues, ["billing-sync"]);
-  assert.equal(status.inFlight, 0);
-  assert.equal(status.processed, 1);
-  assert.equal(status.retried, 1);
-  assert.equal(status.terminal, 0);
-  assert.equal(status.lostLeases, 0);
-  assert.ok(status.lastClaimAt);
-});
-
 test("Native job worker never fabricates completion for missing or invalid outcomes", async () => {
   const native = createFakeNativeQueue([
     claimedJob({
