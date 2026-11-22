@@ -37,6 +37,9 @@ test(
       let botUserId = "199";
       let failDelivery = false;
       let goldDay = 0;
+      let goldPrice = 651_250;
+      const voiceNames = new Map<string, string>();
+      const renames: Array<{ channelId: string; name: string }> = [];
       let feedBody =
         "<rss><item><guid>old</guid><title>Old post</title><link>https://game.example/old</link></item></rss>";
       const sends: Array<{ channelId: string; content: string; roles: string[]; nonce: string }> =
@@ -67,6 +70,12 @@ test(
           timeouts.push(until);
         },
         validateChannel: async () => {},
+        validateVoiceChannel: async () => {},
+        async renameVoiceChannel(channelId, name) {
+          if (voiceNames.get(channelId) === name) return;
+          voiceNames.set(channelId, name);
+          renames.push({ channelId, name });
+        },
         async publishPanel({ channelId, previous, body }) {
           const messageId =
             previous?.channelId === channelId
@@ -97,10 +106,10 @@ test(
           goldAvailable: true,
           async readGoldStatus() {
             return {
-              latest: { ts: goldDay, price: 651_250 },
+              latest: { ts: goldDay, price: goldPrice },
               history: [
                 { ts: goldDay - GOLD_DAY_MS, price: 621_425 },
-                { ts: goldDay, price: 651_250 },
+                { ts: goldDay, price: goldPrice },
               ],
             };
           },
@@ -277,9 +286,10 @@ test(
       goldDay = currentDay - GOLD_DAY_MS;
       const goldPosts = () =>
         sends.filter((send) => send.content.includes("WARDOGS Gold Exchange"));
-      await service.configureWardogsGold("100", "103");
+      await service.configureWardogsGold("100", "103", "106");
       await service.sweep();
       assert.equal(goldPosts().length, 0, "the scheduler waits for today's rate");
+      assert.deepEqual(renames, []);
 
       goldDay = currentDay;
       await Promise.all([service.sweep(), service.sweep()]);
@@ -290,6 +300,7 @@ test(
       assert.match(goldPosts()[0]!.content, /651,250 cash/);
       assert.match(goldPosts()[0]!.content, /Price history \(UTC\)/);
       assert.match(goldPosts()[0]!.content, /621,425/);
+      assert.deepEqual(renames, [{ channelId: "106", name: "Gold: 651,250 cash" }]);
 
       await service.configureWardogsGold("100", "104");
       await service.sweep();
@@ -311,8 +322,22 @@ test(
       await service.configureWardogsGold("100", null);
       now += GOLD_DAY_MS;
       goldDay += GOLD_DAY_MS;
+      goldPrice = 670_000;
       await service.sweep();
       assert.equal(goldPosts().length, 2, "turning updates off stops later posts");
+      assert.deepEqual(renames, [
+        { channelId: "106", name: "Gold: 651,250 cash" },
+        { channelId: "106", name: "Gold: 670,000 cash" },
+      ]);
+      await service.configureWardogsGold("100", null, "107");
+      await service.sweep();
+      assert.deepEqual(renames.at(-1), { channelId: "107", name: "Gold: 670,000 cash" });
+      await service.configureWardogsGold("100", null, null);
+      now += GOLD_DAY_MS;
+      goldDay += GOLD_DAY_MS;
+      goldPrice = 680_000;
+      await service.sweep();
+      assert.equal(renames.length, 3);
 
       const draft = { title: "WARDOGS links", channelId: "104", description: "Link here." };
       const published = await service.publishWardogsLinkPanel("100", draft);

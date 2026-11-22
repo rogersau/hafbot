@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { act } from "react";
 import { withAdminDom } from "./support/admin-dom";
 
-test("WARDOGS dashboard shows price history and updates the scoped Discord panel", async () => {
+test("WARDOGS dashboard shows price history and saves its Discord channels and panel", async (t) => {
   await withAdminDom(async ({ render, click, container }) => {
+    const previousEvent = globalThis.Event;
+    globalThis.Event = window.Event;
+    t.after(() => {
+      globalThis.Event = previousEvent;
+    });
     const { AdminWardogsCommunityPage } =
       await import("../src/admin/components/admin-wardogs-community-page");
     const panel = {
@@ -15,13 +21,16 @@ test("WARDOGS dashboard shows price history and updates the scoped Discord panel
     const writes: unknown[] = [];
     globalThis.fetch = async (_url, init) => {
       if (init?.method === "POST") {
-        writes.push(JSON.parse(String(init.body)));
+        const body = JSON.parse(String(init.body));
+        writes.push(body);
+        if (body.action === "gold")
+          return Response.json({ goldChannelId: null, goldVoiceChannelId: "111" });
         return Response.json({ panel });
       }
       return Response.json({
         roles: [],
         textChannels: [{ id: "102", name: "wardogs-links" }],
-        voiceChannels: [],
+        voiceChannels: [{ id: "111", name: "Gold Exchange" }],
         categories: [],
         forumChannels: [],
       });
@@ -45,6 +54,7 @@ test("WARDOGS dashboard shows price history and updates the scoped Discord panel
             ],
           },
           goldChannelId: null,
+          goldVoiceChannelId: null,
           panel,
         }}
       />,
@@ -69,5 +79,25 @@ test("WARDOGS dashboard shows price history and updates the scoped Discord panel
     ]);
     assert.match(container.textContent ?? "", /WARDOGS link panel published/);
     assert.ok(container.querySelector('a[href="https://discord.com/channels/100/102/600"]'));
+
+    const select = container.querySelector("#wardogs-gold-voice-channel");
+    assert.ok(select);
+    const enter = new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true });
+    await act(async () => select.dispatchEvent(enter));
+    const options = [...document.querySelectorAll('[role="option"]')];
+    const voice = options.find((option) => option.textContent?.includes("Gold Exchange"));
+    assert.ok(voice);
+    assert.ok(!options.some((option) => option.textContent?.includes("wardogs-links")));
+    await act(async () =>
+      voice.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+    await click("Save daily updates");
+    assert.deepEqual(writes.at(-1), {
+      guildId: "100",
+      workspaceId: "workspace-1",
+      action: "gold",
+      voiceChannelId: "111",
+    });
+    assert.match(container.textContent ?? "", /Price display in Gold Exchange/);
   });
 });

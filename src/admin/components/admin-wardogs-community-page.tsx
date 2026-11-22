@@ -79,10 +79,15 @@ function WardogsCommunitySettings({
     error: channelsError,
   } = useGuildResources(workspaceId, guildId);
   const channels = resources?.textChannels ?? [];
+  const voiceChannels = resources?.voiceChannels ?? [];
   const [gold, setGold] = useState(initialData.gold);
   const [goldAvailable, setGoldAvailable] = useState(initialData.goldAvailable);
   const [savedGoldChannel, setSavedGoldChannel] = useState(initialData.goldChannelId ?? "");
   const [goldChannel, setGoldChannel] = useState(savedGoldChannel);
+  const [savedGoldVoiceChannel, setSavedGoldVoiceChannel] = useState(
+    initialData.goldVoiceChannelId ?? "",
+  );
+  const [goldVoiceChannel, setGoldVoiceChannel] = useState(savedGoldVoiceChannel);
   const [goldSaved, setGoldSaved] = useState(false);
   const [panel, setPanel] = useState(initialData.panel);
   const [panelDraft, setPanelDraft] = useState(() => panelDraftFor(initialData.panel));
@@ -90,7 +95,10 @@ function WardogsCommunitySettings({
   const goldRequest = useAdminApi();
   const goldSave = useAdminApi();
   const panelPublish = useAdminApi();
-  const goldDirty = goldChannel !== savedGoldChannel;
+  const goldDirty = goldChannel !== savedGoldChannel || goldVoiceChannel !== savedGoldVoiceChannel;
+  const goldNeedsFeed =
+    (goldChannel && goldChannel !== savedGoldChannel) ||
+    (goldVoiceChannel && goldVoiceChannel !== savedGoldVoiceChannel);
   const savedPanelDraft = panelDraftFor(panel);
   const panelDirty =
     panelDraft.channelId !== savedPanelDraft.channelId ||
@@ -156,13 +164,20 @@ function WardogsCommunitySettings({
         <SettingsBlock>
           <SectionHeader
             title="Daily gold updates"
-            description="Posts the rate and recent history once per UTC day when the feed reports that day's price."
+            description="Posts the rate and recent history in a text channel, and displays the price in a voice channel name."
           />
           <p className="text-sm text-muted-foreground">
             {savedGoldChannel
               ? `Posting in #${channels.find(({ id }) => id === savedGoldChannel)?.name ?? savedGoldChannel}`
               : "Daily posts are off."}
           </p>
+          {savedGoldVoiceChannel ? (
+            <p className="text-sm text-muted-foreground">
+              Price display in{" "}
+              {voiceChannels.find(({ id }) => id === savedGoldVoiceChannel)?.name ??
+                savedGoldVoiceChannel}
+            </p>
+          ) : null}
           {initialData.canWrite ? (
             <form
               className="space-y-4"
@@ -170,17 +185,26 @@ function WardogsCommunitySettings({
                 event.preventDefault();
                 void goldSave.run(
                   () =>
-                    createAdminLoaderClient().postJson<{ goldChannelId: string | null }>(
+                    createAdminLoaderClient().postJson<
+                      Pick<WardogsCommunityDashboard, "goldChannelId" | "goldVoiceChannelId">
+                    >(
                       endpoint,
                       {
                         action: "gold",
-                        channelId: goldChannel || null,
+                        ...(goldChannel !== savedGoldChannel
+                          ? { channelId: goldChannel || null }
+                          : {}),
+                        ...(goldVoiceChannel !== savedGoldVoiceChannel
+                          ? { voiceChannelId: goldVoiceChannel || null }
+                          : {}),
                       },
                       scope,
                     ),
-                  ({ goldChannelId }) => {
+                  ({ goldChannelId, goldVoiceChannelId }) => {
                     setSavedGoldChannel(goldChannelId ?? "");
                     setGoldChannel(goldChannelId ?? "");
+                    setSavedGoldVoiceChannel(goldVoiceChannelId ?? "");
+                    setGoldVoiceChannel(goldVoiceChannelId ?? "");
                     setGoldSaved(true);
                   },
                 );
@@ -213,9 +237,44 @@ function WardogsCommunitySettings({
                   }
                 />
               </FormField>
+              <FormField
+                label="Gold price voice channel"
+                htmlFor="wardogs-gold-voice-channel"
+                hint="Updates the channel name when the new UTC day's price is available."
+              >
+                <ChannelSelect
+                  id="wardogs-gold-voice-channel"
+                  channels={voiceChannels}
+                  value={goldVoiceChannel}
+                  allowClear
+                  placeholder="Voice price display is off"
+                  disabled={
+                    channelsLoading ||
+                    goldSave.loading ||
+                    (!goldAvailable && !savedGoldVoiceChannel)
+                  }
+                  onChange={(value) => {
+                    setGoldVoiceChannel(value);
+                    setGoldSaved(false);
+                  }}
+                  creation={
+                    goldAvailable
+                      ? {
+                          ...scope,
+                          surfaceKey: "wardogs_community",
+                          dependencyKey: "gold_voice_channel",
+                          label: "gold price voice channel",
+                          recommendedName: "Gold price",
+                        }
+                      : undefined
+                  }
+                />
+              </FormField>
               <Button
                 type="submit"
-                disabled={goldSave.loading || !goldDirty || Boolean(goldChannel && !goldAvailable)}
+                disabled={
+                  goldSave.loading || !goldDirty || Boolean(goldNeedsFeed && !goldAvailable)
+                }
               >
                 {goldSave.loading ? "Saving…" : "Save daily updates"}
               </Button>

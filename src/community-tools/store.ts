@@ -15,6 +15,7 @@ import {
 } from "./config";
 
 export const WARDOGS_GOLD_DELIVERY_PREFIX = "wardogs-gold:";
+export const WARDOGS_GOLD_VOICE_DELIVERY_PREFIX = "wardogs-gold-voice:";
 
 export interface CommunityDelivery {
   id: string;
@@ -216,23 +217,38 @@ export class CommunityToolsStore {
       ],
     );
   }
-  async dueWardogsGold(
-    dayMs: number,
-  ): Promise<Array<{ guildId: string; channelId: string; revision: number }>> {
+  async dueWardogsGold(dayMs: number): Promise<
+    Array<{
+      id: string;
+      kind: "message" | "voice";
+      guildId: string;
+      channelId: string;
+      revision: number;
+    }>
+  > {
     const rows = await this.database.query<{
+      id: string;
+      kind: "message" | "voice";
       guild_id: string;
       channel_id: string;
       revision: number;
     }>(
-      `SELECT c.guild_id, c.config_json::jsonb->>'wardogsGoldChannelId' AS channel_id, c.revision
+      `SELECT target.id, target.kind, c.guild_id, target.channel_id, c.revision
          FROM community_tool_configs c
-        WHERE c.feature='automation' AND c.config_json::jsonb->>'wardogsGoldChannelId' IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM community_tool_deliveries d
-                           WHERE d.id=$1 || c.guild_id || ':' || $2::text)
-        ORDER BY c.guild_id`,
-      [WARDOGS_GOLD_DELIVERY_PREFIX, dayMs],
+        CROSS JOIN LATERAL (VALUES
+          ('message', c.config_json::jsonb->>'wardogsGoldChannelId',
+           $1 || c.guild_id || ':' || $3::text),
+          ('voice', c.config_json::jsonb->>'wardogsGoldVoiceChannelId',
+           $2 || c.guild_id || ':' || $3::text || ':' || c.revision::text)
+        ) AS target(kind, channel_id, id)
+        WHERE c.feature='automation' AND target.channel_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM community_tool_deliveries d WHERE d.id=target.id)
+        ORDER BY c.guild_id, target.kind`,
+      [WARDOGS_GOLD_DELIVERY_PREFIX, WARDOGS_GOLD_VOICE_DELIVERY_PREFIX, dayMs],
     );
     return rows.map((row) => ({
+      id: row.id,
+      kind: row.kind,
       guildId: row.guild_id,
       channelId: row.channel_id,
       revision: row.revision,

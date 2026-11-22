@@ -6,13 +6,21 @@ import { createAdminApiHandler } from "./helpers/admin-api";
 
 test("WARDOGS dashboard protects guild settings and only accepts a panel draft", async () => {
   const calls: unknown[] = [];
+  let goldChannelId: string | null = null;
+  let goldVoiceChannelId: string | null = null;
   const communityTools = {
     async readWardogsSettings(guildId: string) {
       calls.push(["read", guildId]);
-      return { goldChannelId: null, panel: null };
+      return { goldChannelId, goldVoiceChannelId, panel: null };
     },
-    async configureWardogsGold(guildId: string, channelId: string | null) {
-      calls.push(["gold", guildId, channelId]);
+    async configureWardogsGold(
+      guildId: string,
+      channelId: string | null | undefined,
+      voiceChannelId?: string | null,
+    ) {
+      calls.push(["gold", guildId, channelId, voiceChannelId]);
+      if (channelId !== undefined) goldChannelId = channelId;
+      if (voiceChannelId !== undefined) goldVoiceChannelId = voiceChannelId;
     },
     async publishWardogsLinkPanel(
       guildId: string,
@@ -79,10 +87,18 @@ test("WARDOGS dashboard protects guild settings and only accepts a panel draft",
     panel: { channelId: "102", messageId: "600", title: "Link WARDOGS", description: "" },
   });
   assert.equal((await post({ action: "gold", channelId: "110" }, true)).status, 200);
+  const voice = { action: "gold", voiceChannelId: "111" };
+  assert.equal((await post(voice)).status, 403);
+  assert.equal((await post({ ...voice, voiceChannelId: "not-a-channel" }, true)).status, 400);
+  const saved = await post(voice, true);
+  assert.equal(saved.status, 200);
+  assert.deepEqual(await saved.json(), { goldChannelId: "110", goldVoiceChannelId: "111" });
   assert.deepEqual(calls, [
     ["read", "100"],
     ["publish", "100", { title: draft.title, description: "", channelId: "102" }],
-    ["gold", "100", "110"],
+    ["gold", "100", "110", undefined],
+    ["read", "100"],
+    ["gold", "100", undefined, "111"],
     ["read", "100"],
   ]);
 });

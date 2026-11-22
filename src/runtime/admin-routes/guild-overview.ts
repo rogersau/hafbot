@@ -1004,7 +1004,9 @@ export function createGuildOverviewAdminRoutes(
             communityTools["wardogs-community"] = {
               enabled: Boolean(options.wardogsCommunity),
               configured: Boolean(
-                automation.config.wardogsGoldChannelId || automation.config.wardogsLinkPanel,
+                automation.config.wardogsGoldChannelId ||
+                automation.config.wardogsGoldVoiceChannelId ||
+                automation.config.wardogsLinkPanel,
               ),
             };
           }
