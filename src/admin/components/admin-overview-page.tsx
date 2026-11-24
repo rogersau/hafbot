@@ -11,6 +11,8 @@ import type { AdminGuildOverviewCard, RecommendedNextStep } from "../../runtime/
 import type { GuildEntitlementTier } from "../../types";
 import type { EntitlementInfo } from "../hooks/use-entitlement";
 import { ONBOARDING_GOALS } from "../../onboarding-goals";
+import { withFirstWorkflow, type FirstWorkflowId } from "../../first-workflow-intent";
+import { findFirstWorkflow, type FirstWorkflow } from "../../first-workflows";
 import { reportDashboardMilestone } from "../lib/product-analytics";
 import type { OperationalIncidentView } from "../../operations/incidents";
 import { describeError, readJsonOrThrow } from "../lib/api";
@@ -27,6 +29,7 @@ interface AdminOverviewPageProps {
   r2Usage?: EntitlementInfo["r2Usage"] | null;
   openIncidents?: OperationalIncidentView[];
   canRemediate?: boolean;
+  firstWorkflowId?: FirstWorkflowId;
   onRouteDataRefresh?: () => Promise<void>;
 }
 
@@ -54,8 +57,10 @@ export function AdminOverviewPage({
   r2Usage = null,
   openIncidents = [],
   canRemediate = false,
+  firstWorkflowId,
   onRouteDataRefresh,
 }: AdminOverviewPageProps) {
+  const firstWorkflow = findFirstWorkflow(firstWorkflowId);
   const [retrying, setRetrying] = useState(false);
   const [loadError, setLoadError] = useState<unknown>(null);
   const items = cards.map((card) => ({
@@ -75,6 +80,13 @@ export function AdminOverviewPage({
         tier={tier}
         attentionCount={openIncidents.length + attentionItems.length + (storageWarning ? 1 : 0)}
       />
+      {firstWorkflow ? (
+        <FirstWorkflowPanel
+          workflow={firstWorkflow}
+          item={items.find(({ card }) => card.id === firstWorkflow.id)}
+          overviewHref={buildAdminDashboardHref("/admin", selectedWorkspaceId, selectedGuildId)}
+        />
+      ) : null}
       {items.length === 0 ? (
         <div className="space-y-3" role="status">
           <p>
@@ -120,10 +132,10 @@ export function AdminOverviewPage({
         />
       ) : null}
       <AllFeatures items={items} />
-      {!hasAttention && recommendedNextStep ? (
+      {!firstWorkflow && !hasAttention && recommendedNextStep ? (
         <RecommendedNextStepPanel step={recommendedNextStep} />
       ) : null}
-      {!hasAttention && items.length > 0 ? (
+      {!firstWorkflow && !hasAttention && items.length > 0 ? (
         <GoalOnboardingPanel
           items={items}
           workspaceId={selectedWorkspaceId}
@@ -643,6 +655,61 @@ function RecommendedNextStepPanel({ step }: { step: RecommendedNextStep }) {
   );
 }
 
+function FirstWorkflowPanel({
+  workflow,
+  item,
+  overviewHref,
+}: {
+  workflow: FirstWorkflow;
+  item?: OverviewItem;
+  overviewHref: string;
+}) {
+  const setupHref =
+    item?.card.locked || item?.card.status === "requires-paid-plan" ? "" : item?.href;
+  return (
+    <section
+      className="mb-4 rounded-lg border bg-card p-4"
+      aria-labelledby="first-workflow-heading"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+            First workflow
+          </p>
+          <h2 id="first-workflow-heading" className="text-xl font-semibold">
+            {workflow.feature}
+          </h2>
+        </div>
+        <Button asChild variant="ghost">
+          <a href={overviewHref}>Dismiss first workflow</a>
+        </Button>
+      </div>
+      <p className="mt-2 text-sm">{workflow.outcome}</p>
+      <ul className="my-3 list-disc space-y-1 pl-5 text-sm">
+        {workflow.requirements.map((requirement) => (
+          <li key={requirement}>{requirement}</li>
+        ))}
+      </ul>
+      <p className="text-sm">
+        <strong>Set up one feature.</strong> {workflow.completion}
+      </p>
+      <p className="mt-2 text-sm">
+        <strong>Test as a member.</strong> {workflow.memberTest}
+      </p>
+      {setupHref ? (
+        <Button className="mt-4" asChild>
+          <a href={setupHref}>{`Open ${workflow.feature} setup`}</a>
+        </Button>
+      ) : (
+        <p className="mt-4 text-sm text-muted-foreground">
+          Setup is not available for this server. Try a different server or check its feature
+          directory.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function GoalOnboardingPanel({
   items,
   workspaceId,
@@ -774,12 +841,14 @@ export function GuildDirectoryEmptyCard({
   lookupError,
   workspaceId,
   onRefresh,
+  firstWorkflowId,
 }: {
   hasGuilds?: boolean;
   allGuildsHidden: boolean;
   lookupError: string | null;
   workspaceId: string;
   onRefresh: () => Promise<void>;
+  firstWorkflowId?: FirstWorkflowId;
 }) {
   const [refreshing, setRefreshing] = useState(false);
 
@@ -813,7 +882,11 @@ export function GuildDirectoryEmptyCard({
                   Restore hidden servers
                 </a>
               ) : (
-                <a href="/install" target="_blank" rel="noopener noreferrer">
+                <a
+                  href={withFirstWorkflow("/install", firstWorkflowId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   Add HAF to a server
                 </a>
               )}

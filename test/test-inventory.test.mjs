@@ -10,6 +10,7 @@ import {
 } from "../scripts/test-inventory.mjs";
 
 const BROWSER_TEST = join("test", "admin-emoji-picker-browser.test.mjs");
+const BUILT_LANDING_TEST = join("test", "landing-mobile-browser.test.mjs");
 
 test("PostgreSQL contracts build the Start server before running tests", () => {
   const manifest = JSON.parse(readFileSync("package.json", "utf8"));
@@ -33,7 +34,8 @@ test("every tracked test belongs to exactly one executable suite", () => {
   assert.deepEqual(inventory.browser, [BROWSER_TEST]);
   assert.ok(inventory.unit.length > 0, "expected unit tests in the inventory");
   assert.ok(inventory.integration.length > 0, "expected integration tests in the inventory");
-  assert.ok(inventory.build.length > 0, "expected build tests in the inventory");
+  assert.ok(inventory.build.includes(BUILT_LANDING_TEST));
+  assert.ok(!inventory.node.includes(BUILT_LANDING_TEST));
   assert.ok(inventory.architecture.length > 0, "expected architecture tests in the inventory");
   assert.deepEqual(inventory.unassigned, []);
   assert.deepEqual(inventory.duplicateAssignments, []);

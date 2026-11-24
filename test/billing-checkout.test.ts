@@ -11,6 +11,9 @@ import {
   type BillingCheckoutStore,
 } from "../src/runtime/billing/checkout";
 import type { BillingSubscriptionProjection } from "../src/runtime/billing/types";
+import { createBillingApiHandler } from "../src/runtime/billing/billing-api";
+import { createLandingPriceCatalog } from "../src/runtime/billing/landing-catalog";
+import { billingContracts } from "../src/contracts/admin/billing";
 
 const catalog = createBillingCatalog({
   historicalPricesJson: JSON.stringify([
@@ -51,6 +54,66 @@ test("Checkout binds a Customer first and supports every current standard Price"
     }),
     /unsupported_price/,
   );
+});
+
+test("Checkout API requires the shared displayed offer before sending the selected Price to Stripe", async () => {
+  const provider = new FakeProvider();
+  const service = createService(provider, new MemoryStore());
+  const standardAmounts: Record<string, number> = {
+    price_pm: 499,
+    price_py: 4500,
+    price_ppm: 899,
+    price_ppy: 8000,
+  };
+  let pricesAvailable = false;
+  const prices = createLandingPriceCatalog({
+    catalog,
+    cache: new Map(),
+    onError: () => {},
+    stripe: {
+      async readPrice(priceId) {
+        if (!pricesAvailable) throw new Error("Price lookup unavailable");
+        const entry = catalog.get(priceId)!;
+        return {
+          id: priceId,
+          productId: entry.productId,
+          active: true,
+          unitAmount: standardAmounts[priceId]!,
+          currency: "aud",
+          interval: entry.frequency === "monthly" ? "month" : "year",
+        };
+      },
+    },
+  });
+  const handler = createBillingApiHandler({
+    service,
+    prices,
+    async readSession() {
+      return { user: { id: "owner", discordUserId: "discord-user", name: "Owner" } };
+    },
+  });
+  const checkout = () =>
+    handler(
+      billingContracts.checkout.operationId,
+      new Request("https://hafbot.test/admin/api/billing/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ priceId: "price_ppy", intentId: "intent_yearly_plus" }),
+      }),
+    );
+
+  assert.equal((await checkout()).status, 503);
+  assert.equal(provider.customerCalls.length, 0);
+  assert.equal(provider.checkoutCalls.length, 0);
+
+  pricesAvailable = true;
+  const billing = await handler(
+    billingContracts.get.operationId,
+    new Request("https://hafbot.test/admin/api/billing"),
+  );
+  assert.deepEqual(((await billing.json()) as { prices: unknown }).prices, await prices.read());
+  assert.equal((await checkout()).status, 200);
+  assert.equal(provider.checkoutCalls[0]?.priceId, "price_ppy");
 });
 
 test("duplicate submission reuses a stable business-intent idempotency key", async () => {

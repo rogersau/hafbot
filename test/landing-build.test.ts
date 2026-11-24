@@ -102,24 +102,31 @@ test("landing plan choices preserve checkout intent and link to the complete com
   );
 });
 
-test("landing groups feature discovery under an accessible community-goals section", async () => {
+test("landing gives the main action to workflow selection and points deeper discovery to the docs", async () => {
   const document = await readLandingDocument();
-  const section = document.querySelector<HTMLElement>('section[aria-labelledby="goals-title"]');
-  assert.ok(section);
-  assert.equal(
-    section.querySelector("#goals-title")?.textContent?.trim(),
-    "What should HAF help your community do?",
-  );
+  try {
+    const [primary] = document.querySelectorAll<HTMLAnchorElement>(".hero-actions .button");
+    assert.equal(document.querySelectorAll(".hero-actions .button").length, 1);
+    assert.equal(primary?.getAttribute("href"), "#first-workflow");
+    const selector = document.querySelector("#first-workflow");
+    assert.equal(selector?.getAttribute("tabindex"), "-1");
+    assert.equal(selector?.querySelectorAll('input[type="radio"]').length, 6);
+    assert.equal(selector?.nextElementSibling?.id, "live-demo");
 
-  const visibleText = section.textContent ?? "";
-  for (const goal of [
-    "Protect the community",
-    "Run staff operations",
-    "Help members participate",
-    "Connect players and systems",
-    "Manage access and communications",
-  ]) {
-    assert.match(visibleText, new RegExp(goal));
+    const guides = document.querySelector('nav[aria-labelledby="workflow-guides-title"]');
+    assert.ok(
+      guides?.querySelector('a[href="https://docs.hafbot.xyz/features/mention-protection"]'),
+    );
+    assert.ok(guides?.querySelector('a[href="https://docs.hafbot.xyz/features/player-link"]'));
+    assert.ok(guides?.querySelector('a[href="https://docs.hafbot.xyz/features/managed-messages"]'));
+    assert.ok(guides?.querySelector('a[href="https://docs.hafbot.xyz/"]'));
+
+    const footer = document.querySelector(".site-footer nav");
+    assert.ok(footer?.querySelector('a[href="/privacy"]'));
+    assert.ok(footer?.querySelector('a[href="/terms"]'));
+    assert.ok(footer?.querySelector('a[href="https://docs.hafbot.xyz/self-hosting"]'));
+  } finally {
+    document.defaultView?.close();
   }
 });
 
@@ -140,5 +147,31 @@ test("shared logo, favicon and social banner are served with cache validators", 
       "dist-admin",
     );
     assert.equal(cached?.status, 304);
+  }
+});
+
+test("landing pricing shows practical upgrade triggers and explains server assignment", async () => {
+  const document = await readLandingDocument();
+  try {
+    const plans = document.querySelector("#plans");
+    assert.ok(plans);
+    const assignment = plans.querySelector(".pricing-summary")?.textContent ?? "";
+    assert.match(assignment, /does not upgrade every server you manage/);
+    assert.match(assignment, /choose\s+one eligible Discord server in Billing with Premium/);
+    assert.match(assignment, /up to three with Premium\s+Plus/);
+
+    const [free, premium] = plans.querySelectorAll("article");
+    assert.match(
+      free?.textContent ?? "",
+      /3 Managed Messages total across drafts and published messages/,
+    );
+    assert.equal(premium?.querySelector("h3")?.textContent, "When Free is not enough");
+    const examples = premium?.textContent ?? "";
+    assert.match(examples, /ticket types for support and reports/);
+    assert.match(examples, /Scheduled Events, Image Rules or Mention Spam Protection/);
+    assert.match(examples, /Player Count or Webhooks/);
+    assert.match(examples, /More than 100 Player Links or more than 3 Managed Messages/);
+  } finally {
+    document.defaultView?.close();
   }
 });

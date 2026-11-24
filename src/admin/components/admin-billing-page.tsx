@@ -14,6 +14,7 @@ import { useAdminApi } from "../hooks/use-admin-api";
 import { describeError } from "../lib/api";
 import type { BillingRouteData, BillingSectionRead } from "../lib/billing-route-data";
 import { PageFeedback } from "./page-feedback";
+import { formatCheckoutAssignment, formatCheckoutOffer } from "../lib/checkout-offer";
 
 type CatalogEntry = {
   priceId: string;
@@ -207,6 +208,9 @@ function BillingPlan({
     (!requestedPlan && data.subscription?.plan !== "free" ? data.subscription?.frequency : null) ??
     requestedFrequency ??
     "yearly";
+  const requestedOffer = data.prices?.find(
+    (price) => price.plan === requestedPlan && price.frequency === frequency,
+  );
   const [pendingPrice, setPendingPrice] = useState<string | null>(null);
   const [portalPending, setPortalPending] = useState(false);
   const [changeTarget, setChangeTarget] = useState<CatalogEntry | null>(null);
@@ -314,7 +318,9 @@ function BillingPlan({
             <div className="rounded-lg border border-primary/35 bg-primary/5 p-4 text-sm">
               <p className="font-semibold">Your {formatPlan(requestedPlan)} selection is ready</p>
               <p className="mt-1 text-muted-foreground">
-                Review the plan below, then choose it to continue to secure Stripe checkout.
+                {requestedOffer
+                  ? `${formatCheckoutOffer(requestedOffer)}. Review the plan below, then choose it to continue to Stripe.`
+                  : "Checkout is unavailable until the current price can be shown."}
               </p>
             </div>
           ) : null}
@@ -345,7 +351,7 @@ function BillingPlan({
             ))}
           </div>
           <p className="text-center text-xs text-muted-foreground">
-            Prices are in AUD. Payments, invoices, and card details are handled securely by Stripe.
+            Payments, invoices, and card details are handled securely by Stripe.
           </p>
         </section>
       ) : null}
@@ -924,11 +930,6 @@ function FrequencySelector({
           onClick={() => onChange(option)}
         >
           {option}
-          {option === "yearly" ? (
-            <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-primary">
-              Save 25%
-            </span>
-          ) : null}
         </button>
       ))}
     </div>
@@ -1018,7 +1019,7 @@ function PlanCard({
                   {price.formattedAmount}
                 </strong>
                 <span className="text-sm text-muted-foreground">
-                  / {frequency === "monthly" ? "month" : "year"}
+                  {price.currency.toUpperCase()} / {frequency === "monthly" ? "month" : "year"}
                 </span>
               </div>
               {yearlyEquivalent ? (
@@ -1031,7 +1032,9 @@ function PlanCard({
               )}
             </>
           ) : (
-            <p className="pt-2 text-sm font-medium">Price available at checkout</p>
+            <p className="pt-2 text-sm font-medium">
+              {mode === "checkout" ? "Current price is unavailable" : "Current Stripe price"}
+            </p>
           )}
         </div>
         <ul className="my-5 space-y-3 text-sm">
@@ -1042,14 +1045,17 @@ function PlanCard({
             </li>
           ))}
         </ul>
+        {mode === "checkout" ? (
+          <p className="mb-5 text-sm text-muted-foreground">{formatCheckoutAssignment(plan)}</p>
+        ) : null}
         <Button
           className="mt-auto w-full"
           size="lg"
           variant={recommended ? "default" : "outline"}
-          disabled={!entry || current || pendingPrice !== null}
+          disabled={!entry || (mode === "checkout" && !price) || current || pendingPrice !== null}
           loading={pendingPrice === entry?.priceId}
           loadingLabel={mode === "checkout" ? "Opening secure checkout…" : "Applying change…"}
-          onClick={() => entry && onSelect(entry)}
+          onClick={() => entry && (mode !== "checkout" || price) && onSelect(entry)}
         >
           {current
             ? "Current plan"

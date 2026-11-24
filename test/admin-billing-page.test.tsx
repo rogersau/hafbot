@@ -262,6 +262,55 @@ test("Billing explains unavailable current prices without showing retired launch
   }
 });
 
+test("Billing shows the same selected amount and server assignment before sending a buyer to Stripe", async () => {
+  const restoreFetch = installFetch(async (path) => {
+    if (path.endsWith("/billing")) return response(billing());
+    if (path.endsWith("/billing/history")) return response({ events: [] });
+    assert.fail(`Unexpected request before explicit checkout: ${path}`);
+  });
+  const env = createDom("?plan=premium_plus&frequency=yearly");
+  try {
+    await render(env);
+    await settle();
+    const text = env.container.textContent ?? "";
+    assert.match(text, /Your Premium Plus selection is ready\$20\.00 AUD \/ year/);
+    assert.match(text, /choose up to three eligible Discord servers in Billing/);
+    assert.match(text, /does not upgrade all your servers/);
+    const choose = [...env.container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Choose Premium Plus",
+    );
+    assert.equal(choose?.disabled, false);
+  } finally {
+    restoreFetch();
+    await env.restore();
+  }
+});
+
+test("Billing will not offer checkout before a current price can be shown", async () => {
+  const restoreFetch = installFetch(async (path) => {
+    if (path.endsWith("/billing")) return response({ ...billing(), prices: [] });
+    if (path.endsWith("/billing/history")) return response({ events: [] });
+    assert.fail(`Unexpected checkout request: ${path}`);
+  });
+  const env = createDom("?plan=premium&frequency=monthly");
+  try {
+    await render(env);
+    await settle();
+    assert.match(
+      env.container.textContent ?? "",
+      /Checkout is unavailable until the current price can be shown/,
+    );
+    const buttons = [...env.container.querySelectorAll("button")].filter((button) =>
+      button.textContent?.startsWith("Choose Premium"),
+    );
+    assert.equal(buttons.length, 2);
+    assert.ok(buttons.every((button) => button.disabled));
+  } finally {
+    restoreFetch();
+    await env.restore();
+  }
+});
+
 test("Billing keeps initial loading separate from loaded and error states", async () => {
   let resolveSummary!: (value: Response) => void;
   let resolveHistory!: (value: Response) => void;

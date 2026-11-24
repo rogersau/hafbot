@@ -35,6 +35,9 @@ body {
 }
 a { color: hsl(var(--accent)); text-decoration: none; }
 a:hover { color: hsl(var(--accent-foreground)); text-decoration: underline; }
+:focus-visible { outline: 2px solid #aeb9ff; outline-offset: 3px; }
+.skip-link { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip-link:focus { position: fixed; inset: 0.75rem auto auto 0.75rem; z-index: 50; width: auto; height: auto; clip-path: none; border-radius: 0.375rem; padding: 0.75rem 1rem; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); font-weight: 600; }
 header { background: hsl(var(--card) / 0.7); border-bottom: 1px solid hsl(var(--border) / 0.6); backdrop-filter: blur(8px); }
 .header-inner { max-width: 72rem; margin: 0 auto; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .brand-wrap { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; }
@@ -46,6 +49,7 @@ nav { display: flex; align-items: center; gap: 1.5rem; font-family: "Oxanium", s
 nav a { color: hsl(var(--muted-foreground)); }
 nav a:hover { color: hsl(var(--foreground)); text-decoration: none; }
 main { max-width: 65ch; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+main a { text-decoration: underline; overflow-wrap: anywhere; }
 h1 { font-family: "Oxanium", sans-serif; font-size: 1.875rem; font-weight: 800; color: hsl(var(--foreground)); margin: 0 0 0.5rem; letter-spacing: -0.025em; }
 .subtitle { font-family: "Oxanium", sans-serif; color: hsl(var(--muted-foreground)); margin-bottom: 2rem; font-size: 0.875rem; font-weight: 500; }
 h2 { font-family: "Oxanium", sans-serif; font-size: 1.25rem; font-weight: 700; margin-top: 2.5rem; margin-bottom: 0.75rem; color: hsl(var(--foreground)); letter-spacing: -0.01em; }
@@ -61,6 +65,7 @@ footer { border-top: 1px solid hsl(var(--border) / 0.6); padding: 2rem 1.5rem; }
 .footer-links a { color: hsl(var(--muted-foreground)); }
 .footer-links a:hover { color: hsl(var(--foreground)); text-decoration: none; }
 @media (min-width: 640px) { .footer-inner { flex-direction: row; } }
+@media (max-width: 639px) { .header-inner { align-items: flex-start; flex-direction: column; } nav, .footer-links { flex-wrap: wrap; gap: 0.75rem; } }
 `;
 
 function legalHead(
@@ -93,7 +98,8 @@ function legalHead(
 }
 
 function legalHeader(crossLink: { href: string; label: string }): string {
-  return `<header>
+  return `<a class="skip-link" href="#main-content">Skip to main content</a>
+<header>
   <div class="header-inner">
     <a href="/" class="brand-wrap">
       <span class="brand-mark">HAF</span>
@@ -127,7 +133,7 @@ export const TERMS_OF_SERVICE_HTML = `<!DOCTYPE html>
 ${legalHead("Terms of Service")}
 <body>
 ${legalHeader({ href: "/privacy", label: "Privacy Policy" })}
-<main>
+<main id="main-content" tabindex="-1">
 <h1>Terms of Service</h1>
 <p class="subtitle">Last updated: July 30, 2026</p>
 
@@ -188,7 +194,7 @@ export const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
 ${legalHead("Privacy Policy")}
 <body>
 ${legalHeader({ href: "/terms", label: "Terms of Service" })}
-<main>
+<main id="main-content" tabindex="-1">
 <h1>Privacy Policy</h1>
 <p class="subtitle">Last updated: November 10, 2026</p>
 
@@ -278,7 +284,7 @@ export function renderSelfHostedPolicyUnavailable(
   return `<!DOCTYPE html><html lang="en">
 ${legalHead(title, site.publicUrl ?? requestOrigin, "This independent installation's operator has not configured this policy.")}
 <body>${legalHeader({ href: "/admin", label: "Dashboard" })}
-<main><h1>${title} unavailable</h1>
+<main id="main-content" tabindex="-1"><h1>${title} unavailable</h1>
 <p>This self-hosted HAF Bot installation is managed by <strong>${operator}</strong>.</p>
 <p>Its operator has not configured this policy. The hosted HAF service's policies do not describe this installation.</p>
 ${support}</main>${LEGAL_FOOTER}</body></html>`;

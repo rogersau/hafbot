@@ -7,10 +7,10 @@ description: "Set up HAF Bot member verification with a Discord button, or paid 
 Member Verification gives new members a Verify button and grants a configured Discord role after they complete the selected check.
 
 ::: info Available on every plan
-Welcome DMs, channel panels, and Discord-button verification are available on Free. Turnstile and Steam Link verification require a paid plan.
+Welcome DMs, channel panels, and the **Discord button** are available on Free. **Turnstile** and **Steam link required** are paid methods.
 :::
 
-::: warning Discord-button verification is not identity proof
+::: warning The Discord button is not identity proof
 The standard button confirms that the Discord account interacted with HAF Bot. It does not prove that the account belongs to a human or to a particular game account.
 :::
 
@@ -32,7 +32,7 @@ Open **Admin Dashboard → Member Verification**.
 ![Member Verification dashboard with delivery, method, and role settings numbered](/images/generated/admin-member-verification.png)
 
 1. **Delivery mode** — Welcome DM or persistent channel panel.
-2. **Verification method** — Discord button or an available stronger check.
+2. **Verification method** — Discord button, Turnstile, or Steam link required.
 3. **Verified Role** — the role granted after successful verification.
 
 To configure the feature:
@@ -51,23 +51,23 @@ Saving a channel-delivery configuration posts or refreshes the Welcome Panel aut
 
 ### Discord button
 
-Available on every plan. Selecting **Verify** grants the configured role.
+Available on every plan. Selecting **Verify** confirms the Discord account interacted with HAF Bot and grants the configured role. It does not prove a human or game-account identity.
 
-### Turnstile challenge
+### Turnstile {#turnstile-challenge}
 
-Paid plans only. The member completes a Cloudflare Turnstile challenge before receiving the role. This adds an automated-account check but does not establish a real-world identity.
+Paid plans only. The member completes a Cloudflare Turnstile challenge before receiving the role. This adds an automated-account check. It does not establish real-world identity.
 
 The option appears only when Turnstile has been configured for the HAF service.
 
-### Steam Link required
+### Steam link required
 
-Paid plans only. The member must have a Steam link when completing verification.
+Paid plans only. This method requires an active linked Steam account when completing the initial check.
 
 When no Steam link exists, HAF provides a Steam sign-in URL and asks the member to select **Verify** again after linking.
 
-Member Verification stores its own completed-verification state. Unlinking Steam later does not remove the Verified Role or revoke that saved state. A previously verified member who rejoins receives the Verified Role again even when their Steam link was later removed.
+Member Verification stores its own completed-verification state. Unlinking Steam later does not revoke saved verification or prevent HAF from restoring the role on rejoin. Member Verification does not remove the role when a Steam account is unlinked.
 
-Use a separate moderation or access-control process when continued Steam linking must remain a requirement after initial verification.
+Use a separate access policy if the link must stay active after initial verification.
 
 The option appears only when Steam linking is available. See [Player Link](/features/player-link) for how Steam identity linking works.
 

@@ -19,6 +19,14 @@ const types = {
 export async function serveAdmin({
   userProfile = { name: "Fictional Admin", email: "qa@example.invalid" },
 } = {}) {
+  return serveWebFixture({ userProfile, landing: false });
+}
+
+export async function serveLanding() {
+  return serveWebFixture({ userProfile: null, landing: true });
+}
+
+async function serveWebFixture({ userProfile, landing }) {
   await access(new URL(".vite/manifest.json", assetRoot));
   const { default: start } = await import("../../dist/server/server.js");
   const server = createServer(async (request, response) => {
@@ -56,15 +64,18 @@ export async function serveAdmin({
           .end(request.method === "HEAD" ? undefined : bytes);
         return;
       }
-      if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
+      const servePage = landing
+        ? url.pathname === "/"
+        : url.pathname === "/admin" || url.pathname.startsWith("/admin/");
+      if (servePage) {
         const rendered = await start.fetch(
           new Request(url, { method: request.method, headers: request.headers }),
           {
             context: {
               admin: {
-                authenticated: true,
+                authenticated: !landing,
                 userProfile,
-                playstationLinkEnabled: true,
+                playstationLinkEnabled: !landing,
                 workerVersion: "",
               },
               nonce: randomBytes(16).toString("base64"),
@@ -83,7 +94,7 @@ export async function serveAdmin({
       response.writeHead(404).end();
     } catch (error) {
       if (response.headersSent) response.destroy(error);
-      else response.writeHead(500).end("Admin fixture server failed to handle the request");
+      else response.writeHead(500).end("Web fixture server failed to handle the request");
     }
   });
   await new Promise((done, reject) => {

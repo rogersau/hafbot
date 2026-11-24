@@ -34,6 +34,8 @@ It also includes one shared White-Label Bot identity. The same custom bot name a
 
 Checkout, invoices, payment methods, and cancellation are handled through Stripe.
 
+Before signing in from a plan selection, review the current price, billing interval, and number of Discord servers you can assign. Billing shows these details again before you continue to Stripe. Paid features are applied to the eligible servers you select in Billing after purchase.
+
 Prices are listed in AUD. Stripe may show a supported local currency or payment method based on location. Review the final Checkout total before confirming payment.
 
 Stripe sends receipts and notices when a payment, renewal, required action, or cancellation changes. HAF may also show a private Billing notice in Discord or the dashboard.

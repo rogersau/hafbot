@@ -20,6 +20,11 @@ import {
 } from "../src/admin/components/admin-overview-page";
 import type { AdminGuildOverviewCard, RecommendedNextStep } from "../src/runtime/admin-types";
 import type { EntitlementInfo } from "../src/admin/hooks/use-entitlement";
+import { getDefaultAdminRedirectTarget } from "../src/admin/lib/admin-route-state";
+import { getDiscordSignInCallbackUrl } from "../src/admin/lib/dashboard-urls";
+import { FIRST_WORKFLOWS, readFirstWorkflow } from "../src/first-workflows";
+import { FirstWorkflowSelector } from "../src/landing/first-workflow-selector";
+import { getAdminLoginLocation } from "../src/runtime/admin-redirects";
 
 const cards: AdminGuildOverviewCard[] = [
   {
@@ -73,6 +78,7 @@ function renderPage(props: {
   cards?: AdminGuildOverviewCard[];
   r2Usage?: EntitlementInfo["r2Usage"] | null;
   recommendedNextStep?: RecommendedNextStep | null;
+  firstWorkflow?: (typeof FIRST_WORKFLOWS)[number];
 }) {
   return renderToString(
     <AdminOverviewPage
@@ -82,6 +88,7 @@ function renderPage(props: {
       cards={props.cards ?? [cards[0]!]}
       r2Usage={props.r2Usage ?? null}
       recommendedNextStep={props.recommendedNextStep ?? null}
+      firstWorkflowId={props.firstWorkflow?.id}
     />,
   );
 }
@@ -307,6 +314,57 @@ test("AdminOverviewPage lets an administrator start from a community goal", () =
   assert.match(html, /href="\/admin\/guild-1\/tickets\?tab=panel&amp;wizard=1"/);
 });
 
+test("a selected first workflow survives Discord sign-in and the default server redirect", () => {
+  const login = getAdminLoginLocation("/admin?workflow=tickets&other=ignored");
+  assert.equal(login, "/admin/login?next=%2Fadmin%3Fworkflow%3Dtickets");
+  const callback = getDiscordSignInCallbackUrl(login.split("?")[1] ?? "");
+  assert.equal(callback, "/admin?workflow=tickets");
+  const target = getDefaultAdminRedirectTarget({
+    currentPath: "/admin",
+    search: callback.split("?")[1] ?? "",
+    selectedWorkspaceId: "workspace-1",
+    selectedGuildId: "",
+    guildDirectory: [{ guildId: "guild-1", name: "Alpha", label: "Alpha", icon: null }],
+    defaultGuildId: null,
+    hiddenGuildIds: [],
+    preferencesLoading: false,
+    lastUsedGuildId: null,
+  });
+  assert.equal(target, "/admin/guild-1?workspaceId=workspace-1&workflow=tickets");
+  assert.equal(readFirstWorkflow(target?.split("?")[1] ?? "")?.feature, "Tickets");
+  assert.equal(getAdminLoginLocation("/admin?workflow=https%3A%2F%2Fexample.com"), "/admin/login");
+});
+
+test("a focused first workflow leads to feature-owned setup and can be dismissed", () => {
+  const html = renderPage({
+    selectedWorkspaceId: "workspace-1",
+    firstWorkflow: FIRST_WORKFLOWS[0],
+    cards: [{ ...cards[1]!, status: "not-set-up", detail: null, readiness: "not_setup" }],
+    recommendedNextStep: recommendation,
+  });
+
+  assert.match(
+    html,
+    /A panel channel, private Ticket category, transcript channel and support role/,
+  );
+  assert.match(html, /Save one Ticket type and publish its panel/);
+  assert.match(html, /As a non-staff member, open and close a test Ticket/);
+  assert.match(
+    html,
+    /href="\/admin\/guild-1\/tickets\?workspaceId=workspace-1&amp;tab=panel&amp;wizard=1"[^>]*>Open Tickets setup/,
+  );
+  assert.match(
+    html,
+    /href="\/admin\/guild-1\?workspaceId=workspace-1"[^>]*>Dismiss first workflow/,
+  );
+  assert.match(html, /All features/);
+  assert.doesNotMatch(html, /Set up HAF around your goal|Recommended next improvement/);
+  assert.doesNotMatch(
+    renderPage({ firstWorkflow: FIRST_WORKFLOWS[0], cards: [] }),
+    /Open Tickets setup/,
+  );
+});
+
 test("attention items prioritize broken and incomplete setup before inactive features", () => {
   const items = getOverviewAttentionItems([
     {
@@ -434,6 +492,33 @@ async function restoreInteractiveEnv(env: ReturnType<typeof createInteractiveEnv
   env.reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = env.previousActEnvironment;
   env.dom.window.close();
 }
+
+test("one native radio selection shows only the chosen workflow and keeps it in both links", async () => {
+  const env = createInteractiveEnv();
+  Object.assign(globalThis, { window: env.dom.window, document: env.dom.window.document });
+  try {
+    await act(async () => env.root.render(<FirstWorkflowSelector />));
+    const radios = env.container.querySelectorAll<HTMLInputElement>("input[type=radio]");
+    assert.equal(radios.length, FIRST_WORKFLOWS.length);
+    assert.ok(Array.from(radios).every((radio) => !radio.checked));
+    assert.equal(env.container.querySelector("h3"), null);
+
+    const ticket = radios[0]!;
+    await act(async () => ticket.click());
+    assert.equal(env.container.querySelector("h3")?.textContent, "Tickets");
+    assert.ok(env.container.querySelector('a[href="/install?workflow=tickets"]'));
+    assert.ok(env.container.querySelector('a[href="/admin?workflow=tickets"]'));
+
+    const verification = radios[1]!;
+    await act(async () => verification.click());
+    assert.equal(env.container.querySelector("h3")?.textContent, "Member Verification");
+    assert.equal(ticket.checked, false);
+    assert.equal(verification.checked, true);
+    assert.equal(env.container.querySelector('a[href="/install?workflow=tickets"]'), null);
+  } finally {
+    await restoreInteractiveEnv(env);
+  }
+});
 
 test("Operations inbox scopes pending state, prevents duplicate submits, and refreshes after success", async () => {
   const env = createInteractiveEnv();

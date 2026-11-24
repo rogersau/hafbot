@@ -1,4 +1,5 @@
 import changelog from "../../changelog.json";
+import { MAIN_CONTENT_ID, SkipLink } from "../accessibility/skip-link";
 
 const CHANGE_GROUPS = [
   ["new", "New"],
@@ -16,6 +17,7 @@ const RELEASE_DATE = new Intl.DateTimeFormat("en-AU", {
 export function ChangelogPage() {
   return (
     <div className="changelog-page min-h-screen bg-background text-foreground">
+      <SkipLink />
       <header className="border-b border-border/60">
         <nav className="mx-auto flex max-w-4xl flex-col gap-4 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <a href="/" className="flex w-fit items-center gap-3 text-foreground">
@@ -36,7 +38,7 @@ export function ChangelogPage() {
           </div>
         </nav>
       </header>
-      <main className="mx-auto max-w-4xl px-6 py-16">
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="mx-auto max-w-4xl px-6 py-16">
         <p className="font-display text-sm font-bold uppercase text-accent">Product updates</p>
         <h1 className="font-display mt-4 text-5xl font-extrabold leading-none sm:text-6xl">
           What's new in HAF Bot
@@ -46,8 +48,10 @@ export function ChangelogPage() {
         </p>
         <p className="mt-6 text-sm text-muted-foreground">
           Entries describe features at their release date. Check{" "}
-          <a href="https://docs.hafbot.xyz/plans">current plans and limits</a> before choosing a
-          subscription.
+          <a href="https://docs.hafbot.xyz/plans" className="underline">
+            current plans and limits
+          </a>{" "}
+          before choosing a subscription.
         </p>
         <div className="mt-14 space-y-12">
           {changelog.releases.map((release) => (

@@ -949,18 +949,38 @@ test("createRuntimeApp serves privacy policy page", async () => {
   assert.match(html, /Share anonymous product usage/i);
 });
 
-test("createRuntimeApp redirects /install to the Discord bot installation URL", async () => {
+test("createRuntimeApp reviews permissions before continuing to the configured Discord URL", async () => {
   const app = createRuntimeApp({
     discordPublicKey: "a".repeat(64),
     discordBotToken: "bot-token",
     discordApplicationId: "123456789012345678",
-    discordInstallPermissions: "268561488",
+    discordInstallPermissions: (268561488n | (1n << 36n)).toString(),
     verifyDiscordRequest: async () => true,
     stores: createRuntimeStoresWithOverrides({} as RuntimeStore),
     gateway: {} as GatewayController,
   });
 
-  const response = await app.fetch(new Request("https://runtime.example/install"));
+  const review = await app.fetch(new Request("https://runtime.example/install?workflow=tickets"));
+  assert.equal(review.status, 200);
+  assert.equal(review.headers.get("location"), null);
+  assert.match(review.headers.get("content-security-policy") ?? "", /script-src 'none'/);
+  const html = await review.text();
+  assert.match(html, /<h1>Review Discord permissions<\/h1>/);
+  assert.match(html, /What your first workflow needs/);
+  assert.match(
+    html,
+    /A panel channel, private Ticket category, transcript channel and support role/,
+  );
+  assert.match(html, /Create support channels and threads/);
+  assert.match(html, /Create Private Threads/);
+  assert.match(html, /Assign member roles/);
+  assert.match(html, /Run configured moderation/);
+  assert.doesNotMatch(html, /Timeout Members/);
+  assert.match(html, /href="\/admin\?workflow=tickets"/);
+
+  const continuation = /href="(\/install\?continue=discord)"/.exec(html)?.[1];
+  assert.ok(continuation);
+  const response = await app.fetch(new Request(new URL(continuation, "https://runtime.example")));
   assert.equal(response.status, 302);
 
   const location = response.headers.get("location");
@@ -968,8 +988,25 @@ test("createRuntimeApp redirects /install to the Discord bot installation URL", 
   const installUrl = new URL(location);
   assert.equal(installUrl.origin + installUrl.pathname, "https://discord.com/oauth2/authorize");
   assert.equal(installUrl.searchParams.get("client_id"), "123456789012345678");
-  assert.equal(installUrl.searchParams.get("permissions"), "268561488");
+  assert.equal(installUrl.searchParams.get("permissions"), (268561488n | (1n << 36n)).toString());
   assert.equal(installUrl.searchParams.get("scope"), "bot applications.commands");
+});
+
+test("createRuntimeApp preserves direct invites for independently hosted bots", async () => {
+  const app = createRuntimeApp({
+    discordPublicKey: "a".repeat(64),
+    discordBotToken: "bot-token",
+    discordApplicationId: "123456789012345678",
+    selfHostedSite: { operatorName: "Self-hosted test" },
+    verifyDiscordRequest: async () => true,
+    stores: createRuntimeStoresWithOverrides({} as RuntimeStore),
+    gateway: {} as GatewayController,
+  });
+  const response = await app.fetch(new Request("https://runtime.example/install"));
+  assert.equal(response.status, 302);
+  const location = response.headers.get("location");
+  assert.ok(location);
+  assert.equal(new URL(location).searchParams.get("permissions"), "0");
 });
 
 test("createRuntimeApp returns 404 for /install when Discord application ID is missing", async () => {

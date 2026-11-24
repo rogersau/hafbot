@@ -1,6 +1,8 @@
 import { LANDING_FAQ } from "./home-content";
 import { LandingDemo } from "./landing-demo";
 import type { PublicLandingPrice } from "./landing-prices";
+import { FirstWorkflowSelector } from "./first-workflow-selector";
+import { MAIN_CONTENT_ID, SkipLink } from "../accessibility/skip-link";
 
 export function LandingHomePage({ prices }: { prices: readonly PublicLandingPrice[] }) {
   return (
@@ -14,6 +16,7 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
         <span />
       </div>
       <div className="landing-page">
+        <SkipLink />
         <header className="site-header">
           <nav className="landing-shell site-nav" aria-label="Main navigation">
             <a className="brand" href="/" aria-label="HAF Bot home">
@@ -38,42 +41,32 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
           </nav>
         </header>
 
-        <main>
+        <main id={MAIN_CONTENT_ID} tabIndex={-1}>
           <section className="hero landing-shell" aria-labelledby="hero-title">
             <div className="hero-copy">
               <p className="eyebrow">
                 <span className="eyebrow-dot" aria-hidden="true"></span>BUILT FOR DISCORD GAMING
                 COMMUNITIES
               </p>
-              <h1 id="hero-title">Less time running Discord. More time playing.</h1>
+              <h1 id="hero-title">Handle player reports in private.</h1>
               <p className="hero-intro">
-                A Discord bot for gaming communities: handle player reports in private tickets, link
-                game accounts, organise groups and automate moderation from one web dashboard. Start
-                with one useful workflow on the hosted free plan, or self-host with Docker on your
-                own infrastructure.
+                HAF Bot adds private support tickets and a staff dashboard to your gaming Discord.
+                Choose one workflow, set it up, and test it as a member.
               </p>
               <div className="hero-actions">
-                <a className="button button-primary" href="/install">
-                  Add HAF Bot to Discord <span aria-hidden="true">↗</span>
-                </a>
-                <a className="button button-ghost" href="#live-demo">
-                  See it in action <span aria-hidden="true">↓</span>
-                </a>
-                <a className="button button-ghost" href="https://docs.hafbot.xyz/self-hosting">
-                  Self-host HAF <span aria-hidden="true">↗</span>
+                <a className="button button-primary" href="#first-workflow">
+                  Choose your first workflow <span aria-hidden="true">↓</span>
                 </a>
               </div>
               <ul className="hero-trust">
-                <li>Free forever plan</li>
-                <li>No card required</li>
-                <li>Guided setup</li>
+                <li>Start free, no card required</li>
               </ul>
             </div>
 
             <div
               className="radar-scope"
               role="img"
-              aria-label="Illustration of example HAF Bot activity: member verification, an LFG application, a trade post and moderator review. Not live customer data."
+              aria-label="Illustration of example HAF Bot activity: a private ticket, a welcome role, an LFG application and moderator review. Not live customer data."
             >
               <div className="scope-frame">
                 <header className="scope-bar">
@@ -91,7 +84,7 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
                   <div className="scope-sweep" aria-hidden="true"></div>
                   <div className="scope-blip blip-verified">
                     <i aria-hidden="true" />
-                    <b>Member verified</b>
+                    <b>Welcome role granted</b>
                   </div>
                   <div className="scope-blip blip-lfg">
                     <i aria-hidden="true" />
@@ -99,7 +92,7 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
                   </div>
                   <div className="scope-blip blip-trade">
                     <i aria-hidden="true" />
-                    <b>Trade posted</b>
+                    <b>Private ticket opened</b>
                   </div>
                   <div className="scope-blip blip-moderation">
                     <i aria-hidden="true" />
@@ -115,187 +108,10 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
             </div>
           </section>
 
+          <FirstWorkflowSelector />
           <LandingDemo />
 
-          <section className="operations-strip" aria-label="What HAF Bot covers">
-            <div className="landing-shell">
-              <p>One bot. Less admin. More time for your community.</p>
-              <div className="capability-marquee" aria-hidden="true">
-                <div className="marquee-track">
-                  <span>WELCOME</span>
-                  <span>VERIFY</span>
-                  <span>FIND SQUADS</span>
-                  <span>TRADE</span>
-                  <span>MODERATE</span>
-                  <span>LOG</span>
-                  <span>ANNOUNCE</span>
-                  <span>SCHEDULE</span>
-                </div>
-                <div className="marquee-track">
-                  <span>WELCOME</span>
-                  <span>VERIFY</span>
-                  <span>FIND SQUADS</span>
-                  <span>TRADE</span>
-                  <span>MODERATE</span>
-                  <span>LOG</span>
-                  <span>ANNOUNCE</span>
-                  <span>SCHEDULE</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
           <div className="lower-content">
-            <section className="goals landing-shell" aria-labelledby="goals-title">
-              <header className="section-heading reveal">
-                <div>
-                  <p className="eyebrow">START WITH WHAT YOU WANT TO IMPROVE</p>
-                  <h2 id="goals-title">What should HAF help your community do?</h2>
-                </div>
-                <p>
-                  Open a goal to see a practical starting point. You can add more features whenever
-                  your community needs them.
-                </p>
-              </header>
-              <div className="goal-accordion reveal">
-                <details open>
-                  <summary>
-                    <span className="goal-index" aria-hidden="true">
-                      01
-                    </span>
-                    <span className="goal-title">Protect the community</span>
-                  </summary>
-                  <div>
-                    <p>
-                      Limit unwanted reactions, flag suspicious accounts and review off-topic
-                      images.
-                    </p>
-                    <ul>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/reaction-rules">Reaction Rules</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/bot-defense">Bot Defense</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/image-rules">Image Rules</a>
-                      </li>
-                    </ul>
-                  </div>
-                </details>
-                <details>
-                  <summary>
-                    <span className="goal-index" aria-hidden="true">
-                      02
-                    </span>
-                    <span className="goal-title">Run staff operations</span>
-                  </summary>
-                  <div>
-                    <p>Give staff dependable support, evidence, and audit workflows.</p>
-                    <ul>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/tickets">Tickets</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/evidence-vault">Evidence Vault</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/guild-audit-log">
-                          Guild Audit Log
-                        </a>
-                      </li>
-                    </ul>
-                  </div>
-                </details>
-                <details>
-                  <summary>
-                    <span className="goal-index" aria-hidden="true">
-                      03
-                    </span>
-                    <span className="goal-title">Help members participate</span>
-                  </summary>
-                  <div>
-                    <p>
-                      Help members find groups, trade, join events, and turn structured Suggestions
-                      into transparent community decisions with visible staff outcomes.
-                    </p>
-                    <ul>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/lfg">Looking for Group</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/marketplace">Marketplace</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/suggestions">Suggestions</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/events">Events</a>
-                      </li>
-                    </ul>
-                  </div>
-                </details>
-                <details>
-                  <summary>
-                    <span className="goal-index" aria-hidden="true">
-                      04
-                    </span>
-                    <span className="goal-title">Connect players and systems</span>
-                  </summary>
-                  <div>
-                    <p>Connect player identities, game servers, and trusted external services.</p>
-                    <ul>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/player-link">Player Link</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/player-count">Player Count</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/webhook-proxy">Webhooks</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/server-levels">
-                          DayZ Server Levels (Beta)
-                        </a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/guides/wardogs-discord-community">
-                          WARDOGS Discord setup and status
-                        </a>
-                      </li>
-                    </ul>
-                  </div>
-                </details>
-                <details>
-                  <summary>
-                    <span className="goal-index" aria-hidden="true">
-                      05
-                    </span>
-                    <span className="goal-title">Manage access and communications</span>
-                  </summary>
-                  <div>
-                    <p>Automate temporary access and keep important Discord messages current.</p>
-                    <ul>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/timed-roles">Timed Roles</a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/managed-messages">
-                          Managed Messages
-                        </a>
-                      </li>
-                      <li>
-                        <a href="https://docs.hafbot.xyz/features/member-verification">
-                          Member Verification
-                        </a>
-                      </li>
-                    </ul>
-                  </div>
-                </details>
-              </div>
-            </section>
-
             <section className="pricing landing-shell" id="plans" aria-labelledby="plans-title">
               <header className="section-heading reveal">
                 <div>
@@ -307,6 +123,11 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
                     These plans cover the hosted HAF service. Stripe handles monthly and yearly
                     payments. Self-hosted mode includes core features with your own external
                     services.
+                  </p>
+                  <p>
+                    Buying a plan does not upgrade every server you manage. After purchase, choose
+                    one eligible Discord server in Billing with Premium, or up to three with Premium
+                    Plus.
                   </p>
                   <a href="https://docs.hafbot.xyz/plans">Compare every feature and plan limit ↗</a>
                 </div>
@@ -323,22 +144,24 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
                     <li>1 ticket panel and type, with ordinary transcripts</li>
                     <li>Up to 100 player links across supported platforms</li>
                     <li>LFG, Marketplace, Suggestions and Timed Roles</li>
-                    <li>3 managed messages, including drafts · 100 MB storage</li>
+                    <li>3 Managed Messages total across drafts and published messages</li>
+                    <li>100 MB managed storage</li>
                   </ul>
                   <a href="/install">Add to Discord</a>
                 </article>
                 <article className="recommended">
                   <b className="recommended-label">RECOMMENDED</b>
                   <small>PREMIUM</small>
-                  <h3>Level up one community</h3>
+                  <h3>When Free is not enough</h3>
                   <div className="stripe-prices">
                     <PlanPrices prices={prices} plan="premium" />
                   </div>
                   <ul>
-                    <li>Paid features for 1 assigned Discord server</li>
-                    <li>More ticket types, advanced ticket tools and Events</li>
-                    <li>No plan quantity limit on player links or managed messages</li>
-                    <li>1 GB managed storage · monthly or yearly billing</li>
+                    <li>Separate ticket types for support and reports</li>
+                    <li>Scheduled Events, Image Rules or Mention Spam Protection</li>
+                    <li>Player Count or Webhooks</li>
+                    <li>More than 100 Player Links or more than 3 Managed Messages</li>
+                    <li>1 GB managed storage</li>
                   </ul>
                   <a href="/admin/billing?plan=premium&amp;frequency=yearly">Choose Premium</a>
                 </article>
@@ -373,11 +196,11 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
             <section className="faq landing-shell" id="faq" aria-labelledby="faq-title">
               <div className="reveal">
                 <p className="eyebrow">QUICK ANSWERS</p>
-                <h2 id="faq-title">Before you add another bot…</h2>
+                <h2 id="faq-title">Before you install</h2>
               </div>
               <div className="reveal">
-                {LANDING_FAQ.map(({ question, answer, guide }, index) => (
-                  <details key={question} open={index === 0}>
+                {LANDING_FAQ.map(({ question, answer, guide }) => (
+                  <details key={question}>
                     <summary>{question}</summary>
                     <p>
                       {answer}
@@ -390,26 +213,6 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
                     </p>
                   </details>
                 ))}
-              </div>
-            </section>
-
-            <section className="final-cta landing-shell" aria-labelledby="cta-title">
-              <div className="final-cta-card reveal">
-                <div className="final-cta-ping" aria-hidden="true"></div>
-                <p className="eyebrow">READY WHEN YOU ARE</p>
-                <h2 id="cta-title">Get your evenings back.</h2>
-                <p>
-                  Add HAF Bot to your Discord and hand over the busywork tonight. Free plan
-                  included—upgrade only if you outgrow it.
-                </p>
-                <div className="hero-actions">
-                  <a className="button button-primary" href="/install">
-                    Add HAF Bot to Discord <span aria-hidden="true">↗</span>
-                  </a>
-                  <a className="button button-ghost" href="https://docs.hafbot.xyz">
-                    Browse the docs <span aria-hidden="true">↗</span>
-                  </a>
-                </div>
               </div>
             </section>
           </div>

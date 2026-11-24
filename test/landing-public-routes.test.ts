@@ -16,11 +16,10 @@ test("home response exposes the launch content and discovery metadata without Ja
   const html = (await response?.text()) ?? "";
 
   assert.equal(response?.status, 200);
-  assert.match(html, /<h1[^>]*>\s*Less time running Discord\. More time playing\./);
+  assert.match(html, /<h1[^>]*>\s*Handle player reports in private\./);
   assert.match(html, /Example Discord gaming community using HAF Bot/);
   assert.match(html, /Managed Message/i);
-  assert.match(html, /Image Rules Mod Queue/i);
-  assert.match(html, /Guild Audit Log/i);
+  assert.match(html, /Choose your first workflow/);
   assert.match(html, /<h2[^>]*>Start free\. Upgrade when your community needs more\.<\/h2>/);
   assert.match(html, /<title>HAF Bot.*Discord tickets, player links/);
   assert.match(html, /<link rel="canonical" href="https:\/\/hafbot\.xyz\/"/);
@@ -41,7 +40,7 @@ test("home response exposes the launch content and discovery metadata without Ja
   }
   assert.equal([...html.matchAll(/<h1(?:\s|>)/g)].length, 1);
   assert.match(html, /What happens if I cancel\?/);
-  assert.match(html, /href="https:\/\/docs\.hafbot\.xyz\/features\/image-rules"/);
+  assert.match(html, /href="https:\/\/docs\.hafbot\.xyz\/features\/tickets"/);
 });
 
 test("public documents keep their security headers and nonce all hydration scripts", async () => {
@@ -79,41 +78,41 @@ test("public documents keep their security headers and nonce all hydration scrip
   }
 });
 
-test("home response renders the same Stripe catalogue values into plans and structured offers", async () => {
+test("signed-out plans, structured offers, and checkout review use the same Stripe catalogue", async () => {
   const routes = createPublicWeb({
     landingPriceCatalog: {
       read: async () => [
         {
           plan: "premium",
           frequency: "monthly",
-          unitAmount: 2900,
+          unitAmount: 499,
           currency: "aud",
-          decimalAmount: "29.00",
-          formattedAmount: "$29.00",
+          decimalAmount: "4.99",
+          formattedAmount: "$4.99",
         },
         {
           plan: "premium",
           frequency: "yearly",
-          unitAmount: 29000,
+          unitAmount: 4500,
           currency: "aud",
-          decimalAmount: "290.00",
-          formattedAmount: "$290.00",
+          decimalAmount: "45.00",
+          formattedAmount: "$45.00",
         },
         {
           plan: "premium_plus",
           frequency: "monthly",
-          unitAmount: 4900,
+          unitAmount: 899,
           currency: "aud",
-          decimalAmount: "49.00",
-          formattedAmount: "$49.00",
+          decimalAmount: "8.99",
+          formattedAmount: "$8.99",
         },
         {
           plan: "premium_plus",
           frequency: "yearly",
-          unitAmount: 49000,
+          unitAmount: 8000,
           currency: "aud",
-          decimalAmount: "490.00",
-          formattedAmount: "$490.00",
+          decimalAmount: "80.00",
+          formattedAmount: "$80.00",
         },
       ],
     },
@@ -122,12 +121,10 @@ test("home response renders the same Stripe catalogue values into plans and stru
   const response = await routes(new Request("https://hafbot.xyz/"));
   const html = (await response?.text()) ?? "";
 
-  assert.match(html, /\$29\.00<\/strong><span>AUD \/ month/);
-  assert.match(html, /\$290\.00<\/strong><span>AUD \/ year/);
-  assert.match(html, /\$49\.00<\/strong><span>AUD \/ month/);
-  assert.match(html, /\$490\.00<\/strong><span>AUD \/ year/);
-  assert.match(html, /"name":"Premium monthly"[^}]+"price":"29\.00"/);
-  assert.match(html, /"name":"Premium Plus yearly"[^}]+"price":"490\.00"/);
+  assert.match(html, /\$4\.99<\/strong><span>AUD \/ month/);
+  assert.match(html, /\$45\.00<\/strong><span>AUD \/ year/);
+  assert.match(html, /\$8\.99<\/strong><span>AUD \/ month/);
+  assert.match(html, /\$80\.00<\/strong><span>AUD \/ year/);
   assert.doesNotMatch(html, /View current price in Billing/);
   assert.match(html, /Standard subscription prices/);
   assert.doesNotMatch(html, /founder|places claimed|cannot be reclaimed/i);
@@ -138,11 +135,36 @@ test("home response renders the same Stripe catalogue values into plans and stru
     ?.offers?.slice(1)
     .map((offer) => ({ name: offer.name, price: offer.price, currency: offer.priceCurrency }));
   assert.deepEqual(offers, [
-    { name: "Premium monthly", price: "29.00", currency: "AUD" },
-    { name: "Premium yearly", price: "290.00", currency: "AUD" },
-    { name: "Premium Plus monthly", price: "49.00", currency: "AUD" },
-    { name: "Premium Plus yearly", price: "490.00", currency: "AUD" },
+    { name: "Premium monthly", price: "4.99", currency: "AUD" },
+    { name: "Premium yearly", price: "45.00", currency: "AUD" },
+    { name: "Premium Plus monthly", price: "8.99", currency: "AUD" },
+    { name: "Premium Plus yearly", price: "80.00", currency: "AUD" },
   ]);
+
+  for (const [plan, frequency, amount, interval] of [
+    ["premium", "monthly", "$4.99", "month"],
+    ["premium", "yearly", "$45.00", "year"],
+    ["premium_plus", "monthly", "$8.99", "month"],
+    ["premium_plus", "yearly", "$80.00", "year"],
+  ]) {
+    const billing = await routes(
+      new Request(`https://hafbot.xyz/admin/billing?plan=${plan}&frequency=${frequency}`),
+    );
+    assert.equal(billing.status, 302);
+    const location = billing.headers.get("location");
+    assert.ok(location?.startsWith("/admin/login?next="));
+    const login = await routes(new Request(new URL(location!, "https://hafbot.xyz")));
+    assert.equal(login.status, 200);
+    const loginHtml = await login.text();
+    assert.ok(loginHtml.includes(`${amount} AUD / ${interval}`));
+    assert.ok(
+      loginHtml.includes(
+        plan === "premium"
+          ? "choose one eligible Discord server in Billing"
+          : "choose up to three eligible Discord servers in Billing",
+      ),
+    );
+  }
 });
 
 test("home response fails honestly when no valid Stripe catalogue is available", async () => {
@@ -153,7 +175,7 @@ test("home response fails honestly when no valid Stripe catalogue is available",
   const html = (await (await routes(new Request("https://hafbot.xyz/")))?.text()) ?? "";
 
   assert.match(html, /View current price in Billing/);
-  assert.doesNotMatch(html, /\$29\.00|\$49\.00/);
+  assert.doesNotMatch(html, /\$4\.99|\$8\.99/);
   const structuredData = readStructuredData(html);
   const software = structuredData["@graph"]?.find(
     (entry) => entry["@type"] === "SoftwareApplication",
@@ -177,57 +199,42 @@ test("home response has coherent accessible tab and landmark semantics", async (
   }
 });
 
-test("home Discord preview exposes each community workflow as a selectable Discord embed", async () => {
+test("home Discord preview gives new visitors three representative workflows", async () => {
   const routes = createPublicWeb();
-  const html = (await (await routes(new Request("https://hafbot.xyz/")))?.text()) ?? "";
-  const document = new JSDOM(html).window.document;
-  const expectedChannels = [
-    "announcements",
-    "community",
-    "mod-queue",
-    "audit-log",
-    "welcome",
-    "looking-for-group",
-    "marketplace",
-    "evidence-vault",
-  ];
-
-  assert.deepEqual(
-    [...document.querySelectorAll<HTMLElement>("[role=tab][data-channel]")].map(
-      (tab) => tab.dataset.channel,
-    ),
-    expectedChannels,
-  );
-  for (const channel of expectedChannels.slice(3)) {
-    const panel = document.querySelector<HTMLElement>(`[data-panel="${channel}"]`);
-    assert.ok(panel, `missing ${channel} panel`);
-    assert.ok(
-      panel.querySelector(".discord-message .discord-embed"),
-      `${channel} is not represented as a Discord embed`,
+  const html = await (await routes(new Request("https://hafbot.xyz/"))).text();
+  const dom = new JSDOM(html);
+  try {
+    const { document } = dom.window;
+    const tabs = [...document.querySelectorAll<HTMLElement>("[role=tab][data-channel]")];
+    assert.deepEqual(
+      tabs.map((tab) => tab.dataset.channel),
+      ["support", "welcome", "looking-for-group"],
     );
+    const docs = [
+      "/features/tickets",
+      "/features/member-verification#verification-methods",
+      "/features/lfg",
+    ];
+    for (const [index, tab] of tabs.entries()) {
+      const panel = document.getElementById(tab.getAttribute("aria-controls")!);
+      assert.ok(panel);
+      assert.ok(panel.querySelector(".discord-message .discord-embed"));
+      assert.equal(panel.hidden, index !== 0);
+      assert.equal(panel.getAttribute("aria-labelledby"), tab.id);
+      assert.ok(panel.querySelector(`a[href="https://docs.hafbot.xyz${docs[index]}"]`));
+    }
+    assert.match(document.querySelector("#panel-support")?.textContent ?? "", /Open ticket/);
+    assert.match(
+      (document.querySelector("#panel-welcome")?.textContent ?? "").replace(/\s+/g, " "),
+      /It does not prove human or game-account identity/,
+    );
+    assert.match(
+      document.querySelector("#panel-looking-for-group")?.textContent ?? "",
+      /I'm Interested/,
+    );
+  } finally {
+    dom.window.close();
   }
-  assert.equal(document.querySelectorAll('[data-panel="audit-log"] .discord-embed').length, 3);
-  const auditText = document.querySelector('[data-panel="audit-log"]')?.textContent ?? "";
-  assert.match(auditText, /Image Rules Mod Queue Action/);
-  assert.match(auditText, /Author[\s\S]+Channel[\s\S]+Message ID/);
-  assert.match(auditText, /Member Verified[\s\S]*User[\s\S]+Context/);
-  assert.equal(
-    document.querySelectorAll('[data-panel="audit-log"] .embed-fields.single-column').length,
-    3,
-  );
-  assert.match(document.querySelector('[data-panel="welcome"]')?.textContent ?? "", /Verify/);
-  assert.match(
-    document.querySelector('[data-panel="looking-for-group"]')?.textContent ?? "",
-    /I'm Interested[\s\S]+Close Post/,
-  );
-  assert.match(
-    document.querySelector('[data-panel="marketplace"]')?.textContent ?? "",
-    /Is there something you are looking for\?[\s\S]+Extra info[\s\S]+Do Business[\s\S]+Close Post/,
-  );
-  assert.match(
-    document.querySelector('[data-panel="evidence-vault"]')?.textContent ?? "",
-    /View record/,
-  );
 });
 
 test("public discovery documents point crawlers at the canonical product sources", async () => {
@@ -250,6 +257,32 @@ test("public discovery documents point crawlers at the canonical product sources
   assert.match(llmsText, /https:\/\/docs\.hafbot\.xyz/);
 });
 
+test("hosted install review works without scripts and does not reflect unsupported workflows", async () => {
+  const routes = createPublicWeb({ discordApplicationId: "123456789012345678" });
+  const url = new URL("https://hafbot.xyz/install");
+  url.searchParams.set("workflow", "<img src=x onerror=alert(1)>");
+  const response = await routes(new Request(url));
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  const dom = new JSDOM(html, { url: url.href });
+  try {
+    const { document } = dom.window;
+    assert.equal(document.querySelector("script, img"), null);
+    const skip = document.querySelector("body > a");
+    assert.equal(skip?.getAttribute("href"), "#main-content");
+    const main = document.querySelector("main#main-content");
+    assert.equal(main?.getAttribute("tabindex"), "-1");
+    assert.match(main?.textContent ?? "", /no extra permissions for the bot role/);
+    assert.equal(main?.querySelector('a[href="/admin"]')?.textContent, "open dashboard setup");
+    assert.match(
+      main?.querySelector('a[href="/install?continue=discord"]')?.textContent ?? "",
+      /opens in a new tab/,
+    );
+  } finally {
+    dom.window.close();
+  }
+});
+
 test("public HTML and install routes emit bounded events without affecting responses", async () => {
   const events: ProductAnalyticsEvent[] = [];
   const routes = createPublicWeb({
@@ -269,9 +302,13 @@ test("public HTML and install routes emit bounded events without affecting respo
       },
     ),
   );
-  const install = await routes(new Request("https://hafbot.xyz/install"));
+  const review = await routes(new Request("https://hafbot.xyz/install"));
 
   assert.equal(home?.status, 200);
+  assert.equal(review?.status, 200);
+  assert.equal(events.length, 1);
+
+  const install = await routes(new Request("https://hafbot.xyz/install?continue=discord"));
   assert.equal(install?.status, 302);
   assert.equal(events[0]?.name, "public_page_viewed");
   assert.deepEqual(events[0]?.name === "public_page_viewed" ? events[0] : null, {
