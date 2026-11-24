@@ -323,9 +323,9 @@ function WardogsCommunitySettings({
                 />
               </FormField>
               <FormField
-                label="Voice channel name format"
+                label="Voice channel name template"
                 htmlFor="wardogs-gold-voice-format"
-                hint="Use {price} for cash per bar, {change} for the percent change since yesterday, and {date} for the UTC price date."
+                hint="Edit the whole name. Use {price} on its own to show only the number. Add your own text, {change} for the daily percentage change, or {date} for the UTC price date."
               >
                 <Input
                   id="wardogs-gold-voice-format"
@@ -342,7 +342,8 @@ function WardogsCommunitySettings({
               </FormField>
               {!voiceFormatValid ? (
                 <p className="text-sm text-destructive">
-                  Enter a name using the supported placeholders.
+                  Enter a single-line name. Supported placeholders are{" "}
+                  {"{price}, {change}, and {date}"}.
                 </p>
               ) : gold ? (
                 <p className="break-all text-sm text-muted-foreground">

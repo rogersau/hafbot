@@ -1,12 +1,19 @@
 import type { WardogsGoldStatus } from "./community-data";
 import { GOLD_DAY_MS } from "./gold-status";
 
-const dateLabel = new Intl.DateTimeFormat("en-US", {
+const dateLabel = new Intl.DateTimeFormat("en-GB", {
   month: "short",
   day: "numeric",
   timeZone: "UTC",
 });
 const number = new Intl.NumberFormat("en-US");
+const compactNumber = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+const fontFamily = "DejaVu Sans";
+const gold = "#ffd580";
+const headingColor = "#f3eee5";
 
 export async function renderWardogsGoldChart(
   { latest, history }: WardogsGoldStatus,
@@ -17,41 +24,50 @@ export async function renderWardogsGoldChart(
   const pointsByDay = new Map(history.map((point) => [point.ts, point.price]));
   pointsByDay.set(latest.ts, latest.price);
   const high = Math.max(...pointsByDay.values());
-  const chartWidth = 680;
-  const chartHeight = 180;
-  const slot = chartWidth / days;
-  const barWidth = Math.min(52, slot * 0.65);
-  const baseline = 314;
+  const width = 840;
+  const inset = 30;
+  const chartHeight = 150;
+  const slot = (width - inset * 2) / days;
+  const barWidth = Math.min(64, slot * 0.58);
+  const baseline = 282;
 
   const rows = Array.from({ length: days }, (_, index) => {
     const ts = start + index * GOLD_DAY_MS;
     const price = pointsByDay.get(ts);
-    const x = 40 + (index + 0.5) * slot;
+    const current = ts === latest.ts;
+    const x = inset + (index + 0.5) * slot;
     const height = price === undefined ? 0 : (price / high) * chartHeight;
+    const top = baseline - height;
     const bar =
       price === undefined
         ? ""
-        : `<rect x="${x - barWidth / 2}" y="${baseline - height}" width="${barWidth}" height="${height}"
-            rx="4" fill="${ts === latest.ts ? "#facc68" : "#b7863b"}"/>`;
+        : `<rect x="${x - barWidth / 2}" y="${top}" width="${barWidth}" height="${height}"
+            rx="5" fill="${current ? gold : "#9d753e"}"/>`;
+    const label =
+      price === undefined ? "—" : (price < 10_000_000 ? number : compactNumber).format(price);
     return `
       ${bar}
-      <text x="${x}" y="${baseline - height - 10}" text-anchor="middle" fill="#f8fafc" font-size="13">
-        ${price === undefined ? "—" : number.format(price)}
-      </text>
-      <text x="${x}" y="340" text-anchor="middle" fill="#cbd5e1" font-size="15">${dateLabel.format(ts)}</text>
+      <text x="${x}" y="${top - 12}" text-anchor="middle" fill="${current ? gold : "#f3eee5"}"
+        font-size="${label.length > 7 ? 18 : 21}" font-weight="bold">${label}</text>
+      <text x="${x}" y="319" text-anchor="middle" fill="${current ? gold : "#c7c0b4"}"
+        font-size="20">${dateLabel.format(ts)}</text>
     `;
   });
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380">
-    <rect width="760" height="380" fill="#17202d"/>
-    <rect x="40" y="36" width="32" height="4" rx="2" fill="#facc68"/>
-    <g font-family="DejaVu Sans, sans-serif">
-      <text x="40" y="77" fill="#f8fafc" font-size="29" font-weight="bold">WARDOGS Gold Exchange</text>
-      <text x="40" y="105" fill="#cbd5e1" font-size="16">Cash per gold bar · UTC</text>
-      <path d="M40 134H720 M40 194H720 M40 254H720 M40 314H720" stroke="#465568" fill="none"/>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="350">
+    <rect width="${width}" height="350" fill="#1b1917"/>
+    <g font-family="${fontFamily}">
+      <text x="${inset}" y="49" fill="${headingColor}" font-size="33" font-weight="bold">Recent gold prices</text>
+      <text x="${inset}" y="81" fill="#c7c0b4" font-size="21">Cash per gold bar · UTC</text>
+      <path d="M30 132H810 M30 182H810 M30 232H810 M30 282H810" stroke="#403a32" fill="none"/>
       ${rows.join("")}
     </g>
   </svg>`;
   const { renderAsync } = await import("@resvg/resvg-js");
-  const png = (await renderAsync(svg, null, signal)).asPng();
-  return new Blob([new Uint8Array(png)], { type: "image/png" });
+  const image = await renderAsync(svg, { font: { defaultFontFamily: fontFamily } }, signal);
+  // resvg can succeed with all text missing on hosts without fonts.
+  const headingPixels = image.pixels.subarray(0, width * 56 * 4);
+  if (!headingPixels.includes(Buffer.from(`${headingColor.slice(1)}ff`, "hex"))) {
+    throw new Error("WARDOGS gold chart text did not render");
+  }
+  return new Blob([new Uint8Array(image.asPng())], { type: "image/png" });
 }

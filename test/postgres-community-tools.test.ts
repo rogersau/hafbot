@@ -47,7 +47,7 @@ test(
         content: string;
         roles: string[];
         nonce: string;
-        attachment?: { filename: string; data: Blob };
+        attachment?: { filename: string; description: string; data: Blob; fallbackContent: string };
       }> = [];
       const panelMessages: Array<{ messageId: string; channelId: string }> = [];
       const deletes: string[] = [];
@@ -305,7 +305,7 @@ test(
       assert.match(goldPosts()[0]!.content, /651,250 cash/);
       assert.match(goldPosts()[0]!.content, /Price history \(UTC\)/);
       assert.match(goldPosts()[0]!.content, /621,425/);
-      assert.deepEqual(renames, [{ channelId: "106", name: "Gold: 651,250 cash" }]);
+      assert.deepEqual(renames, [{ channelId: "106", name: "Gold: 651,250" }]);
 
       await service.configureWardogsGold("100", "104");
       await service.configureWardogsGold("100", undefined, undefined, {
@@ -331,9 +331,12 @@ test(
       );
       assert.notEqual(goldPosts()[0]?.nonce, goldPosts()[1]?.nonce);
       const chartPost = goldPosts()[1]!;
-      assert.match(chartPost.content, /Price history \(UTC\)/);
-      assert.match(chartPost.content, /621,425/);
+      assert.match(chartPost.content, /^### WARDOGS Gold Exchange/);
+      assert.match(chartPost.content, /\(<https:\/\/wardogserverlist\.com\/gold-bars>\)/);
+      assert.doesNotMatch(chartPost.content, /621,425/);
       assert.equal(chartPost.attachment?.filename, "wardogs-gold-price.png");
+      assert.match(chartPost.attachment.description, /621,425/);
+      assert.match(chartPost.attachment.fallbackContent, /621,425/);
       assert.equal(chartPost.attachment.data.type, "image/png");
       const png = Buffer.from(await chartPost.attachment.data.arrayBuffer());
       assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
@@ -345,7 +348,7 @@ test(
       await service.sweep();
       assert.equal(goldPosts().length, 2, "turning updates off stops later posts");
       assert.deepEqual(renames, [
-        { channelId: "106", name: "Gold: 651,250 cash" },
+        { channelId: "106", name: "Gold: 651,250" },
         { channelId: "106", name: "Gold 651,250 (+4.8%)" },
         { channelId: "106", name: "Gold 670,000 (+7.8%)" },
       ]);

@@ -12,7 +12,7 @@ const percent = new Intl.NumberFormat("en-US", {
 });
 const chartLevels = "▁▂▃▄▅▆▇█";
 
-export const DEFAULT_GOLD_VOICE_FORMAT = "Gold: {price} cash";
+export const DEFAULT_GOLD_VOICE_FORMAT = "Gold: {price}";
 export const GOLD_VOICE_FORMAT_LIMIT = 100;
 export const GOLD_POST_FORMATS = ["full", "chart", "image", "summary"] as const;
 export type GoldPostFormat = (typeof GOLD_POST_FORMATS)[number];
@@ -55,13 +55,16 @@ export function formatWardogsGoldStatus(
   format: GoldPostFormat = "full",
 ): string {
   const { latest, history } = status;
-  const lines = [
-    "**WARDOGS Gold Exchange**",
-    `**${number.format(latest.price)} cash** per gold bar`,
-    `Price for ${utcDate.format(latest.ts)} UTC`,
-  ];
   const change = dailyChange(status);
-  if (change) lines.push(`${change} vs. yesterday`);
+  const date = `${utcDate.format(latest.ts)} UTC`;
+  const lines = [
+    format === "image" ? "### WARDOGS Gold Exchange" : "**WARDOGS Gold Exchange**",
+    `**${number.format(latest.price)} cash** per gold bar`,
+    format === "image"
+      ? [date, change && `**${change}** vs. yesterday`].filter(Boolean).join(" · ")
+      : `Price for ${date}`,
+  ];
+  if (change && format !== "image") lines.push(`${change} vs. yesterday`);
   if (format === "chart" && history.length > 1) {
     const high = Math.max(...history.map(({ price }) => price));
     const rows = history.map(({ ts, price }) => {
@@ -69,12 +72,6 @@ export function formatWardogsGoldStatus(
       return `${utcDate.format(ts).padStart(11)}  ${number.format(price).padStart(10)}  ${bar}`;
     });
     lines.push("", "**Price history (cash per gold bar, UTC)**", "```", ...rows, "```");
-  } else if (format === "image" && history.length > 1) {
-    lines.push(
-      "",
-      "**Price history (UTC)**",
-      ...history.map(({ ts, price }) => `${utcDate.format(ts)} · ${number.format(price)}`),
-    );
   } else if (format === "full" && history.length > 1) {
     const prices = history.map((point) => point.price);
     const low = Math.min(...prices);
@@ -90,7 +87,13 @@ export function formatWardogsGoldStatus(
   }
   lines.push(
     "",
-    `[Source: WARDOGS Server List](${WARDOGS_SERVER_LIST_URL}/gold-bars) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)`,
+    `-# Data: [WARDOGS Server List](<${WARDOGS_SERVER_LIST_URL}/gold-bars>) · [CC BY 4.0](<https://creativecommons.org/licenses/by/4.0/>)`,
   );
   return lines.join("\n");
+}
+
+export function describeWardogsGoldChart({ latest, history }: WardogsGoldStatus): string {
+  const entries = history.filter(({ ts }) => ts < latest.ts).concat(latest);
+  const prices = entries.map(({ ts, price }) => `${utcDate.format(ts)}, ${number.format(price)}`);
+  return `Daily cash per gold bar (UTC). ${prices.join(". ")}.`;
 }

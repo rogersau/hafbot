@@ -9,6 +9,7 @@ import { renderWardogsGoldChart } from "../wardogs/gold-chart";
 import {
   DEFAULT_GOLD_VOICE_FORMAT,
   GOLD_DAY_MS,
+  describeWardogsGoldChart,
   formatWardogsGoldChannelName,
   formatWardogsGoldStatus,
   type GoldPostFormat,
@@ -42,6 +43,13 @@ export interface CommunityMember {
   roles: string[];
   bot: boolean;
 }
+interface CommunityAttachment {
+  filename: string;
+  description: string;
+  data: Blob;
+  fallbackContent: string;
+}
+
 export interface CommunityDiscord {
   resources(): Promise<GuildPermissionContext>;
   member(userId: string): Promise<CommunityMember | null>;
@@ -50,7 +58,7 @@ export interface CommunityDiscord {
     content: string,
     roleIds: string[],
     nonce: string,
-    attachment?: { filename: string; description: string; data: Blob },
+    attachment?: CommunityAttachment,
   ): Promise<void>;
   delete(channelId: string, messageId: string): Promise<void>;
   timeout(userId: string, untilMs: number): Promise<void>;
@@ -606,17 +614,18 @@ export class CommunityToolsService {
       if (goldVoice) await discord.renameVoiceChannel(delivery.channelId, delivery.content);
       else {
         let content = delivery.content;
-        let attachment: { filename: string; description: string; data: Blob } | undefined;
+        let attachment: CommunityAttachment | undefined;
         if (gold && delivery.itemId === WARDOGS_GOLD_IMAGE_ITEM) {
           const status = JSON.parse(delivery.content) as WardogsGoldStatus;
-          content = formatWardogsGoldStatus(status, "image");
+          content = formatWardogsGoldStatus(status);
           try {
             attachment = {
               filename: "wardogs-gold-price.png",
-              description:
-                "Bar chart of the daily cash price per gold bar. Exact prices are listed in the message.",
+              description: describeWardogsGoldChart(status),
               data: await renderWardogsGoldChart(status, signal),
+              fallbackContent: content,
             };
+            content = formatWardogsGoldStatus(status, "image");
           } catch {
             signal?.throwIfAborted();
             console.warn("wardogs_gold_chart_render_failed");
