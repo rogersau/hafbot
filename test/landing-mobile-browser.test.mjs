@@ -1,32 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { chromium } from "@playwright/test";
-import react from "@vitejs/plugin-react";
-import { createServer } from "vite";
+import { serveLanding } from "../scripts/admin-qa/server.mjs";
 
 test("mobile landing keeps pricing and the primary action reachable with usable navigation targets", async (t) => {
-  const vite = await createServer({
-    configFile: false,
-    cacheDir: "node_modules/.vite-landing-mobile-test",
-    server: { host: "127.0.0.1", port: 0, hmr: false },
-    logLevel: "error",
-    plugins: [react(), landingFixture()],
-  });
+  const server = await serveLanding();
+  const { origin } = server;
   let browser;
   try {
-    await vite.listen();
     browser = await chromium.launch();
-    const origin = vite.resolvedUrls.local[0];
     for (const reducedMotion of ["no-preference", "reduce"]) {
       for (const width of [320, 375, 390]) {
         const viewport = { width, height: 667 };
         const page = await browser.newPage({ viewport, reducedMotion });
         page.setDefaultTimeout(5_000);
+        const browserErrors = [];
+        page.on("pageerror", (error) => browserErrors.push(error.message));
+        await page.route("**/*", (route) =>
+          new URL(route.request().url()).origin === origin ? route.continue() : route.abort(),
+        );
         try {
-          await page.goto(origin);
-          // The first navigation compiles the Vite fixture and Tailwind CSS under shared CI load.
-          await page.locator(".hero h1").waitFor({ timeout: 20_000 });
-          await page.evaluate(() => document.fonts.ready.then(() => undefined));
+          await openLanding(page, origin);
 
           const dimensions = await page.evaluate(() => ({
             documentWidth: document.documentElement.scrollWidth,
@@ -87,6 +81,14 @@ test("mobile landing keeps pricing and the primary action reachable with usable 
           if (width === 375 && reducedMotion === "reduce") {
             await checkFirstUse(page, origin);
           }
+          assert.deepEqual(browserErrors, [], "built landing page should load without errors");
+        } catch (error) {
+          if (browserErrors.length) {
+            throw new Error(`${error.message}\nBrowser errors: ${browserErrors.join("; ")}`, {
+              cause: error,
+            });
+          }
+          throw error;
         } finally {
           await page.close();
         }
@@ -94,12 +96,19 @@ test("mobile landing keeps pricing and the primary action reachable with usable 
     }
   } finally {
     await browser?.close();
-    await vite.close();
+    await server.close();
   }
 });
 
+async function openLanding(page, origin) {
+  const response = await page.goto(origin);
+  assert.equal(response?.status(), 200, "the built landing route should respond successfully");
+  await page.locator(".hero h1").waitFor();
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+}
+
 async function checkFirstUse(page, origin) {
-  await page.goto(origin);
+  await openLanding(page, origin);
   const start = page.getByRole("link", { name: "Choose your first workflow" });
   await start.focus();
   await page.keyboard.press("Enter");
@@ -134,31 +143,4 @@ async function checkFirstUse(page, origin) {
     await preview.getByRole("link").getAttribute("href"),
     "https://docs.hafbot.xyz/features/member-verification#verification-methods",
   );
-}
-
-function landingFixture() {
-  const entry = "/landing-mobile-test-entry.tsx";
-  return {
-    name: "landing-mobile-test-fixture",
-    configureServer(server) {
-      server.middlewares.use((request, response, next) => {
-        if (request.url !== "/") return next();
-        response.setHeader("Content-Type", "text/html; charset=utf-8");
-        response.end(`<!doctype html><html lang="en"><meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Landing mobile test</title><div id="root"></div>
-          <script type="module" src="${entry}"></script></html>`);
-      });
-    },
-    resolveId(id) {
-      if (id === entry) return id;
-    },
-    load(id) {
-      if (id !== entry) return;
-      return `import { createRoot } from "react-dom/client";
-        import { LandingHomePage } from "/src/landing/home-page.tsx";
-        import "/src/landing/styles.css";
-        createRoot(document.getElementById("root")).render(<LandingHomePage prices={[]} />);`;
-    },
-  };
 }

@@ -95,6 +95,7 @@ function classifyTest(file) {
       `test${sep}admin-bundle-report.test.mjs`,
       `test${sep}admin-ux-regressions.test.mjs`,
       `test${sep}discord-e2e-entrypoints.test.mjs`,
+      `test${sep}landing-mobile-browser.test.mjs`,
     ].includes(file)
   )
     return "build";
