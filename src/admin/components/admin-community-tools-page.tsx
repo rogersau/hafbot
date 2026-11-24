@@ -366,6 +366,12 @@ function CommunityToolsEditor({
               and role hierarchy.
             </p>
             {config.rules.map((rule, index) => {
+              const triggerId = `moderation-trigger-${rule.id}`;
+              const spamThresholdId = `moderation-spam-threshold-${rule.id}`;
+              const spamThresholdPercent = rule.spamProbabilityThreshold.toLocaleString("en", {
+                style: "percent",
+                maximumFractionDigits: 2,
+              });
               const update = (change: Partial<typeof rule>) =>
                 setConfig({
                   ...config,
@@ -396,8 +402,12 @@ function CommunityToolsEditor({
                       onChange={(event) => update({ name: event.target.value })}
                     />
                   </FormField>
-                  <FormField label="Trigger">
+                  <FormField label="Trigger" htmlFor={triggerId}>
                     <select
+                      id={triggerId}
+                      aria-describedby={
+                        rule.trigger === "ai_spam" ? `${triggerId}-notice` : undefined
+                      }
                       className="admin-input"
                       value={rule.trigger}
                       onChange={(event) =>
@@ -408,8 +418,36 @@ function CommunityToolsEditor({
                       <option value="domains">Linked domains</option>
                       <option value="invites">Discord invites</option>
                       <option value="message-rate">Message rate</option>
+                      <option value="ai_spam">AI spam detection</option>
                     </select>
+                    {rule.trigger === "ai_spam" && (
+                      <p id={`${triggerId}-notice`} className="mt-2 text-sm text-muted-foreground">
+                        When enabled, HAF sends eligible Discord message text to the third-party AI
+                        provider configured by the installation operator to check for spam.
+                      </p>
+                    )}
                   </FormField>
+                  {rule.trigger === "ai_spam" && (
+                    <FormField
+                      label={`Spam probability threshold (${spamThresholdPercent})`}
+                      htmlFor={spamThresholdId}
+                      hint="The rule triggers when the spam probability meets or exceeds this threshold."
+                    >
+                      <input
+                        id={spamThresholdId}
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={rule.spamProbabilityThreshold}
+                        aria-valuetext={spamThresholdPercent}
+                        onChange={(event) =>
+                          update({ spamProbabilityThreshold: event.currentTarget.valueAsNumber })
+                        }
+                        className="w-full accent-primary"
+                      />
+                    </FormField>
+                  )}
                   {["words", "domains"].includes(rule.trigger) && (
                     <FormField label="Values (one per line)">
                       <Textarea

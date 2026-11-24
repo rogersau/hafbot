@@ -522,6 +522,7 @@ function createNodeContext(input: {
   );
   const resolveCommunityBot = app.resolveGuildBotIdentity;
   app.communityTools = createCommunityToolsRuntime({
+    environment: input.environment,
     database: input.database,
     stores: app.stores,
     resolveGuildBotIdentity: resolveCommunityBot,

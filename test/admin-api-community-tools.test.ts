@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createAdminApiHandler } from "./helpers/admin-api";
 import type { CommunityToolsService } from "../src/community-tools/service";
-import { automationConfigSchema } from "../src/community-tools/config";
+import { automationConfigSchema, type ModerationConfig } from "../src/community-tools/config";
 
 test("community configuration enforces Guild/workspace read and write authorization before service calls", async () => {
   const calls: string[] = [];
@@ -67,4 +67,57 @@ test("community configuration enforces Guild/workspace read and write authorizat
   );
   assert.equal(bad?.status, 400);
   assert.equal(calls.length, 1);
+});
+
+test("chat moderation API validates each AI spam rule's probability threshold", async () => {
+  let writes = 0;
+  const service = {
+    save: async (_guildId: string, _feature: string, config: unknown) => {
+      writes++;
+      return { config, revision: 1 };
+    },
+  } as unknown as CommunityToolsService;
+  const handler = createAdminApiHandler({
+    stores: {} as never,
+    discordBotToken: "test-token",
+    communityTools: service,
+    adminAccess: { authorize: async () => ({ ok: true }) },
+  });
+  const url = new URL("https://haf.example/admin/api/community-moderation");
+  const save = (...thresholds: unknown[]) =>
+    handler(
+      new Request(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          guildId: "100",
+          revision: 0,
+          config: {
+            rules: thresholds.map((spamProbabilityThreshold, index) => ({
+              id: `spam-${index}`,
+              name: `AI spam ${index}`,
+              trigger: "ai_spam",
+              spamProbabilityThreshold,
+            })),
+          },
+        }),
+      }),
+      url,
+    );
+  const response = await save(undefined, 0, 0.825, 1);
+  assert.ok(response);
+  assert.equal(response.status, 200);
+  const { config } = (await response.json()) as { config: ModerationConfig };
+  assert.equal(config.enabled, false);
+  assert.equal(config.rules[0].enabled, false);
+  assert.equal(config.rules[0].trigger, "ai_spam");
+  assert.deepEqual(
+    config.rules.map((rule) => rule.spamProbabilityThreshold),
+    [0.9, 0, 0.825, 1],
+  );
+
+  for (const invalid of [null, "", "0.8", -0.01, 1.01]) {
+    assert.equal((await save(0.7, invalid))?.status, 400, JSON.stringify(invalid));
+  }
+  assert.equal(writes, 1);
 });
