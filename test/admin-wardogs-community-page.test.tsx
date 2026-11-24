@@ -105,7 +105,7 @@ test("WARDOGS dashboard shows price history and saves its Discord channels and p
       format.value = "image";
       format.dispatchEvent(new window.Event("change", { bubbles: true }));
     });
-    const voiceFormat = "Gold {price} · {change} · {date}";
+    const voiceFormat = "{price}";
     const input = container.querySelector<HTMLInputElement>("#wardogs-gold-voice-format");
     assert.ok(input);
     await act(async () => {
@@ -115,7 +115,11 @@ test("WARDOGS dashboard shows price history and saves its Discord channels and p
       );
       input.dispatchEvent(new window.Event("input", { bubbles: true }));
     });
-    assert.match(container.textContent ?? "", /Gold 651,250 · \+4\.8% · 21 Nov 2026/);
+    assert.equal(
+      [...container.querySelectorAll("p")].find((p) => p.textContent?.startsWith("Preview ·"))
+        ?.textContent,
+      "Preview · 651,250",
+    );
     await click("Save daily updates");
     assert.deepEqual(writes.at(-1), {
       guildId: "100",

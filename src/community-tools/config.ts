@@ -42,7 +42,7 @@ export const goldVoiceFormatSchema = z
   .trim()
   .refine(
     isGoldVoiceFormat,
-    "Enter a name of up to 100 characters using {price}, {change}, or {date}.",
+    "Enter a single-line name of up to 100 characters. You can use {price}, {change}, or {date}.",
   );
 export const goldPostFormatSchema = z.enum(GOLD_POST_FORMATS);
 

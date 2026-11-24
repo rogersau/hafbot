@@ -265,7 +265,8 @@ Member lookups use verified Steam Player Links. Direct SteamID64 lookups also wo
   for `/wardogs gold` and daily gold posts. Run the scheduler with `HAF_SCHEDULER_ENABLED=true`,
   then select a Discord text channel under **Integrations → WARDOGS community** or use
   `/wardogs gold-daily channel:#gold`. HAF Bot needs View Channel and Send Messages there. The
-  scheduler waits for the current UTC day's rate.
+  scheduler waits for the current UTC day's rate. The Docker image includes DejaVu Sans for
+  chart labels. Install it on direct Node deployments to enable chart images.
 - For the built-in `/wardogs sync` flow, register `https://your-host/auth/wardogs/callback` with
   [Tracker Connect](https://wardogstracker.gg/developers/connect). Use the HTTPS origin from
   `BETTER_AUTH_URL` and set `WARDOGS_TRACKER_CONNECT_CLIENT_ID` and `WARDOGS_TRACKER_CONNECT_KEY`.

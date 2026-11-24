@@ -71,6 +71,7 @@ test("staff purge and bot delivery respect a thread parent's channel overwrites"
     filename: "price-chart.png",
     description: "Price history",
     data: new Blob(["chart"], { type: "image/png" }),
+    fallbackContent: "Daily price and text history",
   };
   await discord.send("201", "Daily price", [], "price-nonce", chart);
   const upload = sent[0];
@@ -87,7 +88,7 @@ test("staff purge and bot delivery respect a thread parent's channel overwrites"
   assert.equal(file.type, "image/png");
   deny = 1n << 15n;
   await discord.send("201", "Daily price", [], "next-price-nonce", chart);
-  assert.equal(JSON.parse(String(sent[1])).content, "Daily price");
+  assert.equal(JSON.parse(String(sent[1])).content, chart.fallbackContent);
 });
 
 test("voice price renames require a manageable Guild voice channel and skip an unchanged name", async (t) => {

@@ -135,17 +135,22 @@ export function createCommunityDiscord(
       const permissions = await validateChannel(channelId);
       const roles = Array.from(new Set(roleIds));
       const mentions = roles.map((id) => `<@&${id}>`).join(" ");
+      const image = hasPermission(permissions, DISCORD_PERMISSION_FLAGS.attachFiles)
+        ? attachment
+        : undefined;
+      const message = image ? content : (attachment?.fallbackContent ?? content);
       const body: CreateChannelMessageInput = {
-        content: `${mentions}${mentions ? "\n" : ""}${content}`.slice(0, 2000),
+        content: `${mentions}${mentions ? "\n" : ""}${message}`.slice(0, 2000),
         allowed_mentions: { parse: [], roles },
         nonce,
         enforce_nonce: true,
       };
-      if (attachment && hasPermission(permissions, DISCORD_PERMISSION_FLAGS.attachFiles)) {
+      if (image) {
+        const { filename, description, data } = image;
         await createChannelMessageWithAttachments(
           channelId,
           body,
-          [{ ...attachment, contentType: attachment.data.type }],
+          [{ filename, description, data, contentType: data.type }],
           token,
         );
       } else {
