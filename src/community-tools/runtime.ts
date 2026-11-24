@@ -4,13 +4,14 @@ import type { RuntimeStores } from "../runtime/app-types";
 import { createGatewayEventOperationRunner } from "../runtime/gateway-event-idempotency";
 import { hasInteractionAdminAccess } from "../runtime/interaction-admin-access";
 import { GuildServicePolicy } from "../runtime/guild-service-policy";
-import { classifyMessageSpam } from "../services/message-classification/classifier";
+import { createMessageClassifier } from "../services/message-classification/classifier";
 import { CommunityToolsStore } from "./store";
 import { ContentFeedReader } from "./feeds";
 import { CommunityToolsService } from "./service";
 import { createCommunityDiscord } from "./discord";
 
 export function createCommunityToolsRuntime(options: {
+  environment: Record<string, string | undefined>;
   database: PostgresDatabaseCapability;
   stores: RuntimeStores;
   resolveGuildBotIdentity: (guildId: string) => Promise<{ token: string; userId: string }>;
@@ -31,7 +32,7 @@ export function createCommunityToolsRuntime(options: {
       return createCommunityDiscord(guildId, bot.token, bot.userId);
     },
     operationsFor: (eventKey) => createGatewayEventOperationRunner({ eventKey, store: operations }),
-    classifyMessageSpam,
+    classifyMessageSpam: createMessageClassifier(options.environment).classifyMessageSpam,
     isSuspended: (guildId) => policy.isGuildSuspended(guildId),
     wardogsGold: options.wardogsGold,
     authorizeAdmin: (interaction) => hasInteractionAdminAccess(interaction, options.stores),

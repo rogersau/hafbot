@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import {
-  classifyMessage,
-  classifyMessageSpam,
-} from "../src/services/message-classification/classifier";
+import { createMessageClassifier } from "../src/services/message-classification/classifier";
 import { parseMessageClassificationEnv } from "../src/services/message-classification/env";
 
 const configKeys = [
@@ -13,17 +10,18 @@ const configKeys = [
   "MESSAGE_CLASSIFICATION_API_BASE_URL",
 ] as const;
 
-function mockEnvironment(t: TestContext, vars: Record<string, string | undefined>) {
+function configureClassifier(t: TestContext, vars: Record<string, string | undefined>) {
   for (const key of new Set([...configKeys, ...Object.keys(vars)])) {
     const original = process.env[key];
     t.after(() => {
       if (original === undefined) delete process.env[key];
       else process.env[key] = original;
     });
-    const value = vars[key];
+    const value = configKeys.some((name) => name === key) ? undefined : vars[key];
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
+  return createMessageClassifier(vars);
 }
 
 function openaiResponse(answer: unknown) {
@@ -115,19 +113,21 @@ test("classification configuration validates custom Decisions base URLs", () => 
 });
 
 test("classification skips unconfigured, blank, and oversized messages", async (t) => {
-  mockEnvironment(t, {});
+  const { classifyMessageSpam } = configureClassifier(t, {});
   const fetch = t.mock.method(globalThis, "fetch", async () => openaiPredicate(1));
 
   assert.equal(await classifyMessageSpam("test"), null);
   process.env.MESSAGE_CLASSIFICATION_PROVIDER = "openai";
   process.env.MESSAGE_CLASSIFICATION_API_KEY = "test-key";
-  assert.equal(await classifyMessageSpam(" \n "), null);
-  assert.equal(await classifyMessageSpam("x".repeat(8_001)), null);
+  assert.equal(await classifyMessageSpam("ambient credentials"), null);
+  const configured = createMessageClassifier(process.env);
+  assert.equal(await configured.classifyMessageSpam(" \n "), null);
+  assert.equal(await configured.classifyMessageSpam("x".repeat(8_001)), null);
   assert.equal(fetch.mock.callCount(), 0);
 });
 
 test("OpenAI sends a native predicate and caches the raw probability", async (t) => {
-  mockEnvironment(t, {
+  const { classifyMessageSpam } = configureClassifier(t, {
     MESSAGE_CLASSIFICATION_PROVIDER: "openai",
     MESSAGE_CLASSIFICATION_API_KEY: "openai-test-key",
     OPENAI_BASE_URL: "https://unrelated.example/v1",
@@ -170,7 +170,7 @@ test("OpenAI sends a native predicate and caches the raw probability", async (t)
 });
 
 test("classification keeps cached decisions separate by identifier and criteria", async (t) => {
-  mockEnvironment(t, {
+  const { classifyMessage, classifyMessageSpam } = configureClassifier(t, {
     MESSAGE_CLASSIFICATION_PROVIDER: "openai",
     MESSAGE_CLASSIFICATION_API_KEY: "decision-test-key",
   });
@@ -216,7 +216,7 @@ test("classification keeps cached decisions separate by identifier and criteria"
 });
 
 test("classification evicts the oldest probability when the cache is full", async (t) => {
-  mockEnvironment(t, {
+  const { classifyMessageSpam } = configureClassifier(t, {
     MESSAGE_CLASSIFICATION_PROVIDER: "openai",
     MESSAGE_CLASSIFICATION_API_KEY: "cache-capacity-test-key",
   });
@@ -232,7 +232,7 @@ test("classification evicts the oldest probability when the cache is full", asyn
 });
 
 test("OpenAI uses native Decisions at the configured endpoint and fails open on invalid answers", async (t) => {
-  mockEnvironment(t, {
+  const { classifyMessageSpam } = configureClassifier(t, {
     MESSAGE_CLASSIFICATION_PROVIDER: "openai",
     MESSAGE_CLASSIFICATION_API_KEY: "gateway-test-key",
     MESSAGE_CLASSIFICATION_MODEL: "custom-model",
@@ -286,7 +286,7 @@ test("OpenAI uses native Decisions at the configured endpoint and fails open on 
 });
 
 test("Jev sends a System One Noul question and returns the raw probability", async (t) => {
-  mockEnvironment(t, {
+  const { classifyMessage } = configureClassifier(t, {
     MESSAGE_CLASSIFICATION_PROVIDER: "jev",
     MESSAGE_CLASSIFICATION_API_KEY: "jev-test-key",
     TYPESAFE_API_KEY: "unrelated-key",
@@ -331,7 +331,7 @@ test("Jev sends a System One Noul question and returns the raw probability", asy
 });
 
 test("Jev fails open on unsuccessful responses and invalid Noul answers", async (t) => {
-  mockEnvironment(t, {
+  const { classifyMessageSpam } = configureClassifier(t, {
     MESSAGE_CLASSIFICATION_PROVIDER: "jev",
     MESSAGE_CLASSIFICATION_API_KEY: "jev-retry-test-key",
   });
@@ -358,8 +358,8 @@ test("Jev fails open on unsuccessful responses and invalid Noul answers", async 
   assert.equal(fetch.mock.callCount(), attempts);
 });
 
-test("classification invalidates cached decisions after switching from OpenAI to Jev", async (t) => {
-  mockEnvironment(t, {
+test("classifiers with separate runtime environments use their own credentials and cache", async (t) => {
+  const { classifyMessageSpam } = configureClassifier(t, {
     MESSAGE_CLASSIFICATION_PROVIDER: "openai",
     MESSAGE_CLASSIFICATION_API_KEY: "openai-switch-key",
   });
@@ -385,20 +385,24 @@ test("classification invalidates cached decisions after switching from OpenAI to
   );
 
   assert.deepEqual(await classifyMessageSpam(content), { probability: 0.02 });
-  process.env.MESSAGE_CLASSIFICATION_PROVIDER = "jev";
-  process.env.MESSAGE_CLASSIFICATION_API_KEY = "jev-switch-key";
-  process.env.MESSAGE_CLASSIFICATION_MODEL = "jev-1.14.0";
-  assert.deepEqual(await classifyMessageSpam(content), { probability: 0.99 });
+  const jev = createMessageClassifier({
+    MESSAGE_CLASSIFICATION_PROVIDER: "jev",
+    MESSAGE_CLASSIFICATION_API_KEY: "jev-switch-key",
+    MESSAGE_CLASSIFICATION_MODEL: "jev-1.14.0",
+  });
+  assert.deepEqual(await jev.classifyMessageSpam(content), { probability: 0.99 });
+  assert.deepEqual(await classifyMessageSpam(content), { probability: 0.02 });
   assert.equal(fetch.mock.callCount(), 2);
 });
 
 for (const provider of ["openai", "jev"]) {
   test(`classification times out and aborts a stalled ${provider} request`, async (t) => {
-    mockEnvironment(t, {
+    const { classifyMessageSpam } = configureClassifier(t, {
       MESSAGE_CLASSIFICATION_PROVIDER: provider,
       MESSAGE_CLASSIFICATION_API_KEY: "timeout-test-key",
     });
-    t.mock.timers.enable({ apis: ["setTimeout"] });
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    let recovered = false;
     let markStarted!: (signal: AbortSignal) => void;
     const started = new Promise<AbortSignal>((resolve) => {
       markStarted = resolve;
@@ -409,6 +413,8 @@ for (const provider of ["openai", "jev"]) {
       async (_input: RequestInfo | URL, init?: RequestInit) => {
         const signal = init?.signal;
         assert.ok(signal);
+        if (signal.aborted) throw signal.reason;
+        if (recovered) return provider === "jev" ? jevResponse(0.7) : openaiPredicate(0.7);
         markStarted(signal);
         return new Promise<Response>((_resolve, reject) => {
           signal.addEventListener("abort", () => reject(signal.reason), { once: true });
@@ -424,6 +430,13 @@ for (const provider of ["openai", "jev"]) {
     t.mock.timers.tick(5_000);
     assert.equal(await result, null);
     assert.equal((await started).aborted, true);
+    recovered = true;
+    assert.equal(await classifyMessageSpam("Another message during the cooldown."), null);
     assert.equal(fetch.mock.callCount(), 1);
+    t.mock.timers.tick(30_000);
+    assert.deepEqual(await classifyMessageSpam("First message after the cooldown."), {
+      probability: 0.7,
+    });
+    assert.equal(fetch.mock.callCount(), 2);
   });
 }
