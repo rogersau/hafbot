@@ -453,6 +453,9 @@ test("container files pin Node, minimize runtime tooling, run non-root, and pres
     "@azure/storage-blob",
     "@resvg/resvg-js",
     "@sentry/node",
+    "@tanstack/ai",
+    "@tanstack/ai-openai",
+    "@typesafe-ai/sdk",
     "better-auth",
     "drizzle-orm",
     "effect",
@@ -466,6 +469,13 @@ test("container files pin Node, minimize runtime tooling, run non-root, and pres
     rootManifest.dependencies["@sentry/node"].replace(/^[~^]/, ""),
     "Production must run the Sentry SDK version used by the build and tests.",
   );
+  for (const dependency of ["@tanstack/ai", "@tanstack/ai-openai", "@typesafe-ai/sdk"]) {
+    assert.equal(
+      runtimeManifest.dependencies[dependency],
+      rootManifest.dependencies[dependency],
+      `Production must use the tested version of ${dependency}.`,
+    );
+  }
   const zodMajor = (specifier: unknown): string => {
     const match = String(specifier).match(/(?:^|[^0-9])(\d+)/);
     assert.ok(match, `Zod dependency ${String(specifier)} must include a major version.`);

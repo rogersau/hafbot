@@ -10,6 +10,8 @@ import {
 } from "../src/community-tools/config";
 import { createPostgresDatabaseCapabilityFromEnvironment } from "../src/runtime/postgres/postgres-capability";
 import { createGatewayEventOperationRunner } from "../src/runtime/gateway-event-idempotency";
+import type { GatewayEventCapabilities } from "../src/runtime/gateway-events/contracts";
+import { communityToolsGatewayHandler } from "../src/runtime/gateway-events/handlers/community-tools";
 import { createPostgresGatewayEventOperationStore } from "../src/runtime/postgres/postgres-gateway-event-operation-store";
 import { initializePostgresSchema } from "../src/runtime/postgres/postgres-schema";
 import { GOLD_DAY_MS } from "../src/wardogs/gold-status";
@@ -106,6 +108,7 @@ test(
         operationsFor: ops,
         isSuspended: async () => suspended,
         authorizeAdmin: async () => false,
+        classifyMessageSpam: async () => null,
         feedReader: new ContentFeedReader({ transport: async () => feedBody }),
         wardogsGold: {
           goldAvailable: true,
@@ -385,6 +388,204 @@ test(
         moved,
         "regular settings cannot replace the published message reference",
       );
+    } finally {
+      await database.close();
+    }
+  },
+);
+
+test(
+  "Gateway AI spam moderation reuses a probability across rules and event replays",
+  { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
+  async () => {
+    assert.ok(postgresUrl);
+    const url = new URL(postgresUrl);
+    assert.ok(["127.0.0.1", "localhost"].includes(url.hostname) && url.pathname.endsWith("_test"));
+    const database = createPostgresDatabaseCapabilityFromEnvironment({
+      DATABASE_URL: postgresUrl,
+      NODE_ENV: "test",
+    });
+    try {
+      await database.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
+      await initializePostgresSchema(database);
+      const now = Date.now();
+      const store = new CommunityToolsStore(database, () => now);
+      const receipts = createPostgresGatewayEventOperationStore(database);
+      const ops = (eventKey: string) =>
+        createGatewayEventOperationRunner({ eventKey, store: receipts, nowMs: () => now });
+      const classified: string[] = [];
+      const deletes: string[] = [];
+      const warnings: string[] = [];
+      const timeouts: number[] = [];
+      let memberRoles: string[] = [];
+      let suspended = false;
+      const discord: CommunityDiscord = {
+        resources: async () => ({
+          guildId: "100",
+          botUserId: "199",
+          channels: [],
+          roles: [
+            { id: "110", name: "Moderator", permissions: "0", position: 1 },
+            { id: "111", name: "Administrator", permissions: "8", position: 2 },
+            { id: "112", name: "Trusted", permissions: "0", position: 3 },
+          ],
+          member: { roles: [] },
+        }),
+        member: async () => ({ roles: memberRoles, bot: false }),
+        delete: async (_channel, id) => void deletes.push(id),
+        send: async (_channel, content) => void warnings.push(content),
+        timeout: async (_userId, untilMs) => void timeouts.push(untilMs),
+        validateChannel: async () => {},
+        validateVoiceChannel: async () => {},
+        renameVoiceChannel: async () => {},
+        moderate: async () => {},
+        messages: async () => [],
+        assertStaffTarget: async () => {},
+      };
+      const communityTools = new CommunityToolsService({
+        store,
+        discordForGuild: async () => discord,
+        operationsFor: ops,
+        isSuspended: async () => suspended,
+        authorizeAdmin: async () => false,
+        feedReader: new ContentFeedReader(),
+        classifyMessageSpam: async (content) => {
+          classified.push(content);
+          if (content === "discord.gg/example") throw new Error("provider unavailable");
+          if (content === "uncertain") return null;
+          if (content === "invalid probability") return { probability: 1.01 };
+          return { probability: content === "  claim your prize  " ? 0.9 : 0.89 };
+        },
+        now: () => now,
+      });
+      const message = {
+        guild_id: "100",
+        channel_id: "101",
+        content: "community message",
+        author: { id: "102", bot: false },
+        webhook_id: undefined as string | undefined,
+      };
+      const deliver = (id: string, changes: Partial<typeof message> = {}, receivedAtMs = now) => {
+        const eventKey = `message-${id}`;
+        return communityToolsGatewayHandler.handle(
+          { operations: ops(eventKey), stores: { communityTools } } as GatewayEventCapabilities,
+          {
+            version: 2,
+            type: "MESSAGE_CREATE",
+            eventKey,
+            sessionId: null,
+            sequence: null,
+            receivedAtMs,
+            data: { ...message, ...changes, id },
+          },
+        );
+      };
+      const config = moderationConfigSchema.parse({
+        enabled: true,
+        moderatorRoleIds: ["110"],
+        rules: [
+          {
+            id: "ai-warning",
+            name: "AI spam warning",
+            trigger: "ai_spam",
+            channelIds: ["101"],
+            excludedRoleIds: ["112"],
+            deleteMessage: true,
+          },
+          {
+            id: "ai-timeout",
+            name: "AI spam timeout",
+            trigger: "ai_spam",
+            spamProbabilityThreshold: 0.95,
+            channelIds: ["101"],
+            excludedRoleIds: ["112"],
+            warn: false,
+            timeoutAfter: 1,
+          },
+          { id: "invites", name: "No invites", enabled: true, trigger: "invites" },
+        ],
+      });
+      await communityTools.save("100", "moderation", config, 0);
+      await deliver("300");
+      assert.deepEqual(classified, []);
+
+      const enabledConfig = {
+        ...config,
+        rules: config.rules.map((rule) => ({ ...rule, enabled: true })),
+      };
+      await communityTools.save("100", "moderation", enabledConfig, 1);
+      assert.deepEqual(await store.read("100", "moderation"), {
+        config: enabledConfig,
+        revision: 2,
+      });
+      await deliver("301", { guild_id: "200" });
+      await deliver("302", { channel_id: "103" });
+      await deliver("303", { content: " \n " });
+      await deliver("304", { content: undefined });
+      await deliver("305", { author: { id: "102", bot: true } });
+      await deliver("306", { webhook_id: "130" });
+      await deliver("307", {}, now - 6 * 60000);
+      for (const role of ["110", "111", "112"]) {
+        memberRoles = [role];
+        await deliver(role);
+      }
+      memberRoles = [];
+      suspended = true;
+      await deliver("308");
+      suspended = false;
+      assert.deepEqual(classified, []);
+
+      await deliver("309", { content: "uncertain" });
+      await deliver("309", { content: "uncertain" });
+      await deliver("310", { content: "borderline text" });
+      await deliver("313", { content: "invalid probability" });
+      await deliver("313", { content: "invalid probability" });
+      await ops("message-314").runResult("community:classify-spam", async () => true);
+      await deliver("314");
+      assert.deepEqual(await store.history("100", "102"), []);
+      await deliver("311", { content: "discord.gg/example" });
+      await deliver("311", { content: "discord.gg/example" });
+      assert.deepEqual(
+        (await store.history("100", "102")).map((entry) => entry.reason),
+        ["No invites"],
+      );
+      const spam = "  claim your prize  ";
+      await deliver("312", { content: spam });
+      await deliver("312", { content: spam });
+      assert.deepEqual(timeouts, []);
+      assert.deepEqual((await store.history("100", "102")).map((entry) => entry.reason).sort(), [
+        "AI spam warning",
+        "No invites",
+      ]);
+
+      const lowerTimeoutThreshold = {
+        ...enabledConfig,
+        rules: enabledConfig.rules.map((rule) =>
+          rule.id === "ai-timeout" ? { ...rule, spamProbabilityThreshold: 0.89 } : rule,
+        ),
+      };
+      await communityTools.save("100", "moderation", lowerTimeoutThreshold, 2);
+      await deliver("310", { content: "borderline text" });
+      await deliver("310", { content: "borderline text" });
+      assert.deepEqual(classified, [
+        "uncertain",
+        "borderline text",
+        "invalid probability",
+        "discord.gg/example",
+        spam,
+      ]);
+      assert.deepEqual(deletes, ["312"]);
+      assert.deepEqual(timeouts, [now + 10 * 60000]);
+      assert.deepEqual(warnings, [
+        "<@102>: your message triggered a server rule (No invites).",
+        "<@102>: your message triggered a server rule (AI spam warning).",
+      ]);
+      const history = await store.history("100", "102");
+      assert.deepEqual(history.map((entry) => entry.reason).sort(), [
+        "AI spam timeout",
+        "AI spam warning",
+        "No invites",
+      ]);
     } finally {
       await database.close();
     }

@@ -60,7 +60,8 @@ export const moderationRuleSchema = z.object({
   id,
   enabled: z.boolean().default(false),
   name: z.string().trim().min(1).max(80),
-  trigger: z.enum(["words", "domains", "invites", "message-rate"]),
+  trigger: z.enum(["words", "domains", "invites", "message-rate", "ai_spam"]),
+  spamProbabilityThreshold: z.number().min(0).max(1).default(0.9),
   values: z
     .array(z.string().trim().max(150))
     .max(50)
@@ -200,6 +201,7 @@ export function moderationMatches(
     return rule.values.some((value) =>
       normalized.includes(value.normalize("NFKC").toLocaleLowerCase("en-US")),
     );
+  if (rule.trigger !== "domains") return false;
   const domains = Array.from(normalized.matchAll(/https?:\/\/[^\s<>]+/g)).flatMap(([raw]) => {
     try {
       return [new URL(raw).hostname];

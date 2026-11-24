@@ -2,6 +2,7 @@ import type { GuildPermissionContext } from "../runtime/admin-permissions";
 import type { GatewayEventOperationRunner } from "../runtime/gateway-event-idempotency";
 import { deriveGatewayOperationNonce } from "../runtime/gateway-event-idempotency";
 import type { DiscordInteraction } from "../runtime/app-types";
+import type { MessageDecisionResult } from "../services/message-classification/classifier";
 import { isRecord } from "../unknown-parse";
 import { ContentFeedReader, contentFeedUrl } from "./feeds";
 import type { WardogsCommunityData, WardogsGoldStatus } from "../wardogs/community-data";
@@ -89,6 +90,7 @@ export interface CommunityToolsOptions {
   operationsFor(eventKey: string): GatewayEventOperationRunner;
   isSuspended(guildId: string): Promise<boolean>;
   authorizeAdmin(interaction: DiscordInteraction): Promise<boolean>;
+  classifyMessageSpam(content: string): Promise<MessageDecisionResult | null>;
   feedReader: ContentFeedReader;
   wardogsGold?: Pick<WardogsCommunityData, "goldAvailable" | "readGoldStatus">;
   now?: () => number;
@@ -325,6 +327,7 @@ export class CommunityToolsService {
       const staffRoles = resources.roles
         .filter((role) => (BigInt(role.permissions) & 8n) !== 0n)
         .map((role) => role.id);
+      let spamProbability: number | null | undefined;
       for (const rule of moderation.rules) {
         if (
           !rule.enabled ||
@@ -334,10 +337,29 @@ export class CommunityToolsService {
               rule.excludedRoleIds.includes(role) ||
               moderation.moderatorRoleIds.includes(role) ||
               staffRoles.includes(role),
-          ) ||
-          !moderationMatches(rule, message.content)
+          )
         )
           continue;
+        if (rule.trigger === "ai_spam") {
+          if (!message.content.trim()) continue;
+          if (spamProbability === undefined) {
+            const verdict = await operations.runResult("community:classify-spam", async () => {
+              try {
+                return (await this.options.classifyMessageSpam(message.content)) ?? null;
+              } catch {
+                return null;
+              }
+            });
+            const probability = verdict?.probability;
+            spamProbability =
+              typeof probability === "number" && probability >= 0 && probability <= 1
+                ? probability
+                : null;
+          }
+          const matches =
+            spamProbability !== null && spamProbability >= rule.spamProbabilityThreshold;
+          if (!matches) continue;
+        } else if (!moderationMatches(rule, message.content)) continue;
         const result = await operations.runResult(`community:rule:${rule.id}:count`, () =>
           this.store.recordCase({
             id: `${message.eventKey}:rule:${rule.id}`,

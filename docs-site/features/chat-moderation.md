@@ -12,6 +12,17 @@ Open **Admin Dashboard → Chat Moderation** and add up to 25 rules. Rules can m
 
 Choose optional channels and excluded roles. Empty channel selection applies across the Guild. Bots, webhooks, configured moderators and members holding Administrator roles are excluded. A rule may warn, delete the triggering message, or apply a timeout after the configured number of violations in its window. Start with warnings and inspect real matches before enabling stronger actions.
 
+Choose **AI spam detection** to classify eligible Discord message text with the installation's AI provider. To try it in one channel, select that channel and the warning action. Review the matches in **View recent moderation activity** before expanding the rule. If the provider is unavailable or returns an unreadable decision, the AI rule skips that message and the other chat rules still apply.
+
+Each AI spam rule has a minimum spam probability, which defaults to 90%. Rules share the model's score for a message. For example, with a warning rule at 80% and a deletion rule at 98%, a message scored at 92% triggers only the warning. A score equal to the threshold counts as a match.
+
+Installation operators configure one decision provider in the bot's environment.
+
+- For TypeSafe AI's Jev, set `MESSAGE_CLASSIFICATION_PROVIDER=jev` and put your TypeSafe API key in `MESSAGE_CLASSIFICATION_API_KEY`. HAF requests a yes/no probability from Jev. [TypeSafe decision guide](https://docs.typesafe.ai/primitives/noul)
+- For OpenAI, set `MESSAGE_CLASSIFICATION_PROVIDER=openai` and supply your OpenAI key in the same variable. HAF uses a predicate question with the Decisions API. A custom service configured with `MESSAGE_CLASSIFICATION_API_BASE_URL` must implement the Decisions endpoint and its predicate response format. [OpenAI Decisions guide](https://developers.openai.com/api/docs/guides/decisions)
+
+Set `MESSAGE_CLASSIFICATION_MODEL` to override the provider's default model. Restart the bot after changing its environment.
+
 Timeouts preserve an existing longer timeout. Chat Rules do not change Bot Defense's confirm/dismiss behavior and do not automatically kick or ban accounts. Old queued messages are not processed after five minutes.
 
 ## Staff Tools and Reports
