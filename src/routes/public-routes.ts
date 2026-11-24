@@ -38,6 +38,7 @@ import {
   type ProductAnalyticsReporter,
 } from "../product-analytics";
 import { report, reportPublicPageView } from "./public-analytics";
+import { DISCORD_INSTALL_CONTINUATION, renderInstallPage } from "./install-page";
 
 export interface PublicRouteOptions {
   selfHostedSite?: SelfHostedSite;
@@ -122,13 +123,23 @@ export function createPublicEndpoints(options: PublicRouteOptions) {
       );
     },
     install: (request: Request): Response => {
-      const installUrl = buildDiscordInstallUrl({
-        discordApplicationId: options.discordApplicationId,
-        discordInstallPermissions: options.discordInstallPermissions,
-      });
+      const permissions = options.discordInstallPermissions?.trim() || "0";
+      const installUrl = buildDiscordInstallUrl(options.discordApplicationId, permissions);
 
       if (!installUrl) {
         return Response.json({ error: "Discord install link is not configured" }, { status: 404 });
+      }
+
+      const requestUrl = new URL(request.url);
+      if (
+        !options.selfHostedSite &&
+        requestUrl.searchParams.get("continue") !== DISCORD_INSTALL_CONTINUATION
+      ) {
+        return htmlResponse({
+          profile: "legal",
+          html: renderInstallPage(permissions, requestUrl.search),
+          requestUrl,
+        });
       }
 
       if (!browserPrivacySignalEnabled(request)) {
@@ -528,11 +539,11 @@ function sanitizeFilename(value: string): string {
   return sanitized.slice(0, 180) || "evidence";
 }
 
-function buildDiscordInstallUrl(options: {
-  discordApplicationId?: string;
-  discordInstallPermissions?: string;
-}): string | null {
-  const clientId = options.discordApplicationId?.trim();
+function buildDiscordInstallUrl(
+  discordApplicationId: string | undefined,
+  permissions: string,
+): string | null {
+  const clientId = discordApplicationId?.trim();
   if (!clientId) {
     return null;
   }
@@ -540,7 +551,7 @@ function buildDiscordInstallUrl(options: {
   const installUrl = new URL("https://discord.com/oauth2/authorize");
   installUrl.searchParams.set("client_id", clientId);
   installUrl.searchParams.set("scope", "bot applications.commands");
-  installUrl.searchParams.set("permissions", options.discordInstallPermissions?.trim() || "0");
+  installUrl.searchParams.set("permissions", permissions);
 
   return installUrl.toString();
 }

@@ -158,6 +158,8 @@ export function createBillingApiHandler(options: {
         }
         case "checkout": {
           const checkoutBody = body.value as { priceId: string; intentId: string };
+          // Use the same complete Stripe projection shown during review before creating Checkout.
+          if (!(await options.prices?.read())?.length) return unavailableResponse(adminRequest);
           response = Response.json(
             await options.service.startCheckout({
               ownerId: session.user.id,

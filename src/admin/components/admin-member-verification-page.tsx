@@ -473,9 +473,9 @@ function MemberVerificationEditor({
       <NavigationGuard hasChanges={hasUnsavedChanges} onDiscardChanges={discardChanges} />
       <UnsavedChangesIndicator hasChanges={hasUnsavedChanges} />
       <p className="text-sm text-muted-foreground">
-        When enabled, members verify themselves by clicking Verify to gain the Verified Role. Choose
-        whether to deliver the welcome message as a DM to each new member, or as a persistent panel
-        in a channel. Verified members who leave and rejoin have the role restored automatically.
+        Members select Verify in a welcome DM or channel panel. HAF grants the Verified Role after
+        they complete the selected check. A saved verification can restore the role when a member
+        rejoins.
       </p>
 
       <SettingsPanel>
@@ -489,7 +489,7 @@ function MemberVerificationEditor({
             <div className="space-y-0.5">
               <p className="text-sm font-medium">Enable Member Verification</p>
               <p className="text-xs text-muted-foreground">
-                Send the welcome message and grant the Verified Role on Verify.
+                Send the welcome message and grant the Verified Role after the selected check.
               </p>
             </div>
             <Switch
@@ -536,17 +536,17 @@ function MemberVerificationEditor({
                 setSteamPrerequisitePrompt(value === "steam-link" && !steamLinkConfigured);
               }}
             >
-              <SelectTrigger id="verification-method">
+              <SelectTrigger id="verification-method" aria-describedby="verification-method-help">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="discord-button">Discord button only</SelectItem>
+                <SelectItem value="discord-button">Discord button</SelectItem>
                 {(turnstileAvailable || config.verificationMethod === "turnstile") && (
                   <SelectItem
                     value="turnstile"
                     disabled={!paidMethodsAvailable || !turnstileAvailable}
                   >
-                    Turnstile challenge
+                    Turnstile
                   </SelectItem>
                 )}
                 {(steamLinkAvailable || config.verificationMethod === "steam-link") && (
@@ -554,11 +554,43 @@ function MemberVerificationEditor({
                     value="steam-link"
                     disabled={!paidMethodsAvailable || !steamLinkAvailable}
                   >
-                    Steam Link required
+                    Steam link required
                   </SelectItem>
                 )}
               </SelectContent>
             </Select>
+            <div id="verification-method-help" className="mt-2 space-y-2 text-sm">
+              <dl className="space-y-2">
+                <div>
+                  <dt className="font-medium">Discord button</dt>
+                  <dd className="text-muted-foreground">
+                    Confirms the Discord account interacted with HAF Bot. It does not prove a human
+                    or game-account identity.
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Turnstile</dt>
+                  <dd className="text-muted-foreground">
+                    Adds an automated-account check. It does not establish real-world identity.
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Steam link required</dt>
+                  <dd className="text-muted-foreground">
+                    Requires an active linked Steam account when completing the initial check.
+                  </dd>
+                </div>
+              </dl>
+              <p className="text-muted-foreground">
+                Unlinking Steam later does not revoke saved verification or prevent HAF from
+                restoring the role on rejoin. Use a separate access policy if the link must stay
+                active.
+              </p>
+              <p className="text-muted-foreground">
+                The Discord button is available on Free. The two enhanced methods need service setup
+                and, on hosted HAF, a paid plan.
+              </p>
+            </div>
             {!turnstileAvailable && !steamLinkAvailable && (
               <p className="text-xs text-muted-foreground">
                 Enhanced verification methods are not configured for this runtime.
@@ -566,14 +598,8 @@ function MemberVerificationEditor({
             )}
             {config.verificationMethod === "turnstile" && !turnstileAvailable ? (
               <p className="text-xs text-muted-foreground">
-                Saved method: Turnstile challenge (currently unavailable). Disable Member
-                Verification or choose an available method before saving.
-              </p>
-            ) : null}
-            {!paidMethodsAvailable && (turnstileAvailable || steamLinkAvailable) ? (
-              <p className="text-xs text-muted-foreground">
-                Turnstile and Steam Link verification require a paid plan. Discord button
-                verification remains available on Free.
+                Saved method: Turnstile (currently unavailable). Disable Member Verification or
+                choose an available method before saving.
               </p>
             ) : null}
           </FormField>

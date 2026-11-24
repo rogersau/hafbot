@@ -1,4 +1,5 @@
 import type { AdminGuildDirectoryEntry } from "../../runtime/admin-types";
+import { readFirstWorkflowId, withFirstWorkflow } from "../../first-workflow-intent";
 import { normalizeAdminDashboardPath } from "../dashboard-routes";
 import {
   buildAdminDashboardHref,
@@ -86,7 +87,8 @@ export function getDefaultAdminRedirectTarget({
   if (currentPath === "/admin/billing") {
     return setSearchParam(currentPath, search, "guildId", encodeGuildIdForSearch(fallbackGuildId));
   }
-  return buildAdminDashboardHref(currentPath, selectedWorkspaceId, fallbackGuildId);
+  const href = buildAdminDashboardHref(currentPath, selectedWorkspaceId, fallbackGuildId);
+  return currentPath === "/admin" ? withFirstWorkflow(href, readFirstWorkflowId(search)) : href;
 }
 
 export function buildReactionRulesTabHref(href: string, tab: ReactionRulesTab): string {

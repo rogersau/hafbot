@@ -97,16 +97,17 @@ test("unauthenticated admin App renders the Discord sign-in prompt", () => {
   assert.match(html, /Continue with Discord/);
 });
 
-test("checkout-aware sign in explains that the selected plan will continue after Discord", () => {
+test("checkout-aware sign in does not continue a selection without a current price", () => {
   const html = renderToString(
     <App
       initialPath="/admin/login"
       initialSearch="?next=%2Fadmin%2Fbilling%3Fplan%3Dpremium_plus%26frequency%3Dyearly"
     />,
   );
-  assert.match(html, /Sign in to continue to checkout/);
+  assert.match(html, /Checkout price unavailable/);
   assert.match(html, /Premium Plus yearly/);
-  assert.match(html, /Your selection is saved/);
+  assert.match(html, /Sign in without a plan selection/);
+  assert.doesNotMatch(html, /Sign in to continue to checkout/);
   assert.match(html, /creates your account automatically/);
 });
 

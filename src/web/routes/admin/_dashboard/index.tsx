@@ -4,6 +4,7 @@ import { Card, CardContent } from "../../../../admin/components/ui/card";
 import { buildAdminDashboardHref } from "../../../../admin/lib/dashboard-urls";
 import { createLazyAdminPage } from "../../../../admin/routes/lazy-page";
 import { AdminRouteShell, useAdminRouteContext } from "../../../../admin/routes/page-context";
+import { readFirstWorkflowId, withFirstWorkflow } from "../../../../first-workflow-intent";
 
 const GuildDirectoryEmptyCard = createLazyAdminPage(
   () => import("../../../../admin/components/admin-overview-page"),
@@ -18,8 +19,12 @@ function AdminIndexRoute() {
   const context = useAdminRouteContext();
   if (context.currentPath !== "/admin") return null;
 
+  const firstWorkflowId = readFirstWorkflowId(context.currentSearch);
   const redirectTarget = context.selectedGuildId
-    ? buildAdminDashboardHref("/admin", context.selectedWorkspaceId, context.selectedGuildId)
+    ? withFirstWorkflow(
+        buildAdminDashboardHref("/admin", context.selectedWorkspaceId, context.selectedGuildId),
+        firstWorkflowId,
+      )
     : context.defaultRedirectTarget;
 
   if (redirectTarget) {
@@ -45,6 +50,7 @@ function AdminIndexRoute() {
           lookupError={context.guildLookupError}
           workspaceId={context.selectedWorkspaceId}
           onRefresh={context.refreshGuildDirectory}
+          firstWorkflowId={firstWorkflowId}
         />
       )}
     </AdminRouteShell>

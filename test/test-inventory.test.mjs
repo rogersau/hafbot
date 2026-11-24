@@ -9,7 +9,10 @@ import {
   listNodeTestPaths,
 } from "../scripts/test-inventory.mjs";
 
-const BROWSER_TEST = join("test", "admin-emoji-picker-browser.test.mjs");
+const BROWSER_TESTS = [
+  join("test", "admin-emoji-picker-browser.test.mjs"),
+  join("test", "landing-mobile-browser.test.mjs"),
+];
 
 test("PostgreSQL contracts build the Start server before running tests", () => {
   const manifest = JSON.parse(readFileSync("package.json", "utf8"));
@@ -30,7 +33,7 @@ test("every tracked test belongs to exactly one executable suite", () => {
   const inventory = assertTestInventory();
 
   assert.ok(inventory.node.length > 0, "expected Node tests in the inventory");
-  assert.deepEqual(inventory.browser, [BROWSER_TEST]);
+  assert.deepEqual(inventory.browser, BROWSER_TESTS);
   assert.ok(inventory.unit.length > 0, "expected unit tests in the inventory");
   assert.ok(inventory.integration.length > 0, "expected integration tests in the inventory");
   assert.ok(inventory.build.length > 0, "expected build tests in the inventory");
@@ -59,10 +62,13 @@ test("browser checks can be omitted from the executable Node test list", () => {
   const previous = process.env.TEST_SKIP_BROWSER_CHECKS;
   try {
     delete process.env.TEST_SKIP_BROWSER_CHECKS;
-    assert.ok(listNodeTestPaths({ compiled: false }).includes(BROWSER_TEST));
+    const complete = listNodeTestPaths({ compiled: false });
+    for (const browserTest of BROWSER_TESTS) assert.ok(complete.includes(browserTest));
 
     process.env.TEST_SKIP_BROWSER_CHECKS = "true";
-    assert.equal(listNodeTestPaths({ compiled: false }).includes(BROWSER_TEST), false);
+    const withoutBrowser = listNodeTestPaths({ compiled: false });
+    for (const browserTest of BROWSER_TESTS)
+      assert.equal(withoutBrowser.includes(browserTest), false);
   } finally {
     if (previous === undefined) delete process.env.TEST_SKIP_BROWSER_CHECKS;
     else process.env.TEST_SKIP_BROWSER_CHECKS = previous;

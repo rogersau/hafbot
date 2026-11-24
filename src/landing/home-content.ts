@@ -8,9 +8,10 @@ interface LandingQuestion {
 
 export const LANDING_FAQ: readonly LandingQuestion[] = [
   {
-    question: "What is HAF Bot?",
+    question: "How do I set up my first workflow?",
     answer:
-      "HAF Bot is a Discord bot for gaming communities. It combines private support tickets, player account linking, LFG, Marketplace, Suggestions, moderation and audit logs with a web dashboard for staff.",
+      "Choose one job, review the permissions to add HAF to Discord, and set up the feature in the dashboard. Test it as a non-admin member before adding anything else.",
+    guide: { href: "https://docs.hafbot.xyz/getting-started", text: "Read the setup guide" },
   },
   {
     question: "Can I self-host HAF Bot?",

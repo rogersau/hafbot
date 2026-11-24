@@ -22,6 +22,7 @@ import type { AdminDocumentData } from "../../web/router-context";
 import { AdminRouteContextProvider } from "../routes/page-context";
 import { getAdminRouteState, getDefaultAdminRedirectTarget } from "../lib/admin-route-state";
 import { setLastSelectedGuildId, getLastSelectedGuildId } from "../lib/guild-selection-persistence";
+import { readFirstWorkflowId, withFirstWorkflow } from "../../first-workflow-intent";
 
 interface DashboardProps {
   admin: AdminDocumentData;
@@ -136,6 +137,11 @@ function AdminDashboardContent({ admin, guildRouteId, location, children }: Dash
         else params.delete("guildId");
         const query = params.toString();
         nextHref = query ? `/admin/billing?${query}` : "/admin/billing";
+      } else if (
+        currentPath === "/admin" ||
+        currentPath === buildAdminDashboardHref("/admin", "", selectedGuildId)
+      ) {
+        nextHref = withFirstWorkflow(nextHref, readFirstWorkflowId(currentSearch));
       }
       const next = router.buildLocation({ to: nextHref });
       await router.navigate({ to: nextHref, replace: true });

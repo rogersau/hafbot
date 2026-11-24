@@ -18,13 +18,17 @@ You need:
 - HAF Bot's role above any roles it needs to assign or remove; and
 - the channels, categories, and staff roles your chosen feature will use.
 
+The hosted invite requests permissions for several workflows. Your first workflow may need only some
+of them. Check the final list in Discord and use [Discord’s permission reference](https://docs.discord.com/developers/topics/permissions)
+for the details. Installing the bot does not configure features, publish messages or link player accounts.
+
 Most feature pages can also create their recommended Discord resources for you.
 
 ## Ten-Minute Setup
 
-1. Visit [hafbot.xyz/install](https://hafbot.xyz/install) and add HAF Bot to your Discord server.
+1. Visit [hafbot.xyz/install](https://hafbot.xyz/install) and review the Discord permissions. Choose **Continue to Discord**, select the server and confirm.
 2. In Discord, check that HAF Bot's role is above any member, verification, linked-player, or temporary roles it will manage.
-3. Sign in at [hafbot.xyz/admin](https://hafbot.xyz/admin).
+3. Return to the HAF tab and choose **Open dashboard setup**. If the bot is already installed, go directly to [hafbot.xyz/admin](https://hafbot.xyz/admin).
 4. Choose the Discord server you want to configure.
 5. Configure one feature rather than enabling everything at once.
 6. Save the configuration.

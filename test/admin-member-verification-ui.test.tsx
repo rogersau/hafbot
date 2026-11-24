@@ -75,7 +75,51 @@ test("Member Verification keeps retained Turnstile configuration visible when ru
     </ToastProvider>,
   );
 
-  assert.match(html, /Turnstile challenge/);
+  assert.match(html, /Saved method: Turnstile \(currently unavailable\)/);
+});
+
+test("Member Verification describes the three methods before selection and separates initial linking from ongoing access", () => {
+  const data = memberVerificationData();
+  const dom = new JSDOM(
+    renderToString(
+      <ToastProvider>
+        <AdminMemberVerificationPage
+          selectedWorkspaceId="workspace-1"
+          selectedGuildId="guild-1"
+          entitlement={null}
+          initialData={{
+            ...data,
+            paidMethodsAvailable: false,
+            turnstileAvailable: true,
+            steamLinkAvailable: true,
+          }}
+        />
+      </ToastProvider>,
+    ),
+  );
+  try {
+    const { document } = dom.window;
+    const helpId = document.querySelector("#verification-method")?.getAttribute("aria-describedby");
+    const help = helpId ? document.getElementById(helpId) : null;
+    assert.ok(help);
+    assert.deepEqual(
+      [...help.querySelectorAll("dt")].map((label) => label.textContent),
+      ["Discord button", "Turnstile", "Steam link required"],
+    );
+    const text = help.textContent ?? "";
+    assert.match(
+      text,
+      /interacted with HAF Bot\. It does not prove a human or game-account identity/,
+    );
+    assert.match(text, /automated-account check\. It does not establish real-world identity/);
+    assert.match(text, /active linked Steam account when completing the initial check/);
+    assert.match(text, /does not revoke saved verification or prevent HAF from restoring the role/);
+    assert.match(text, /separate access policy if the link must stay active/);
+    assert.match(text, /Discord button is available on Free/);
+    assert.match(text, /on hosted HAF, a paid plan/);
+  } finally {
+    dom.window.close();
+  }
 });
 
 async function renderSaveOutcome(
