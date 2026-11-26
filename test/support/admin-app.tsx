@@ -49,7 +49,7 @@ function loadRouteTree(): typeof import("../../src/web/routeTree.gen").routeTree
 }
 
 function isViteAsset(specifier: string) {
-  return /\.css(?:\?url)?$/.test(specifier) || specifier.endsWith("?raw");
+  return /\.(?:css|png)(?:\?url)?$/.test(specifier) || specifier.endsWith("?raw");
 }
 
 export default function AdminApp({
