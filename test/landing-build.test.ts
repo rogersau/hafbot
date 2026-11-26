@@ -97,29 +97,32 @@ test("landing plan choices preserve checkout intent and link to the complete com
     links.some(
       (link) =>
         link.href === "https://docs.hafbot.xyz/plans" &&
-        link.textContent?.includes("Compare every feature and plan limit"),
+        link.textContent?.includes("See which features each plan includes"),
     ),
   );
 });
 
-test("landing gives the main action to workflow selection and points deeper discovery to the docs", async () => {
+test("landing directs visitors to installation, a workflow preview and setup guides", async () => {
   const document = await readLandingDocument();
   try {
-    const [primary] = document.querySelectorAll<HTMLAnchorElement>(".hero-actions .button");
-    assert.equal(document.querySelectorAll(".hero-actions .button").length, 1);
-    assert.equal(primary?.getAttribute("href"), "#first-workflow");
+    const [primary, secondary] = document.querySelectorAll<HTMLAnchorElement>(
+      ".hero .hero-actions .button",
+    );
+    assert.equal(primary.getAttribute("href"), "/install?continue=discord");
+    assert.equal(
+      document.querySelector(".site-nav .install-link")?.getAttribute("href"),
+      "/install?continue=discord",
+    );
+    assert.equal(secondary.getAttribute("href"), "#live-demo");
+    assert.ok(document.querySelector("#live-demo"));
+    const preview = document.querySelector(".workspace-preview");
+    assert.ok(preview?.querySelector("img[src]"));
+    assert.match(preview?.textContent ?? "", /Sample server preview/);
     const selector = document.querySelector("#first-workflow");
     assert.equal(selector?.getAttribute("tabindex"), "-1");
     assert.equal(selector?.querySelectorAll('input[type="radio"]').length, 6);
-    assert.equal(selector?.nextElementSibling?.id, "live-demo");
-
-    const guides = document.querySelector('nav[aria-labelledby="workflow-guides-title"]');
-    assert.ok(
-      guides?.querySelector('a[href="https://docs.hafbot.xyz/features/mention-protection"]'),
-    );
-    assert.ok(guides?.querySelector('a[href="https://docs.hafbot.xyz/features/player-link"]'));
-    assert.ok(guides?.querySelector('a[href="https://docs.hafbot.xyz/features/managed-messages"]'));
-    assert.ok(guides?.querySelector('a[href="https://docs.hafbot.xyz/"]'));
+    assert.ok(document.querySelector('.final-cta a[href="https://docs.hafbot.xyz/"]'));
+    assert.match(document.querySelector(".footer-brand")?.textContent ?? "", /HELPFUL AS F\*\*K/);
 
     const footer = document.querySelector(".site-footer nav");
     assert.ok(footer?.querySelector('a[href="/privacy"]'));
@@ -156,9 +159,8 @@ test("landing pricing shows practical upgrade triggers and explains server assig
     const plans = document.querySelector("#plans");
     assert.ok(plans);
     const assignment = plans.querySelector(".pricing-summary")?.textContent ?? "";
-    assert.match(assignment, /does not upgrade every server you manage/);
-    assert.match(assignment, /choose\s+one eligible Discord server in Billing with Premium/);
-    assert.match(assignment, /up to three with Premium\s+Plus/);
+    assert.match(assignment, /Assign Premium to one Discord server in Billing/);
+    assert.match(assignment, /up to three with Premium Plus/);
 
     const [free, premium] = plans.querySelectorAll("article");
     assert.match(
@@ -167,10 +169,10 @@ test("landing pricing shows practical upgrade triggers and explains server assig
     );
     assert.equal(premium?.querySelector("h3")?.textContent, "When Free is not enough");
     const examples = premium?.textContent ?? "";
-    assert.match(examples, /ticket types for support and reports/);
-    assert.match(examples, /Scheduled Events, Image Rules or Mention Spam Protection/);
-    assert.match(examples, /Player Count or Webhooks/);
-    assert.match(examples, /More than 100 Player Links or more than 3 Managed Messages/);
+    assert.match(examples, /Unlimited ticket panels & types, auto-replies and anonymous reports/);
+    assert.match(examples, /Scheduled Events, Image Rules and Mention Spam Protection/);
+    assert.match(examples, /Live player counts and webhooks/);
+    assert.match(examples, /Unlimited player links and managed messages/);
   } finally {
     document.defaultView?.close();
   }

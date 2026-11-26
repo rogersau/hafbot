@@ -1,3 +1,4 @@
+import { landingCommunity } from "./community";
 import type { PublicLandingPrice } from "./landing-prices";
 
 interface LandingQuestion {
@@ -8,26 +9,49 @@ interface LandingQuestion {
 
 export const LANDING_FAQ: readonly LandingQuestion[] = [
   {
-    question: "How do I set up my first workflow?",
+    question: "What is HAF Bot?",
     answer:
-      "Choose one job, review the permissions to add HAF to Discord, and set up the feature in the dashboard. Test it as a non-admin member before adding anything else.",
-    guide: { href: "https://docs.hafbot.xyz/getting-started", text: "Read the setup guide" },
+      "HAF helps you run a gaming Discord. Give players a place to find a squad, open a private ticket or link their game account. Your mods manage it all from one dashboard.",
   },
   {
     question: "Can I self-host HAF Bot?",
     answer:
-      "Yes. Run your own Discord application with Docker, PostgreSQL and private object storage, with optional Cloudflare Tunnel ingress. You manage hosting, credentials, backups and updates. The MIT-licensed source is available at github.com/rogersau/hafbot. The initial source release documents its live-installation testing limits. Self-hosted mode includes all core features with your own external services; resource and safety limits still apply.",
+      "Yes. Run the MIT-licensed Docker version on your own infrastructure. You get all the core features and manage your own Discord app, storage, backups and updates.",
     guide: { href: "https://docs.hafbot.xyz/self-hosting", text: "Read the self-hosting guide" },
   },
   {
     question: "What happens if I cancel?",
     answer:
-      "You keep paid features until the cancellation date shown in Billing. After that, saved configuration remains, paid-only processing stops and Free limits apply. HAF does not replay activity missed while paid features were inactive.",
+      "You keep paid features until the date shown in Billing. Then your server goes back to Free. Your settings stay saved, Free limits apply and paid features stop processing new activity. If you resubscribe, they pick up from there.",
   },
   {
     question: "How are payments handled?",
     answer:
-      "Stripe handles checkout, invoices, and payment methods. HAF never stores your full card details.",
+      "Stripe handles checkout, invoices and card details. You can manage your subscription in Billing.",
+  },
+  {
+    question: "What Discord permissions does HAF actually need?",
+    answer:
+      "It depends on what you turn on. Tickets needs Manage Channels to open private channels. Verification and Timed Roles need Manage Roles, with HAF’s role above the roles it hands out. You can set up one feature at a time and review the invite’s permissions before adding HAF.",
+    guide: { href: "/install", text: "Review install permissions" },
+  },
+  {
+    question: "Can I run HAF alongside my existing bots?",
+    answer:
+      "Yes. Keep your current bots and give HAF one job, like Tickets or LFG. Move another job over whenever you’re ready.",
+  },
+  {
+    question: "Which platforms does Player Link support?",
+    answer:
+      "Players sign in through Steam or Xbox to link those accounts. PlayStation players enter their own PSN Online ID.",
+  },
+  {
+    question: "Can I test HAF before adding it to my live server?",
+    answer:
+      "Yes. Add HAF to a private test server and try tickets, LFG or verification on the Free forever plan. No card required.",
+    guide: landingCommunity.demoDiscordUrl
+      ? { href: landingCommunity.demoDiscordUrl, text: "Try HAF in our demo Discord" }
+      : { href: "/install", text: "Add HAF to your test server" },
   },
 ];
 

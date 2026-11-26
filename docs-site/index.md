@@ -47,6 +47,13 @@ features:
 - [Run the Discord side of a DayZ community](/guides/dayz-discord-bot) — connect player identities, handle reports and choose one workflow to start with.
 - [Set up a WARDOGS Discord community](/guides/wardogs-discord-community) — start with current Discord workflows and check the boundary around game-server integrations.
 
+## Game Server Integrations
+
+- [Live Player Counts](/features/player-count) shows how to post server status and player counts in Discord.
+- [Server Levels (Beta)](/features/server-levels) connects DayZ attendance to Discord through CFTools.
+- [Webhooks](/features/webhook-proxy) routes updates from external services to a Discord channel.
+- [WARDOGS community setup](/guides/wardogs-discord-community) covers current support and experimental integrations.
+
 ## Explore the Documentation
 
 - [Getting Started](/getting-started) — install HAF and configure your first feature.

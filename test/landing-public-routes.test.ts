@@ -16,11 +16,11 @@ test("home response exposes the launch content and discovery metadata without Ja
   const html = (await response?.text()) ?? "";
 
   assert.equal(response?.status, 200);
-  assert.match(html, /<h1[^>]*>\s*Handle player reports in private\./);
+  assert.match(html, /<h1[^>]*>\s*Less time running Discord\. More time playing\./);
   assert.match(html, /Example Discord gaming community using HAF Bot/);
   assert.match(html, /Managed Message/i);
-  assert.match(html, /Choose your first workflow/);
-  assert.match(html, /<h2[^>]*>Start free\. Upgrade when your community needs more\.<\/h2>/);
+  assert.match(html, /See it in action/);
+  assert.match(html, /<h2[^>]*>Start free\. Only pay if your server outgrows it\.<\/h2>/);
   assert.match(html, /<title>HAF Bot.*Discord tickets, player links/);
   assert.match(html, /<link rel="canonical" href="https:\/\/hafbot\.xyz\/"/);
   assert.match(html, /<meta name="robots" content="index, follow/);
@@ -28,7 +28,7 @@ test("home response exposes the launch content and discovery metadata without Ja
   assert.match(html, /"@type":"SoftwareApplication"/);
   assert.match(html, /"@type":"FAQPage"/);
   assert.match(html, /href="\/admin"[^>]*>Login<\/a>/);
-  assert.match(html, /href="\/install"[^>]*>Install/);
+  assert.match(html, /href="\/install\?continue=discord"[^>]*>Add to Discord/);
   const dom = new JSDOM(html);
   try {
     assert.equal(
@@ -126,7 +126,11 @@ test("signed-out plans, structured offers, and checkout review use the same Stri
   assert.match(html, /\$8\.99<\/strong><span>AUD \/ month/);
   assert.match(html, /\$80\.00<\/strong><span>AUD \/ year/);
   assert.doesNotMatch(html, /View current price in Billing/);
-  assert.match(html, /Standard subscription prices/);
+  assert.match(html, /Save 25%/);
+  assert.match(html, /Save 26%/);
+  assert.match(html, /\$3\.75/);
+  assert.match(html, /\$6\.67/);
+  assert.match(html, /Base prices in AUD/);
   assert.doesNotMatch(html, /founder|places claimed|cannot be reclaimed/i);
   assert.doesNotMatch(html, /normally|was <|<del|line-through/i);
   const structuredData = readStructuredData(html);
@@ -175,6 +179,7 @@ test("home response fails honestly when no valid Stripe catalogue is available",
   const html = (await (await routes(new Request("https://hafbot.xyz/")))?.text()) ?? "";
 
   assert.match(html, /View current price in Billing/);
+  assert.doesNotMatch(html, /Show prices in|Save [0-9]+%/);
   assert.doesNotMatch(html, /\$4\.99|\$8\.99/);
   const structuredData = readStructuredData(html);
   const software = structuredData["@graph"]?.find(
@@ -199,7 +204,7 @@ test("home response has coherent accessible tab and landmark semantics", async (
   }
 });
 
-test("home Discord preview gives new visitors three representative workflows", async () => {
+test("home Discord preview gives new visitors the workflows named in the showcase", async () => {
   const routes = createPublicWeb();
   const html = await (await routes(new Request("https://hafbot.xyz/"))).text();
   const dom = new JSDOM(html);
@@ -208,12 +213,15 @@ test("home Discord preview gives new visitors three representative workflows", a
     const tabs = [...document.querySelectorAll<HTMLElement>("[role=tab][data-channel]")];
     assert.deepEqual(
       tabs.map((tab) => tab.dataset.channel),
-      ["support", "welcome", "looking-for-group"],
+      ["support", "welcome", "looking-for-group", "marketplace", "mod-queue", "audit-log"],
     );
     const docs = [
       "/features/tickets",
       "/features/member-verification#verification-methods",
       "/features/lfg",
+      "/features/marketplace",
+      "/features/image-rules",
+      "/features/guild-audit-log",
     ];
     for (const [index, tab] of tabs.entries()) {
       const panel = document.getElementById(tab.getAttribute("aria-controls")!);
@@ -226,7 +234,7 @@ test("home Discord preview gives new visitors three representative workflows", a
     assert.match(document.querySelector("#panel-support")?.textContent ?? "", /Open ticket/);
     assert.match(
       (document.querySelector("#panel-welcome")?.textContent ?? "").replace(/\s+/g, " "),
-      /It does not prove human or game-account identity/,
+      /When they hit Verify, HAF gives them the role you picked/,
     );
     assert.match(
       document.querySelector("#panel-looking-for-group")?.textContent ?? "",
@@ -310,6 +318,9 @@ test("public HTML and install routes emit bounded events without affecting respo
 
   const install = await routes(new Request("https://hafbot.xyz/install?continue=discord"));
   assert.equal(install?.status, 302);
+  const invite = new URL(install.headers.get("location")!);
+  assert.equal(invite.origin + invite.pathname, "https://discord.com/oauth2/authorize");
+  assert.equal(invite.searchParams.get("client_id"), "123456789012345678");
   assert.equal(events[0]?.name, "public_page_viewed");
   assert.deepEqual(events[0]?.name === "public_page_viewed" ? events[0] : null, {
     name: "public_page_viewed",

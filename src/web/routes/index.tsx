@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CHANGELOG_FEED_LINK } from "../../landing/changelog-feed";
+import { landingCommunity } from "../../landing/community";
 import { landingStructuredData } from "../../landing/home-content";
 import { LandingHomePage } from "../../landing/home-page";
 import { getLandingPrices } from "../../landing/landing-prices";
 import { publicPageMiddleware } from "../../landing/public-page-middleware";
+import ticketsDashboard from "../../../docs-site/public/images/generated/admin-tickets.png";
 import stylesheet from "../../landing/styles.css?url";
 
 const TITLE = "HAF Bot — Discord tickets, player links & community tools";
@@ -53,5 +55,11 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  return <LandingHomePage prices={Route.useLoaderData()} />;
+  return (
+    <LandingHomePage
+      prices={Route.useLoaderData()}
+      discordScreenshot={landingCommunity.discordScreenshot}
+      dashboardScreenshot={landingCommunity.dashboardScreenshot ?? ticketsDashboard}
+    />
+  );
 }
