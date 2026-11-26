@@ -22,7 +22,7 @@ test("the configured catalogue supplies standard pricing copy", async () => {
   const html = await readHome(catalog);
   assert.match(html, /\$1\.23/);
   assert.doesNotMatch(html, /founder|fully claimed|50 of 50|cannot be reclaimed/i);
-  assert.match(html, /Standard subscription prices/);
+  assert.match(html, /Hosted plans cover our managed bot and dashboard, billed via Stripe/);
 });
 
 test("FAQ structured answers exactly match visible homepage answers", async () => {
@@ -39,7 +39,7 @@ test("FAQ structured answers exactly match visible homepage answers", async () =
     };
     const questions =
       data["@graph"].find((entry) => entry["@type"] === "FAQPage")?.mainEntity ?? [];
-    assert.equal(questions.length, 4);
+    assert.equal(questions.length, 8);
     const visible = [...document.querySelectorAll("#faq details")];
     assert.equal(visible.length, questions.length);
     for (const question of questions) {
@@ -54,21 +54,30 @@ test("FAQ structured answers exactly match visible homepage answers", async () =
     assert.ok(document.querySelector(".discord-console[data-nosnippet]"));
     assert.match(
       (document.body.textContent ?? "").replace(/\s+/g, " "),
-      /These are mockups, not live customer activity/,
+      /Click through how HAF handles verification, LFG, trades, mod queues, and logs/,
     );
   } finally {
     dom.window.close();
   }
 });
 
-test("homepage links the WARDOGS guide without adding an unsupported integration claim", async () => {
-  const html = await readHome();
-  assert.match(html, /https:\/\/docs\.hafbot\.xyz\/guides\/wardogs-discord-community/);
-  const dom = new JSDOM(html);
+test("the five community goals link to setup guides before hosted pricing", async () => {
+  const dom = new JSDOM(await readHome());
   try {
-    assert.doesNotMatch(
-      dom.window.document.querySelector("#landing-structured-data")?.textContent ?? "",
-      /WARDOGS|RCON|reserved slots|Server XP/i,
+    const document = dom.window.document;
+    const goals = document.querySelectorAll(".goals details");
+    assert.equal(goals.length, 5);
+    assert.match(goals[2].textContent ?? "", /Levels \(Beta\)/);
+    assert.ok(
+      goals[3].querySelector('a[href="https://docs.hafbot.xyz/#game-server-integrations"]'),
+    );
+    assert.doesNotMatch(goals[3].textContent ?? "", /WARDOGS|Levels/);
+    assert.ok(
+      document.querySelector('.community-proof a[href="https://github.com/rogersau/hafbot"]'),
+    );
+    assert.equal(
+      document.querySelector(".community-proof")?.parentElement?.nextElementSibling?.id,
+      "plans",
     );
   } finally {
     dom.window.close();

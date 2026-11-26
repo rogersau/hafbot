@@ -52,7 +52,7 @@ test("mobile landing keeps pricing and the primary action reachable with usable 
             assert.ok(link.left >= 0 && link.right <= width, `${link.name} goes off screen`);
           }
 
-          assert.equal(await page.locator(".radar-scope").isVisible(), false);
+          assert.ok(await page.getByText("Sample server preview").isVisible());
           const primary = await page.locator(".hero .button-primary").evaluate((link) => {
             const { left, width, top, height, bottom } = link.getBoundingClientRect();
             const hit = document.elementFromPoint(left + width / 2, top + height / 2);
@@ -109,11 +109,8 @@ async function openLanding(page, origin) {
 
 async function checkFirstUse(page, origin) {
   await openLanding(page, origin);
-  const start = page.getByRole("link", { name: "Choose your first workflow" });
-  await start.focus();
-  await page.keyboard.press("Enter");
   const workflow = page.getByRole("region", { name: "What do you want to fix first?" });
-  assert.equal(await workflow.evaluate((region) => region === document.activeElement), true);
+  await workflow.focus();
   await page.keyboard.press("Tab");
   const tickets = workflow.getByRole("radio", { name: "Handle support or reports" });
   assert.equal(await tickets.evaluate((radio) => radio === document.activeElement), true);
@@ -128,7 +125,7 @@ async function checkFirstUse(page, origin) {
   const openChannels = page.getByRole("button", { name: "Open channel list" });
   assert.match(await openChannels.innerText(), /Channel list/);
   await openChannels.click();
-  assert.equal(await page.getByRole("tab").count(), 3);
+  assert.equal(await page.getByRole("tab").count(), 6);
   await page.keyboard.press("ArrowDown");
   const welcome = page.getByRole("tab", { name: "# welcome" });
   assert.equal(await welcome.evaluate((tab) => tab === document.activeElement), true);
@@ -137,7 +134,7 @@ async function checkFirstUse(page, origin) {
   const preview = page.getByRole("tabpanel");
   assert.match(
     (await preview.innerText()).replace(/\s+/g, " "),
-    /does not prove human or game-account identity/,
+    /When they hit Verify, HAF gives them the role you picked/,
   );
   assert.equal(
     await preview.getByRole("link").getAttribute("href"),

@@ -571,268 +571,54 @@
   font-size: 8px;
 }
 
-/* ─── Radar scope (hero instrument) ─────────────────────────────── */
-.radar-scope {
-  justify-self: end;
-  width: min(100%, 460px);
+.hero-self-host,
+.workspace-preview figcaption {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
-.scope-frame {
+.hero-self-host a,
+.workspace-preview a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.workspace-preview {
+  width: 100%;
+  max-width: 560px;
+  margin: 0;
+}
+.workspace-panel {
   overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--phosphor) 22%, var(--line));
-  border-radius: 22px;
-  background:
-    radial-gradient(120% 90% at 50% 0%, #0e1a2088 0%, transparent 55%),
-    linear-gradient(180deg, #0b111aee, #080d14f2);
-  box-shadow:
-    inset 0 1px 0 #ffffff0d,
-    0 40px 90px -30px #000d,
-    0 0 70px -18px color-mix(in oklab, var(--phosphor) 24%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #101624;
+  box-shadow: 0 14px 40px -28px #000;
 }
-.scope-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 13px 18px;
-  color: color-mix(in oklab, var(--phosphor) 80%, white 10%);
-  font: 600 9px var(--font-mono);
-  letter-spacing: 0.16em;
+.workspace-panel + .workspace-panel {
+  margin-top: 10px;
 }
-.scope-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.workspace-panel h2 {
+  margin: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink);
+  font:
+    600 14px "Oxanium Variable",
+    sans-serif;
 }
-.scope-status i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--phosphor);
-  box-shadow: 0 0 8px var(--phosphor);
-  animation: scope-status-blink 2.2s ease-in-out infinite;
+.workspace-panel p {
+  margin: 0;
+  padding: 14px 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
 }
-@keyframes scope-status-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
-.scope-id {
-  color: var(--faint);
-}
-.scope-readouts {
-  border-top: 1px solid color-mix(in oklab, var(--phosphor) 14%, transparent);
-  color: var(--faint);
-}
-.scope-bar:first-child {
-  border-bottom: 1px solid color-mix(in oklab, var(--phosphor) 14%, transparent);
-}
-.scope-display {
-  container-type: size;
-  position: relative;
-  aspect-ratio: 1;
-  margin: 18px;
-}
-.scope-display::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background:
-    linear-gradient(color-mix(in oklab, var(--phosphor) 26%, transparent) 0 0) 50% 0 / 1px 100%
-      no-repeat,
-    linear-gradient(color-mix(in oklab, var(--phosphor) 26%, transparent) 0 0) 0 50% / 100% 1px
-      no-repeat,
-    repeating-radial-gradient(
-      circle at center,
-      transparent 0 calc(25% - 1px),
-      color-mix(in oklab, var(--phosphor) 20%, transparent) calc(25% - 1px) 25%
-    ),
-    repeating-conic-gradient(
-      from 0deg,
-      color-mix(in oklab, var(--phosphor) 15%, transparent) 0deg 0.5deg,
-      transparent 0.5deg 15deg
-    ),
-    radial-gradient(circle at 50% 42%, #12241f55 0%, #080f14 68%);
-  border: 1px solid color-mix(in oklab, var(--phosphor) 30%, transparent);
-  box-shadow:
-    inset 0 0 60px #03110cb3,
-    inset 0 0 8px color-mix(in oklab, var(--phosphor) 18%, transparent);
-}
-.scope-sweep {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg 292deg,
-    color-mix(in oklab, var(--phosphor) 7%, transparent) 310deg,
-    color-mix(in oklab, var(--phosphor) 38%, transparent) 344deg,
-    color-mix(in oklab, var(--phosphor) 92%, transparent) 359.5deg,
-    transparent 360deg
-  );
-  mask-image: radial-gradient(circle, #000 0 71%, transparent 71.5%);
-  filter: drop-shadow(0 0 9px color-mix(in oklab, var(--phosphor) 55%, transparent));
-  animation: scope-sweep 16s linear infinite;
-}
-@keyframes scope-sweep {
-  to {
-    rotate: 1turn;
-  }
-}
-.scope-bearing {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  left: 50%;
-  display: none;
-  color: color-mix(in oklab, var(--phosphor) 62%, transparent);
-  font: 500 8.5px var(--font-mono);
-  letter-spacing: 0.1em;
-}
-@supports (container-type: size) {
-  .scope-bearing {
-    display: block;
-    transform: translate(-50%, -50%) rotate(var(--bearing)) translateY(-40cqi)
-      rotate(calc(var(--bearing) * -1));
-  }
-}
-.bearing-0 {
-  --bearing: 0deg;
-}
-.bearing-90 {
-  --bearing: 90deg;
-}
-.bearing-180 {
-  --bearing: 180deg;
-}
-.bearing-270 {
-  --bearing: 270deg;
-}
-.scope-blip {
-  position: absolute;
-  z-index: 3;
-  width: 0;
-  height: 0;
-}
-.blip-verified {
-  --delay: 1.87s;
-  left: 72.7%;
-  top: 24.7%;
-}
-.blip-lfg {
-  --delay: 4.98s;
-  left: 77.8%;
-  top: 61.2%;
-}
-.blip-trade {
-  --delay: 9.11s;
-  left: 35.2%;
-  top: 81.7%;
-}
-.blip-moderation {
-  --delay: 14.04s;
-  left: 27.1%;
-  top: 26.3%;
-}
-.scope-blip i {
-  position: absolute;
-  inset: -4.5px;
-  border-radius: 50%;
-  background: var(--phosphor);
-  box-shadow:
-    0 0 6px var(--phosphor),
-    0 0 16px color-mix(in oklab, var(--phosphor) 70%, transparent);
-  opacity: 0.3;
-  animation: scope-blip-dot 16s linear var(--delay, 0s) infinite;
-}
-.scope-blip i::after {
-  content: "";
-  position: absolute;
-  inset: -7px;
-  border: 1px solid var(--phosphor);
-  border-radius: 50%;
-  opacity: 0;
-  animation: scope-blip-ring 16s linear var(--delay, 0s) infinite;
-}
-.scope-blip b {
-  position: absolute;
-  bottom: 15px;
-  left: 0;
-  translate: -50% 0;
-  padding: 4px 7px;
-  border: 1px solid color-mix(in oklab, var(--phosphor) 35%, transparent);
-  border-radius: 5px;
-  color: color-mix(in oklab, var(--phosphor) 88%, white 8%);
-  background: #06110dcc;
-  font: 600 8px var(--font-mono);
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-  opacity: 0;
-  animation: scope-blip-label 16s linear var(--delay, 0s) infinite;
-}
-@keyframes scope-blip-dot {
-  0% {
-    opacity: 1;
-    scale: 1.35;
-  }
-  10% {
-    opacity: 0.95;
-    scale: 1;
-  }
-  45%,
-  100% {
-    opacity: 0.3;
-    scale: 1;
-  }
-}
-@keyframes scope-blip-ring {
-  0% {
-    opacity: 0.85;
-    scale: 0.5;
-  }
-  22%,
-  100% {
-    opacity: 0;
-    scale: 2.6;
-  }
-}
-@keyframes scope-blip-label {
-  0%,
-  4% {
-    opacity: 0;
-    translate: -50% 5px;
-  }
-  10%,
-  42% {
-    opacity: 1;
-    translate: -50% 0;
-  }
-  52%,
-  100% {
-    opacity: 0;
-    translate: -50% 0;
-  }
-}
-.scope-logo {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  left: 50%;
-  width: 34px;
-  height: 34px;
-  padding: 5px;
-  border: 1px solid color-mix(in oklab, var(--phosphor) 40%, transparent);
-  border-radius: 50%;
-  background: #08110df2;
-  box-shadow:
-    0 0 14px color-mix(in oklab, var(--phosphor) 40%, transparent),
-    0 0 0 5px #08110d66;
-  object-fit: contain;
-  translate: -50% -50%;
+.workspace-panel img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 /* ─── Demo section (Discord console) ────────────────────────────── */
@@ -1186,39 +972,11 @@
   transition: color 0.15s;
 }
 
-.workflow-guides {
-  margin-top: 24px;
-  padding-block: 14px;
-  border-top: 1px solid var(--line);
-}
-.workflow-guides h3 {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 700;
-}
-.workflow-guides ul {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 20px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.workflow-guides a,
-.demo .section-heading > p a {
+.discord-message > div > a {
+  display: inline-block;
+  margin-top: 12px;
   color: #aeb9ff;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.workflow-guides a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
   font-size: 13px;
-}
-.discord-message > div > a:hover {
-  color: #d3dbff;
 }
 .lower-content {
   background: linear-gradient(180deg, #080c1457, #080c1470);
@@ -1226,6 +984,103 @@
   backdrop-filter: blur(3px) saturate(0.76);
 }
 
+.consolidation {
+  padding-block: clamp(32px, 6vw, 80px);
+  border-block: 1px solid var(--line);
+}
+.consolidation p,
+.goal-accordion p,
+.community-proof p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.goals {
+  padding-top: clamp(36px, 5vw, 70px);
+}
+.goal-accordion details {
+  border-bottom: 1px solid var(--line);
+}
+.goal-accordion summary {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding-block: 1.25rem;
+  list-style: none;
+  font:
+    700 clamp(1.1rem, 2vw, 1.5rem) "Oxanium Variable",
+    sans-serif;
+  cursor: pointer;
+}
+.goal-accordion summary::-webkit-details-marker {
+  display: none;
+}
+.goal-index,
+.goal-accordion a,
+.community-proof a {
+  color: #b4c1ff;
+}
+.goal-index {
+  font: 600 0.875rem var(--font-mono);
+}
+.goal-accordion summary::after {
+  content: "+";
+  margin-left: auto;
+}
+.goal-accordion details[open] summary::after {
+  content: "−";
+}
+.goal-accordion ul,
+.community-proof {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem 1.5rem;
+}
+.goal-accordion ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 1.5rem;
+  gap: 0.5rem;
+}
+.goal-accordion a {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+.goal-accordion a,
+.community-proof a {
+  text-underline-offset: 4px;
+}
+.goal-accordion a:hover,
+.community-proof a:hover {
+  text-decoration: underline;
+}
+.community-proof {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+}
+.final-cta {
+  padding-block: clamp(36px, 6vw, 80px);
+  text-align: center;
+  border-top: 1px solid var(--line);
+}
+.final-cta h2 {
+  font:
+    800 italic clamp(2rem, 4vw, 3.5rem)/1.1 "Oxanium Variable",
+    sans-serif;
+}
+.final-cta > p {
+  max-width: 50ch;
+  margin: 1rem auto 1.5rem;
+  color: var(--muted);
+}
+.final-cta .hero-actions {
+  justify-content: center;
+}
 /* ─── Pricing ───────────────────────────────────────────────────── */
 .pricing {
   padding-block: 110px 120px;
@@ -1378,6 +1233,35 @@
 }
 .stripe-price + .stripe-price strong {
   font-size: 18px;
+}
+.price-currency {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin: 0 0 18px;
+  color: #aab4c6;
+  font-size: 13px;
+}
+.price-currency select {
+  padding: 8px;
+  color: #f4f6fb;
+  background: #161c29;
+  border: 1px solid #49556c;
+  border-radius: 5px;
+}
+.annual-savings {
+  margin: 8px 0;
+  font-size: 12px;
+  color: #b2bed1;
+}
+.annual-savings b {
+  display: inline-block;
+  padding: 3px 6px;
+  margin-right: 4px;
+  border-radius: 4px;
+  background: #203c36;
+  color: #a0efc8;
 }
 .price-fallback {
   margin: 5px 0;
@@ -1543,8 +1427,8 @@
   object-fit: contain;
 }
 .footer-brand small {
-  color: #5f6a80;
-  font-size: 7px;
+  color: #aab3c3;
+  font-size: 12px;
   letter-spacing: 0.14em;
 }
 .site-footer nav a {
@@ -1565,19 +1449,6 @@
     filter: blur(6px);
   }
 }
-/* The hero scope melts into the ambient radar field as it exits, while the
-   field itself fades in to receive it — one radar at two zoom levels. */
-@keyframes scope-dissolve {
-  30% {
-    opacity: 0.82;
-  }
-  100% {
-    opacity: 0;
-    scale: 2.4;
-    translate: 3% -5%;
-    filter: blur(14px) saturate(1.6) brightness(1.1);
-  }
-}
 @keyframes field-fade-in {
   from {
     opacity: 0.08;
@@ -1592,12 +1463,6 @@
       animation: reveal-in linear both;
       animation-timeline: view();
       animation-range: entry 0% entry 55%;
-    }
-    .radar-scope {
-      transform-origin: 50% 46%;
-      animation: scope-dissolve linear both;
-      animation-timeline: view();
-      animation-range: exit 0% exit 100%;
     }
     .signal-field {
       animation: field-fade-in linear both;
@@ -1618,10 +1483,6 @@
   }
   .hero-intro {
     max-width: 560px;
-  }
-  .radar-scope {
-    justify-self: center;
-    width: min(100%, 430px);
   }
 }
 @media (max-width: 950px) {
@@ -1654,7 +1515,7 @@
   .site-nav {
     display: grid;
     min-height: 0;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: stretch;
     gap: 4px;
     padding-block: 6px;
@@ -1665,7 +1526,7 @@
   }
   .brand {
     min-height: 44px;
-    grid-column: 1 / -1;
+    grid-column: 1 / 3;
     justify-self: start;
     margin: 0;
     font-size: 13px;
@@ -1681,6 +1542,9 @@
     text-align: center;
   }
   .install-link {
+    grid-area: 1 / 3 / 2 / 5;
+    justify-self: end;
+    padding-inline: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1693,6 +1557,7 @@
     background: radial-gradient(ellipse at 85% 0%, #142633 0%, #080c14 700px);
   }
   .hero {
+    gap: 28px;
     padding-block: clamp(24px, 8vw, 42px) 28px;
   }
   .hero h1 {
@@ -1713,9 +1578,6 @@
   }
   .hero-trust {
     margin-top: 16px;
-  }
-  .radar-scope {
-    display: none;
   }
   #first-workflow,
   .demo,
@@ -1896,19 +1758,8 @@
   .signal-field i,
   .signal-field span,
   .eyebrow-dot::after,
-  .scope-sweep,
-  .scope-blip i,
-  .scope-blip i::after,
-  .scope-status i,
   .plan-grid article.recommended::before,
   .message-content [role="tabpanel"] {
     animation: none !important;
-  }
-  .scope-blip b {
-    animation: none !important;
-    opacity: 0.9 !important;
-  }
-  .scope-blip i {
-    opacity: 0.85;
   }
 }

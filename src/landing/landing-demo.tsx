@@ -1,9 +1,46 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 
+const EXTRA_EXAMPLES = [
+  {
+    id: "marketplace",
+    label: "marketplace",
+    heading: "Keep trades out of general chat.",
+    description:
+      "Each listing tells players what’s on offer, what the seller wants and which server to meet on.",
+    title: "Marketplace listing",
+    message: "Spare tent on AU Main. Looking for a car battery. Online after restart.",
+    guide: "Marketplace",
+    slug: "marketplace",
+  },
+  {
+    id: "mod-queue",
+    label: "mod-queue",
+    heading: "Give your mods the final say.",
+    description:
+      "Image Rules sends uncertain images to your mod queue. Staff can review each one and decide whether to restore it.",
+    title: "Image needs review",
+    message:
+      "An image from #screenshots is waiting for a mod to check it against the channel rules.",
+    guide: "Image Rules",
+    slug: "image-rules",
+  },
+  {
+    id: "audit-log",
+    label: "audit-log",
+    heading: "See who changed what.",
+    description: "Send staff actions to a private log so the next mod on shift can catch up.",
+    title: "Managed message updated",
+    message: "A moderator updated the weekend raid schedule in #announcements.",
+    guide: "Guild Audit Log",
+    slug: "guild-audit-log",
+  },
+] as const;
+
 const CHANNELS = [
   { id: "support", label: "support-tickets" },
   { id: "welcome", label: "welcome" },
   { id: "looking-for-group", label: "looking-for-group" },
+  ...EXTRA_EXAMPLES,
 ] as const;
 
 export function LandingDemo() {
@@ -84,13 +121,11 @@ export function LandingDemo() {
       <header className="section-heading reveal">
         <div>
           <p className="eyebrow">EXAMPLE DISCORD WORKFLOWS</p>
-          <h2 id="demo-title">See what members do in Discord.</h2>
+          <h2 id="demo-title">See what HAF actually does.</h2>
         </div>
         <p>
-          Try a private support ticket, a welcome role, or an LFG post. These are mockups, not live
-          customer activity. All three examples are included on Free. See the{" "}
-          <a href="https://docs.hafbot.xyz/plans">full plan comparison</a> for limits and paid
-          options.
+          Click through how HAF handles verification, LFG, trades, mod queues, and logs from one
+          dashboard.
         </p>
       </header>
 
@@ -220,9 +255,8 @@ export function LandingDemo() {
                 <p className="eyebrow">MEMBER VERIFICATION</p>
                 <h3>Give new players an easy first step.</h3>
                 <p>
-                  Welcome members in a DM or shared channel. The free Discord button confirms the
-                  account interacted with HAF Bot before granting a role. It does not prove human or
-                  game-account identity.
+                  Send new players the rules in a DM or welcome channel. When they hit Verify, HAF
+                  gives them the role you picked.
                 </p>
               </div>
               <article className="discord-message">
@@ -267,7 +301,7 @@ export function LandingDemo() {
                 <h3>Turn “anyone on?” into a full squad.</h3>
                 <p>
                   Players share a server or activity, when they want to play and who they need.
-                  Interested members can notify the poster or apply through optional approval.
+                  Players can join in or ask the organiser for a spot.
                 </p>
               </div>
               <article className="discord-message">
@@ -305,36 +339,43 @@ export function LandingDemo() {
                 </div>
               </article>
             </section>
+            {EXTRA_EXAMPLES.map((example) => (
+              <section
+                key={example.id}
+                id={`panel-${example.id}`}
+                role="tabpanel"
+                tabIndex={0}
+                aria-labelledby={`tab-${example.id}`}
+                data-panel={example.id}
+                hidden={CHANNELS[activeIndex].id !== example.id}
+              >
+                <div className="panel-intro compact-intro">
+                  <h3>{example.heading}</h3>
+                  <p>{example.description}</p>
+                </div>
+                <article className="discord-message">
+                  <span className="bot-avatar">
+                    <img src="/logo.png" alt="" />
+                  </span>
+                  <div>
+                    <p className="discord-message-meta">
+                      <b>HAF BOT</b>
+                      <em>APP</em>
+                    </p>
+                    <div className="discord-embed">
+                      <h4>{example.title}</h4>
+                      <p>{example.message}</p>
+                    </div>
+                    <a href={`https://docs.hafbot.xyz/features/${example.slug}`}>
+                      Set up {example.guide} ↗
+                    </a>
+                  </div>
+                </article>
+              </section>
+            ))}
           </div>
         </div>
       </div>
-
-      <nav className="workflow-guides" aria-labelledby="workflow-guides-title">
-        <h3 id="workflow-guides-title">Find another workflow</h3>
-        <ul>
-          <li>
-            <a href="https://docs.hafbot.xyz/features/mention-protection">
-              Reduce unwanted mentions
-            </a>
-          </li>
-          <li>
-            <a href="https://docs.hafbot.xyz/features/player-link">Connect game accounts</a>
-          </li>
-          <li>
-            <a href="https://docs.hafbot.xyz/features/managed-messages">
-              Keep announcements current
-            </a>
-          </li>
-          <li>
-            <a href="https://docs.hafbot.xyz/guides/wardogs-discord-community">
-              Set up a WARDOGS community
-            </a>
-          </li>
-          <li>
-            <a href="https://docs.hafbot.xyz/">Browse all feature guides ↗</a>
-          </li>
-        </ul>
-      </nav>
     </section>
   );
 }

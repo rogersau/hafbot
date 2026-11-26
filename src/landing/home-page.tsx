@@ -1,10 +1,21 @@
+import { CommunityGoals } from "./community-goals";
+import { landingCommunity } from "./community";
 import { LANDING_FAQ } from "./home-content";
 import { LandingDemo } from "./landing-demo";
+import { LandingPricing } from "./landing-pricing";
 import type { PublicLandingPrice } from "./landing-prices";
 import { FirstWorkflowSelector } from "./first-workflow-selector";
 import { MAIN_CONTENT_ID, SkipLink } from "../accessibility/skip-link";
 
-export function LandingHomePage({ prices }: { prices: readonly PublicLandingPrice[] }) {
+export function LandingHomePage({
+  prices,
+  discordScreenshot,
+  dashboardScreenshot,
+}: {
+  prices: readonly PublicLandingPrice[];
+  discordScreenshot?: string;
+  dashboardScreenshot?: string;
+}) {
   return (
     <>
       <div className="signal-field" aria-hidden="true">
@@ -35,8 +46,8 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
             <a className="login-link" href="/admin">
               Login
             </a>
-            <a className="install-link" href="/install">
-              Install <span aria-hidden="true">↗</span>
+            <a className="install-link" href="/install?continue=discord">
+              Add to Discord <span aria-hidden="true">↗</span>
             </a>
           </nav>
         </header>
@@ -48,155 +59,84 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
                 <span className="eyebrow-dot" aria-hidden="true"></span>BUILT FOR DISCORD GAMING
                 COMMUNITIES
               </p>
-              <h1 id="hero-title">Handle player reports in private.</h1>
+              <h1 id="hero-title">Less time running Discord. More time playing.</h1>
               <p className="hero-intro">
-                HAF Bot adds private support tickets and a staff dashboard to your gaming Discord.
-                Choose one workflow, set it up, and test it as a member.
+                Tickets, player links, LFG, trading, and mod tools—all in one bot and one web
+                dashboard. Start free on our hosted plan, or self-host with Docker on your own box.
               </p>
               <div className="hero-actions">
-                <a className="button button-primary" href="#first-workflow">
-                  Choose your first workflow <span aria-hidden="true">↓</span>
+                <a className="button button-primary" href="/install?continue=discord">
+                  Add to Discord — Free <span aria-hidden="true">↗</span>
+                </a>
+                <a className="button button-ghost" href="#live-demo">
+                  See it in action <span aria-hidden="true">↓</span>
                 </a>
               </div>
               <ul className="hero-trust">
-                <li>Start free, no card required</li>
+                <li>Free forever plan</li>
+                <li>No card required</li>
+                <li>Guided setup</li>
               </ul>
+              <p className="hero-self-host">
+                Want to run it yourself?{" "}
+                <a href="https://docs.hafbot.xyz/self-hosting">Self-host with Docker →</a>
+              </p>
             </div>
 
-            <div
-              className="radar-scope"
-              role="img"
-              aria-label="Illustration of example HAF Bot activity: a private ticket, a welcome role, an LFG application and moderator review. Not live customer data."
-            >
-              <div className="scope-frame">
-                <header className="scope-bar">
-                  <span className="scope-status">
-                    <i aria-hidden="true" />
-                    EXAMPLE ACTIVITY
-                  </span>
-                  <span className="scope-id">HAF COMMUNITY · AU</span>
-                </header>
-                <div className="scope-display">
-                  <span className="scope-bearing bearing-0">000</span>
-                  <span className="scope-bearing bearing-90">090</span>
-                  <span className="scope-bearing bearing-180">180</span>
-                  <span className="scope-bearing bearing-270">270</span>
-                  <div className="scope-sweep" aria-hidden="true"></div>
-                  <div className="scope-blip blip-verified">
-                    <i aria-hidden="true" />
-                    <b>Welcome role granted</b>
-                  </div>
-                  <div className="scope-blip blip-lfg">
-                    <i aria-hidden="true" />
-                    <b>LFG application</b>
-                  </div>
-                  <div className="scope-blip blip-trade">
-                    <i aria-hidden="true" />
-                    <b>Private ticket opened</b>
-                  </div>
-                  <div className="scope-blip blip-moderation">
-                    <i aria-hidden="true" />
-                    <b>Mod queue cleared</b>
-                  </div>
-                  <img className="scope-logo" src="/logo.png" alt="" />
-                </div>
-                <footer className="scope-bar scope-readouts">
-                  <span>ILLUSTRATIVE PREVIEW</span>
-                  <span>NOT LIVE DATA</span>
-                </footer>
+            <figure className="workspace-preview">
+              <div className="workspace-panel">
+                <h2>Tickets in Discord</h2>
+                {discordScreenshot ? (
+                  <img src={discordScreenshot} alt="HAF ticket workflow in Discord" />
+                ) : (
+                  <p>
+                    A player opens a private ticket. Only they and the support team can see it.{" "}
+                    <a href="https://docs.hafbot.xyz/features/tickets#member-flow">
+                      Follow a ticket →
+                    </a>
+                  </p>
+                )}
               </div>
-            </div>
+              <div className="workspace-panel">
+                <h2>Tickets in the staff dashboard</h2>
+                {dashboardScreenshot && (
+                  <a
+                    href={dashboardScreenshot}
+                    aria-label="View the full Tickets dashboard screenshot"
+                  >
+                    <img
+                      src={dashboardScreenshot}
+                      alt="Ticket panel settings in the HAF dashboard"
+                      width={1440}
+                      height={1050}
+                    />
+                  </a>
+                )}
+              </div>
+              <figcaption>
+                Sample server preview
+                {landingCommunity.demoDiscordUrl && (
+                  <>
+                    {" "}
+                    —{" "}
+                    <a href={landingCommunity.demoDiscordUrl}>test it live in our demo Discord →</a>
+                  </>
+                )}
+              </figcaption>
+            </figure>
           </section>
 
           <FirstWorkflowSelector />
           <LandingDemo />
 
           <div className="lower-content">
-            <section className="pricing landing-shell" id="plans" aria-labelledby="plans-title">
-              <header className="section-heading reveal">
-                <div>
-                  <p className="eyebrow">HOSTED HAF PLANS</p>
-                  <h2 id="plans-title">Start free. Upgrade when your community needs more.</h2>
-                </div>
-                <div className="pricing-summary">
-                  <p>
-                    These plans cover the hosted HAF service. Stripe handles monthly and yearly
-                    payments. Self-hosted mode includes core features with your own external
-                    services.
-                  </p>
-                  <p>
-                    Buying a plan does not upgrade every server you manage. After purchase, choose
-                    one eligible Discord server in Billing with Premium, or up to three with Premium
-                    Plus.
-                  </p>
-                  <a href="https://docs.hafbot.xyz/plans">Compare every feature and plan limit ↗</a>
-                </div>
-              </header>
-              <div className="plan-grid reveal">
-                <article>
-                  <small>FREE</small>
-                  <h3>Get started</h3>
-                  <p className="plan-price">
-                    <strong>$0</strong>
-                    <span>forever</span>
-                  </p>
-                  <ul>
-                    <li>1 ticket panel and type, with ordinary transcripts</li>
-                    <li>Up to 100 player links across supported platforms</li>
-                    <li>LFG, Marketplace, Suggestions and Timed Roles</li>
-                    <li>3 Managed Messages total across drafts and published messages</li>
-                    <li>100 MB managed storage</li>
-                  </ul>
-                  <a href="/install">Add to Discord</a>
-                </article>
-                <article className="recommended">
-                  <b className="recommended-label">RECOMMENDED</b>
-                  <small>PREMIUM</small>
-                  <h3>When Free is not enough</h3>
-                  <div className="stripe-prices">
-                    <PlanPrices prices={prices} plan="premium" />
-                  </div>
-                  <ul>
-                    <li>Separate ticket types for support and reports</li>
-                    <li>Scheduled Events, Image Rules or Mention Spam Protection</li>
-                    <li>Player Count or Webhooks</li>
-                    <li>More than 100 Player Links or more than 3 Managed Messages</li>
-                    <li>1 GB managed storage</li>
-                  </ul>
-                  <a href="/admin/billing?plan=premium&amp;frequency=yearly">Choose Premium</a>
-                </article>
-                <article>
-                  <small>PREMIUM PLUS</small>
-                  <h3>Run a bigger network</h3>
-                  <div className="stripe-prices">
-                    <PlanPrices prices={prices} plan="premium_plus" />
-                  </div>
-                  <ul>
-                    <li>Paid features for up to 3 assigned Discord servers</li>
-                    <li>Same per-server features as Premium</li>
-                    <li>1 shared white-label bot name and brand</li>
-                    <li>1 GB managed storage per assigned server</li>
-                  </ul>
-                  <a href="/admin/billing?plan=premium_plus&amp;frequency=yearly">
-                    Choose Premium Plus
-                  </a>
-                </article>
-              </div>
-              <p className="pricing-note">
-                {prices.length > 0
-                  ? "Standard subscription prices. Prices come straight from Stripe."
-                  : "Log in to Billing to see the current paid prices."}
-              </p>
-              <p className="pricing-note">
-                Discord limits, storage allowances and abuse safeguards still apply. Steam and Xbox
-                links use platform sign-in; PlayStation IDs are self-reported.
-              </p>
-            </section>
+            <CommunityGoals />
+            <LandingPricing prices={prices} />
 
             <section className="faq landing-shell" id="faq" aria-labelledby="faq-title">
               <div className="reveal">
                 <p className="eyebrow">QUICK ANSWERS</p>
-                <h2 id="faq-title">Before you install</h2>
+                <h2 id="faq-title">Before you add another bot…</h2>
               </div>
               <div className="reveal">
                 {LANDING_FAQ.map(({ question, answer, guide }) => (
@@ -215,6 +155,21 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
                 ))}
               </div>
             </section>
+            <section className="final-cta landing-shell" aria-labelledby="cta-title">
+              <h2 id="cta-title">Get your evenings back.</h2>
+              <p>
+                Add HAF Bot to your Discord and hand over the busywork tonight. Free forever plan
+                included—upgrade only if you outgrow it.
+              </p>
+              <div className="hero-actions">
+                <a className="button button-primary" href="/install?continue=discord">
+                  Add to Discord — Free ↗
+                </a>
+                <a className="button button-ghost" href="https://docs.hafbot.xyz/">
+                  Browse the docs ↗
+                </a>
+              </div>
+            </section>
           </div>
         </main>
 
@@ -223,7 +178,7 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
             <a className="footer-brand" href="/" aria-label="HAF Bot home">
               <img src="/logo.png" alt="" width={30} height={30} />
               <span>HAF BOT</span>
-              <small>HELPFUL AS F**K</small>
+              <small>· HELPFUL AS F**K</small>
             </a>
             <nav aria-label="Footer navigation">
               <a href="https://docs.hafbot.xyz/">Docs</a>
@@ -239,26 +194,4 @@ export function LandingHomePage({ prices }: { prices: readonly PublicLandingPric
       </div>
     </>
   );
-}
-
-function PlanPrices({
-  prices,
-  plan,
-}: {
-  prices: readonly PublicLandingPrice[];
-  plan: PublicLandingPrice["plan"];
-}) {
-  const planPrices = prices
-    .filter((price) => price.plan === plan)
-    .sort((left, right) => left.frequency.localeCompare(right.frequency));
-  if (planPrices.length === 0) {
-    return <p className="price-fallback">View current price in Billing</p>;
-  }
-
-  return planPrices.map((price) => (
-    <p className="stripe-price" key={price.frequency}>
-      <strong>{price.formattedAmount}</strong>
-      <span>{`${price.currency.toUpperCase()} / ${price.frequency === "monthly" ? "month" : "year"}`}</span>
-    </p>
-  ));
 }
