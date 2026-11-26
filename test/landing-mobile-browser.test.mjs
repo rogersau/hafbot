@@ -109,18 +109,34 @@ async function openLanding(page, origin) {
 
 async function checkFirstUse(page, origin) {
   await openLanding(page, origin);
-  const workflow = page.getByRole("region", { name: "What do you want to fix first?" });
+  const workflow = page.getByRole("region", { name: "Set up your first workflow" });
   await workflow.focus();
   await page.keyboard.press("Tab");
-  const tickets = workflow.getByRole("radio", { name: "Handle support or reports" });
-  assert.equal(await tickets.evaluate((radio) => radio === document.activeElement), true);
-  await page.keyboard.press("Space");
+  const choice = workflow.getByRole("combobox", { name: "Set up your first workflow" });
+  assert.equal(await choice.evaluate((select) => select === document.activeElement), true);
+  await choice.selectOption("tickets");
   await workflow.getByRole("heading", { name: "Tickets", exact: true }).waitFor();
   assert.match(await workflow.innerText(), /As a non-staff member, open and close a test Ticket/);
   assert.equal(
     await workflow.getByRole("link", { name: "Review install permissions" }).getAttribute("href"),
     "/install?workflow=tickets",
   );
+
+  const goal = page.locator(".goals details").nth(3);
+  assert.equal(await goal.getAttribute("open"), null);
+  await goal.locator("summary").click();
+  assert.doesNotMatch(await goal.innerText(), /WARDOGS/i);
+  assert.equal(
+    await goal.getByRole("link", { name: "Game Server Integrations" }).getAttribute("href"),
+    "https://docs.hafbot.xyz/#game-server-integrations",
+  );
+
+  const faq = page.locator("#faq details").nth(7);
+  assert.equal(await faq.getAttribute("open"), null);
+  await faq.getByText("Can I test HAF before adding it to my live server?").click();
+  const testServer = faq.getByRole("link", { name: "Add HAF to your test server" });
+  assert.equal(await testServer.getAttribute("href"), "/install");
+  assert.doesNotMatch(await faq.innerText(), /\[[^\]]+\]/);
 
   const openChannels = page.getByRole("button", { name: "Open channel list" });
   assert.match(await openChannels.innerText(), /Channel list/);

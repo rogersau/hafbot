@@ -8,7 +8,7 @@ import { publicPageMiddleware } from "../../landing/public-page-middleware";
 import ticketsDashboard from "../../../docs-site/public/images/generated/admin-tickets.png";
 import stylesheet from "../../landing/styles.css?url";
 
-const TITLE = "HAF Bot — Discord tickets, player links & community tools";
+const TITLE = "HAF Bot | Discord tickets, player links & community tools";
 const SOCIAL_DESCRIPTION =
   "Private support tickets, player links, LFG and moderation for gaming Discords. Start free on hosted HAF or self-host with Docker.";
 
@@ -30,7 +30,7 @@ export const Route = createFileRoute("/")({
       { property: "og:description", content: SOCIAL_DESCRIPTION },
       { property: "og:url", content: "https://hafbot.xyz/" },
       { property: "og:image", content: "https://hafbot.xyz/banner.png" },
-      { property: "og:image:alt", content: "HAF Bot — Helpful as F**K" },
+      { property: "og:image:alt", content: "HAF Bot (Helpful as F**K)" },
       { property: "og:site_name", content: "HAF Bot" },
       { property: "og:locale", content: "en_AU" },
       { name: "twitter:card", content: "summary_large_image" },

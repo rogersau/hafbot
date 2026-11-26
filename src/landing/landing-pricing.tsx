@@ -83,7 +83,7 @@ export function LandingPricing({ prices }: { prices: readonly PublicLandingPrice
             <li>1 ticket panel &amp; type with standard transcripts</li>
             <li>Up to 100 player links (Steam, Xbox &amp; PlayStation)</li>
             <li>LFG, Marketplace, Suggestions and Timed Roles</li>
-            <li>3 Managed Messages total across drafts and published messages</li>
+            <li>Up to 3 Managed Messages (drafts + live)</li>
             <li>100 MB managed storage</li>
           </ul>
           <a href="/install?continue=discord">Add to Discord</a>
@@ -91,7 +91,7 @@ export function LandingPricing({ prices }: { prices: readonly PublicLandingPrice
         <article className="recommended">
           <b className="recommended-label">RECOMMENDED</b>
           <small>PREMIUM</small>
-          <h3>When Free is not enough</h3>
+          <h3>For one growing community</h3>
           <div className="stripe-prices">
             <PlanPrices prices={prices} conversion={conversion} plan="premium" />
           </div>
@@ -121,8 +121,8 @@ export function LandingPricing({ prices }: { prices: readonly PublicLandingPrice
       </div>
       <p className="pricing-note">
         Stripe handles checkout and billing. Steam and Xbox use official sign-in; PlayStation IDs
-        are self-reported. Normal Discord API and fair-use limits apply —{" "}
-        <a href="/terms">see Terms</a>.
+        are self-reported. Normal Discord API and fair-use limits apply.{" "}
+        <a href="/terms">See Terms</a>.
       </p>
       <p className="pricing-note">
         Rather run it on your own server? Self-hosted Docker mode is MIT-licensed and includes all

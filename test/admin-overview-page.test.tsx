@@ -493,27 +493,29 @@ async function restoreInteractiveEnv(env: ReturnType<typeof createInteractiveEnv
   env.dom.window.close();
 }
 
-test("one native radio selection shows only the chosen workflow and keeps it in both links", async () => {
+test("selecting a setup guide shows only the chosen workflow and keeps it in both links", async () => {
   const env = createInteractiveEnv();
   Object.assign(globalThis, { window: env.dom.window, document: env.dom.window.document });
   try {
     await act(async () => env.root.render(<FirstWorkflowSelector />));
-    const radios = env.container.querySelectorAll<HTMLInputElement>("input[type=radio]");
-    assert.equal(radios.length, FIRST_WORKFLOWS.length);
-    assert.ok(Array.from(radios).every((radio) => !radio.checked));
+    const select = env.container.querySelector("select")!;
+    assert.equal(select.options.length, FIRST_WORKFLOWS.length + 1);
+    assert.equal(select.value, "");
     assert.equal(env.container.querySelector("h3"), null);
-
-    const ticket = radios[0]!;
-    await act(async () => ticket.click());
+    async function choose(value: string) {
+      await act(async () => {
+        select.value = value;
+        select.dispatchEvent(new env.dom.window.Event("change", { bubbles: true }));
+      });
+    }
+    await choose("tickets");
     assert.equal(env.container.querySelector("h3")?.textContent, "Tickets");
     assert.ok(env.container.querySelector('a[href="/install?workflow=tickets"]'));
     assert.ok(env.container.querySelector('a[href="/admin?workflow=tickets"]'));
 
-    const verification = radios[1]!;
-    await act(async () => verification.click());
+    await choose("member-verification");
     assert.equal(env.container.querySelector("h3")?.textContent, "Member Verification");
-    assert.equal(ticket.checked, false);
-    assert.equal(verification.checked, true);
+    assert.ok(env.container.querySelector('a[href="/install?workflow=member-verification"]'));
     assert.equal(env.container.querySelector('a[href="/install?workflow=tickets"]'), null);
   } finally {
     await restoreInteractiveEnv(env);
