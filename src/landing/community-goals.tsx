@@ -24,7 +24,7 @@ const goals = [
   {
     title: "Help members participate",
     description:
-      "Let players squad up, trade, join events, and vote on suggestions—with staff outcomes everyone can see.",
+      "Let players squad up, trade, join events, and vote on suggestions. Everyone can see what the mods decide.",
     features: [
       ["Looking for Group", "features/lfg"],
       ["Marketplace", "features/marketplace"],

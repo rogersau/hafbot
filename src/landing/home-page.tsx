@@ -4,7 +4,6 @@ import { LANDING_FAQ } from "./home-content";
 import { LandingDemo } from "./landing-demo";
 import { LandingPricing } from "./landing-pricing";
 import type { PublicLandingPrice } from "./landing-prices";
-import { FirstWorkflowSelector } from "./first-workflow-selector";
 import { MAIN_CONTENT_ID, SkipLink } from "../accessibility/skip-link";
 
 export function LandingHomePage({
@@ -61,12 +60,12 @@ export function LandingHomePage({
               </p>
               <h1 id="hero-title">Less time running Discord. More time playing.</h1>
               <p className="hero-intro">
-                Tickets, player links, LFG, trading, and mod tools—all in one bot and one web
-                dashboard. Start free on our hosted plan, or self-host with Docker on your own box.
+                Tickets, player links, LFG, trading, and mod tools in one bot and one web dashboard.
+                Start free on our hosted plan, or self-host with Docker on your own box.
               </p>
               <div className="hero-actions">
                 <a className="button button-primary" href="/install?continue=discord">
-                  Add to Discord — Free <span aria-hidden="true">↗</span>
+                  Add to Discord for free <span aria-hidden="true">↗</span>
                 </a>
                 <a className="button button-ghost" href="#live-demo">
                   See it in action <span aria-hidden="true">↓</span>
@@ -118,7 +117,7 @@ export function LandingHomePage({
                 {landingCommunity.demoDiscordUrl && (
                   <>
                     {" "}
-                    —{" "}
+                    ·{" "}
                     <a href={landingCommunity.demoDiscordUrl}>test it live in our demo Discord →</a>
                   </>
                 )}
@@ -126,7 +125,6 @@ export function LandingHomePage({
             </figure>
           </section>
 
-          <FirstWorkflowSelector />
           <LandingDemo />
 
           <div className="lower-content">
@@ -158,12 +156,12 @@ export function LandingHomePage({
             <section className="final-cta landing-shell" aria-labelledby="cta-title">
               <h2 id="cta-title">Get your evenings back.</h2>
               <p>
-                Add HAF Bot to your Discord and hand over the busywork tonight. Free forever plan
-                included—upgrade only if you outgrow it.
+                Add HAF Bot to your Discord and hand over the busywork tonight. Start free and
+                upgrade only if you outgrow it.
               </p>
               <div className="hero-actions">
                 <a className="button button-primary" href="/install?continue=discord">
-                  Add to Discord — Free ↗
+                  Add to Discord for free ↗
                 </a>
                 <a className="button button-ghost" href="https://docs.hafbot.xyz/">
                   Browse the docs ↗

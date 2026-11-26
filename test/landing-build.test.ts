@@ -105,6 +105,7 @@ test("landing plan choices preserve checkout intent and link to the complete com
 test("landing directs visitors to installation, a workflow preview and setup guides", async () => {
   const document = await readLandingDocument();
   try {
+    assert.doesNotMatch(document.documentElement.textContent ?? "", /\u2014/);
     const [primary, secondary] = document.querySelectorAll<HTMLAnchorElement>(
       ".hero .hero-actions .button",
     );
@@ -118,9 +119,9 @@ test("landing directs visitors to installation, a workflow preview and setup gui
     const preview = document.querySelector(".workspace-preview");
     assert.ok(preview?.querySelector("img[src]"));
     assert.match(preview?.textContent ?? "", /Sample server preview/);
-    const selector = document.querySelector("#first-workflow");
+    const selector = document.querySelector("#live-demo #first-workflow");
     assert.equal(selector?.getAttribute("tabindex"), "-1");
-    assert.equal(selector?.querySelectorAll('input[type="radio"]').length, 6);
+    assert.equal(selector?.querySelectorAll('option:not([value=""])').length, 6);
     assert.ok(document.querySelector('.final-cta a[href="https://docs.hafbot.xyz/"]'));
     assert.match(document.querySelector(".footer-brand")?.textContent ?? "", /HELPFUL AS F\*\*K/);
 
@@ -163,11 +164,8 @@ test("landing pricing shows practical upgrade triggers and explains server assig
     assert.match(assignment, /up to three with Premium Plus/);
 
     const [free, premium] = plans.querySelectorAll("article");
-    assert.match(
-      free?.textContent ?? "",
-      /3 Managed Messages total across drafts and published messages/,
-    );
-    assert.equal(premium?.querySelector("h3")?.textContent, "When Free is not enough");
+    assert.match(free?.textContent ?? "", /Up to 3 Managed Messages \(drafts \+ live\)/);
+    assert.equal(premium?.querySelector("h3")?.textContent, "For one growing community");
     const examples = premium?.textContent ?? "";
     assert.match(examples, /Unlimited ticket panels & types, auto-replies and anonymous reports/);
     assert.match(examples, /Scheduled Events, Image Rules and Mention Spam Protection/);

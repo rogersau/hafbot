@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { FirstWorkflowSelector } from "./first-workflow-selector";
 
 const EXTRA_EXAMPLES = [
   {
@@ -376,6 +377,7 @@ export function LandingDemo() {
           </div>
         </div>
       </div>
+      <FirstWorkflowSelector />
     </section>
   );
 }

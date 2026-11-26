@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { FIRST_WORKFLOWS, withFirstWorkflow, type FirstWorkflow } from "../first-workflows";
+import {
+  findFirstWorkflow,
+  FIRST_WORKFLOWS,
+  withFirstWorkflow,
+  type FirstWorkflow,
+} from "../first-workflows";
 
 export function FirstWorkflowSelector() {
   const [selected, setSelected] = useState<FirstWorkflow>();
@@ -8,38 +13,27 @@ export function FirstWorkflowSelector() {
     <section
       id="first-workflow"
       tabIndex={-1}
-      className="landing-shell py-8"
-      aria-labelledby="first-workflow-title"
+      className="mt-5"
+      aria-labelledby="first-workflow-label"
     >
-      <header className="mb-4">
-        <h2 id="first-workflow-title" className="text-2xl font-semibold">
-          What do you want to fix first?
-        </h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Pick one job and try it with a member before adding anything else.
-        </p>
-      </header>
-      <fieldset>
-        <legend className="sr-only">Choose a starting workflow</legend>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <label id="first-workflow-label" htmlFor="workflow-choice" className="font-semibold">
+          Set up your first workflow
+        </label>
+        <select
+          id="workflow-choice"
+          className="min-h-11 max-w-full rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 text-sm"
+          value={selected?.id ?? ""}
+          onChange={(event) => setSelected(findFirstWorkflow(event.target.value))}
+        >
+          <option value="">Choose a workflow</option>
           {FIRST_WORKFLOWS.map((workflow) => (
-            <label
-              key={workflow.id}
-              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm has-checked:border-[var(--accent)]"
-            >
-              <input
-                className="h-4 w-4 shrink-0 accent-[var(--accent)]"
-                type="radio"
-                name="first-workflow"
-                value={workflow.id}
-                checked={selected?.id === workflow.id}
-                onChange={() => setSelected(workflow)}
-              />
+            <option key={workflow.id} value={workflow.id}>
               {workflow.label}
-            </label>
+            </option>
           ))}
-        </div>
-      </fieldset>
+        </select>
+      </div>
       <p className="sr-only" role="status">
         {selected ? `${selected.feature} setup details available below.` : ""}
       </p>
