@@ -100,7 +100,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261016.1",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "4.3.5",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^22.10.0",
