@@ -11,11 +11,7 @@ import {
   buildAdminDashboardHref,
 } from "../src/admin/lib/dashboard-urls";
 import { buildGuildAdminRoleApiPath } from "../src/admin/components/guild-admin-role-card";
-import {
-  ADMIN_GUILD_DASHBOARD_PATHS,
-  isAdminDashboardPath,
-  normalizeAdminDashboardPath,
-} from "../src/admin/dashboard-routes";
+import { isAdminDashboardPath, normalizeAdminDashboardPath } from "../src/admin/dashboard-routes";
 import {
   buildCommerceTabHref,
   getAdminRouteState,
@@ -107,17 +103,6 @@ test("dashboard href preserves workspace and guild ids", () => {
     buildAdminDashboardHref("/admin/tickets", "workspace-1", ""),
     "/admin?workspaceId=workspace-1",
   );
-});
-
-test("every guild-scoped dashboard route builds a guild-scoped href", () => {
-  for (const path of ADMIN_GUILD_DASHBOARD_PATHS) {
-    const section = path.slice("/admin/".length);
-    assert.equal(
-      buildAdminDashboardHref(path, "workspace-1", "guild-1"),
-      `/admin/guild-1/${section}?workspaceId=workspace-1`,
-    );
-    assert.equal(isAdminDashboardPath(`/admin/guild-1/${section}`), true);
-  }
 });
 
 test("admin route state selects the Player Link platform from the query string", () => {

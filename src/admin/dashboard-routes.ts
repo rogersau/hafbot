@@ -99,11 +99,18 @@ export function getPaidAdminFeature(path: string): string | null {
 }
 
 const ADMIN_RESERVED_PATHS = new Set(["login", "logout", "global", "api", "assets"]);
-export const ADMIN_GUILD_DASHBOARD_SECTIONS = [
-  ...ADMIN_GUILD_FEATURE_ROUTES.map(({ path }) => path.slice("/admin/".length)),
+const GUILD_SETTINGS_SECTIONS = [
   "troubleshooting",
   "channel-permissions",
   "guild-settings",
+] as const;
+export type GuildDashboardPath =
+  | (typeof ADMIN_GUILD_FEATURE_ROUTES)[number]["path"]
+  | `/admin/${(typeof GUILD_SETTINGS_SECTIONS)[number]}`;
+
+const ADMIN_GUILD_DASHBOARD_SECTIONS = [
+  ...ADMIN_GUILD_FEATURE_ROUTES.map(({ path }) => path.slice("/admin/".length)),
+  ...GUILD_SETTINGS_SECTIONS,
 ];
 export const ADMIN_GUILD_DASHBOARD_PATHS = ADMIN_GUILD_DASHBOARD_SECTIONS.map(
   (section) => `/admin/${section}`,
