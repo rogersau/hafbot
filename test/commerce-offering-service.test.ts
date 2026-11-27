@@ -9,6 +9,7 @@ import {
 } from "../src/commerce/offering-service";
 import { SqliteCommerceOfferingStore } from "./support/sqlite/runtime/commerce/sqlite-offering-store";
 import { createTestDatabase } from "./support/sqlite-d1-database";
+import type { CommerceOffering } from "../src/commerce/types";
 
 const NOW = 1_900_000_000_000;
 
@@ -270,8 +271,19 @@ class FakeStore implements CommerceOfferingStore {
   async readPublishContext() {
     return this.context;
   }
-  async countPublishedSubscriptions() {
-    return 0;
+  async publishOffering(offeringId: string, guildId: string, nowMs: number) {
+    const offering = await this.readOffering(offeringId);
+    if (await this.hasPublishedRoleMapping(guildId, offering.discordRoleId, offeringId)) {
+      throw new Error("commerce_offering_role_already_published");
+    }
+    const published: CommerceOffering = {
+      ...offering,
+      state: "published",
+      publishedAtMs: offering.publishedAtMs ?? nowMs,
+      updatedAtMs: nowMs,
+    };
+    await this.createOffering(published);
+    return published;
   }
   async hasPublishedRoleMapping(guildId: string, roleId: string, excludingId: string) {
     return [...this.offerings.values()].some(

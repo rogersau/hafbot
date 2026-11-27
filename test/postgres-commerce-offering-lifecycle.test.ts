@@ -483,7 +483,6 @@ test(
         () => service.publish(sixth.offering.id),
         /commerce_offering_subscription_limit/,
       );
-      assert.equal(await store.countPublishedSubscriptions(seller.guildId), 5);
       assert.equal((await store.readOffering(sixth.offering.id))?.state, "draft");
 
       const paidRole = new PostgresPaidRoleStore(database);
@@ -493,7 +492,6 @@ test(
       assert.ok(repair);
       await paidRole.completeRoleRepair({ ...repair, repairedCount: 1 }, NOW + 1);
       assert.equal((await store.readOffering(publishedIds[0]!))?.state, "published");
-      assert.equal(await store.countPublishedSubscriptions(seller.guildId), 5);
       assert.equal(
         await new PostgresCommerceSafeguardStore(database).claimCapacity({
           id: "checkout-after-capacity-repair",
@@ -515,9 +513,50 @@ test(
         discordRoleId: "role-capacity-unpublished-replacement",
       });
       assert.equal(unpublishedRepair.offering.repairPreviousState, "unpublished");
-      assert.equal(await store.countPublishedSubscriptions(seller.guildId), 4);
       assert.equal((await service.publish(sixth.offering.id)).state, "published");
-      assert.equal(await store.countPublishedSubscriptions(seller.guildId), 5);
+    });
+  },
+);
+
+test(
+  "competing publications for the last Guild subscription slot admit exactly one Offering",
+  { skip: postgresUrl ? false : "TEST_POSTGRES_URL is not configured" },
+  async () => {
+    await withPostgres(async (database) => {
+      const seller = await seedSeller(database, "last-slot");
+      const service = offeringService(database);
+      for (let index = 0; index < 4; index++) {
+        const draft = await createDraftFor(service, seller, `role-${index}`, `Published ${index}`);
+        await service.publish(draft.offering.id);
+      }
+      const first = await createDraftFor(service, seller, "role-first", "First");
+      const second = await createDraftFor(service, seller, "role-second", "Second");
+      await database.execute(`
+        CREATE FUNCTION pause_publication() RETURNS trigger LANGUAGE plpgsql AS $$
+          BEGIN
+            PERFORM pg_sleep(0.15);
+            RETURN NEW;
+          END
+        $$;
+        CREATE TRIGGER pause_publication BEFORE UPDATE OF state ON commerce_offerings
+          FOR EACH ROW WHEN (NEW.state = 'published') EXECUTE FUNCTION pause_publication();
+      `);
+
+      const outcomes = await Promise.allSettled([
+        service.publish(first.offering.id),
+        service.publish(second.offering.id),
+      ]);
+      assert.equal(outcomes.filter((result) => result.status === "fulfilled").length, 1);
+      const rejected = outcomes.find((result) => result.status === "rejected");
+      assert.match(String(rejected?.reason), /commerce_offering_subscription_limit/);
+      const states = await database.query<{ state: string }>(
+        "SELECT state FROM commerce_offerings WHERE id IN ($1, $2) ORDER BY state",
+        [first.offering.id, second.offering.id],
+      );
+      assert.deepEqual(
+        states.map(({ state }) => state),
+        ["draft", "published"],
+      );
     });
   },
 );
