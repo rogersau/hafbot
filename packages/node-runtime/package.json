@@ -10,7 +10,7 @@
     "@azure/identity": "4.14.1",
     "@azure/storage-blob": "12.34.0",
     "@resvg/resvg-js": "2.6.2",
-    "@sentry/node": "11.11.0",
+    "@sentry/node": "11.16.0",
     "@tanstack/ai": "1.7.0",
     "@tanstack/ai-openai": "1.2.0",
     "@typesafe-ai/sdk": "0.7.0",
